@@ -1,0 +1,11 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE bEmptyPayload BOOLEAN FALSE;
+		DECLARE bodyDomain    CHAR    FIELDNAME(Body);
+
+		IF ((bodyDomain <> 'XMLNSC') AND (bodyDomain <> 'BLOB')) THEN
+			SET bEmptyPayload = TRUE;
+		END IF;
+
+		RETURN bEmptyPayload;
+	END;

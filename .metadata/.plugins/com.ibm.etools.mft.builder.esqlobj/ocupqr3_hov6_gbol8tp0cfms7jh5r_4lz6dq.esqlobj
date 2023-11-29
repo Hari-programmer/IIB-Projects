@@ -1,0 +1,30 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		DECLARE i INTEGER 1;
+		FOR InRef AS InputRoot.DFDL.Input.record[] DO
+		
+		WHILE 1<i DO
+		 --EXISTS(InRef.Data[]) <> ''
+		IF CONTAINS(InRef.Data[i],'hello') THEN
+			
+		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' || InRef.Data;
+		SET OutputLocalEnvironment.Destination.HTTP.Timeout = 42; 
+		SET OutputLocalEnvironment.Destination.HTTP.RequestLine.Method = 'GET';
+		SET OutputLocalEnvironment.Destination.HTTP.RequestLine.HTTPVersion = 'HTTP/1.1'; 
+		SET OutputLocalEnvironment.Destination.HTTP.SSLProtocol = 'TLS';
+	 
+		END IF;
+		
+		SET i=i+1;
+		
+		END WHILE;
+		
+		END FOR;
+		
+		
+		
+		
+		RETURN TRUE;
+	END;
+

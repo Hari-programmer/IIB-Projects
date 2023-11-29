@@ -1,0 +1,7 @@
+CREATE FILTER MODULE ComIbmDnqFinApplicationOutput_SCPNNeeded
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		RETURN CARDINALITY(LocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"."Request"[]) > 0;
+	END;
+
+END MODULE;

@@ -1,0 +1,35 @@
+CREATE COMPUTE MODULE ComIbmDniStandardsProcessing_Cleanup
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE rEnv             REFERENCE TO Environment.Variables."ComIbmDni"."DniStandardsProcessing";
+		DECLARE rElementCheck    REFERENCE TO rEnv."chConfigDataLoc";
+		DECLARE bVariablesExists BOOLEAN rEnv."bVariablesExists";
+		DECLARE bVarComExists    BOOLEAN rEnv."bVarComExists";
+		DECLARE bComIbmDniExists BOOLEAN rEnv."bComIbmDniExists";
+
+		IF bComIbmDniExists THEN
+			MOVE rElementCheck TO rEnv."chConfigDataLoc";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET Environment."ComIbmDni"."ConfigDataLoc" = rElementCheck;
+			ELSE
+				DELETE FIELD Environment."ComIbmDni"."ConfigDataLoc";
+			END IF;
+		ELSE
+			DELETE FIELD Environment."ComIbmDni";
+		END IF;
+
+		IF bVariablesExists THEN
+			IF bVarComExists THEN
+				DELETE FIELD Environment.Variables."ComIbmDni"."DniStandardsProcessing";
+			ELSE
+				DELETE FIELD Environment.Variables."ComIbmDni";
+			END IF;
+		ELSE
+			DELETE FIELD Environment.Variables;
+		END IF;
+
+		RETURN TRUE;
+	END;
+END MODULE;

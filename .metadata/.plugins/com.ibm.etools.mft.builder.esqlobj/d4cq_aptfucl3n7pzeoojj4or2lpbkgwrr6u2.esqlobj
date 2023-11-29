@@ -1,0 +1,18 @@
+CREATE COMPUTE MODULE ComIbmDnqTrigger_Compute
+
+	CREATE FUNCTION Main() RETURNS BOOLEAN BEGIN
+
+		SET OutputRoot = InputRoot;
+
+		Create LASTCHILD OF OutputRoot DOMAIN( 'MQMD' ); 
+		Set OutputRoot.MQMD.Format = 'MQHRF2  ';
+
+		Create LASTCHILD OF OutputRoot DOMAIN( 'MQRFH2' ); 
+		SET OutputRoot.MQRFH2.(MQRFH2.Field)Format = MQFMT_NONE;
+		SET OutputRoot.MQRFH2.ComIbmDni.OU = 'SYSOU';
+
+		RETURN TRUE;
+
+	END;
+
+END MODULE;

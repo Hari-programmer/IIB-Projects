@@ -1,0 +1,154 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+--		DECLARE FIN_SERVICE_CCSID  CONSTANT INT 1208; --@P01A @P02C @P09D
+		DECLARE DNQ_SIPN_SERVICE   CONSTANT CHARACTER 'DNF_ILC_FIN';
+		DECLARE DNQ_FMT_SERVICE    CONSTANT CHARACTER 'DNF_PF_IS';
+		DECLARE rEnv               REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinServiceOutput";
+		DECLARE rCommonProperties  REFERENCE TO Environment."ComIbmDni"."Properties"."Common";
+--		SET OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN" = NULL; @P09D
+--		DECLARE rMtfin             REFERENCE TO OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN"; --@P01C @P09D
+		DECLARE rElementCheck      REFERENCE TO OutputRoot.MQRFH2; --@P02A
+--		DECLARE chOptionsMwh       CHAR TRIM(COALESCE(rEnv."chOptionsMwh", '')); @P06D
+		DECLARE chFinMode          CHAR ''; --@P05C @P07C
+		DECLARE chInstanceName     CHAR rCommonProperties."Instance";
+		DECLARE chOu               CHAR '';
+		DECLARE chQueueName        CHAR '';
+--		DECLARE bTransformation    BOOLEAN TRUE; @P09D
+                                                                 -- begin @P04A
+		-- check message format
+		DECLARE chPayloadFormat CHAR FIELDNAME(OutputRoot.*[<]);
+		IF SUBSTRING(chPayloadFormat FROM 1 FOR 3) <> 'XML' THEN
+			-- payload is not XML
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1102
+			VALUES (chPayloadFormat, 'DNQO1102E');
+		END IF;
+                                                                   -- end @P04A
+		-- check FIN mode
+                                                                 -- begin @P07A
+		IF (CARDINALITY(rEnv."chFinMode"[]) > 0) AND (LENGTH(rEnv."chFinMode") > 0) THEN
+			SET chFinMode = UPPER(TRIM(rEnv."chFinMode"));
+			SET rEnv."chFinMode" = chFinMode;
+		END IF;
+                                                                   -- end @P07A
+                                                                 -- begin @P05A
+		IF chFinMode = '' THEN
+			SET chFinMode = 'SIPN';
+		END IF;
+		SET rEnv."chFinMode" = chFinMode; --@P06A
+                                                                 -- begin @P05A
+		IF chFinMode NOT IN ('SIPN', 'FMT') THEN
+			-- FIN mode: invalid property value
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1100
+			VALUES (chFinMode, 'DNQO1100E');
+		END IF;
+                                                                 -- begin @P02A
+		-- check MQRFH2
+		IF NOT LASTMOVE(rElementCheck) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1103
+			VALUES ('Root.MQRFH2', 'DNQO1103E'); --@P08C
+		END IF;
+
+		-- check OU
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+		IF NOT LASTMOVE(rElementCheck) OR (LENGTH(rElementCheck) = 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1103
+			VALUES ('Root.MQRFH2.ComIbmDni.OU', 'DNQO1103E'); --@P08C
+		ELSE
+			SET chOu = rElementCheck;
+		END IF;
+		SET chOu = OutputRoot.MQRFH2."ComIbmDni"."OU";
+                                                                   -- end @P02A
+		-- move existing element MTFIN from MQRFH2 to payload, if it exists
+                                                                 /* begin @P09D
+		IF LASTMOVE(rMtfin) AND (LENGTH(rMtfin) > 0) THEN
+			SET OutputRoot.*[<] = NULL;
+			SET OutputRoot.BLOB.BLOB = CAST(rMtfin AS BLOB CCSID FIN_SERVICE_CCSID); --@P01C
+			SET OutputRoot.*[<2].CodedCharSetId = FIN_SERVICE_CCSID; --@P01A
+			SET rMtfin = NULL;
+			SET bTransformation = FALSE;
+                                                                 /* begin @P02D
+		ELSE
+			-- create Standards node request
+			DECLARE rStandardsRequest REFERENCE TO Environment;
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniStandards"."Request" AS rStandardsRequest;
+			SET rStandardsRequest."Validate"  = 'No';
+			SET rStandardsRequest."Transform" = 'Yes';
+*/                                                                 -- end @P02D
+		END IF;
+*/                                                                 -- end @P09D
+--		SET rEnv."bTransformation" = bTransformation; @P09D
+                                                                 -- begin @P16A
+		MOVE rElementCheck TO InputRoot.MQMD.ReplyToQ;
+		IF (NOT LASTMOVE(rElementCheck)) OR (LENGTH(TRIM(rElementCheck)) = 0) THEN
+                                                                 -- begin @P21A
+			MOVE rElementCheck TO Environment.Variables.ComIbmDni.DnqFinServiceOutput.chReply2Q;
+			IF ((LASTMOVE(rElementCheck)) AND (LENGTH(TRIM(rElementCheck)) > 0)) THEN
+				SET OutputRoot.MQMD.ReplyToQ = rElementCheck;
+				MOVE rElementCheck TO Environment.Variables.ComIbmDni.DnqFinServiceOutput.chReply2QM;
+				IF ((LASTMOVE(rElementCheck)) AND (LENGTH(TRIM(rElementCheck)) > 0)) THEN
+					SET OutputRoot.MQMD.ReplyToQMgr = rElementCheck;
+				END IF;
+			ELSE
+                                                                   -- end @P21A
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1103
+				VALUES ('Root.MQMD.ReplyToQ', 'DNQO1103E');
+			END IF;                                                    -- @P21A
+		END IF;
+                                                                   -- end @P16A
+		-- set target queue depending on FIN mode
+		-- needed for Message History and target queue addressing
+		SET chQueueName = chInstanceName || '.' || chOu || '.';
+		IF chFinMode = 'SIPN' THEN
+			SET chQueueName = chQueueName || DNQ_SIPN_SERVICE;
+		ELSE
+			SET chQueueName = chQueueName || DNQ_FMT_SERVICE;
+		END IF;
+                                                                 -- begin @P13A
+		DECLARE chUserId  CHAR '';
+		DECLARE chService CHAR '';
+
+		IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."ER"[]) > 0) THEN
+			SET chUserId = Environment."ComIbmDni"."Properties"."Common"."BrokerUID";
+			SET chService = 'ER';
+		ELSE
+			SET chUserId = TRIM(InputRoot.MQMD.UserIdentifier);
+			SET chService = 'ROUTING';
+		END IF;
+                                                                   -- end @P13A
+		-- create Message History record
+		DECLARE rHistoryEntry REFERENCE TO Environment;
+		CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."History" AS rHistoryEntry;
+		CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+		
+		SET rHistoryEntry."UserId"         = chUserId; --@P13C @P14C
+		SET rHistoryEntry."TimeStamp"      = DnqUtil_GetCurrentWbifnTimestamp();
+		SET rHistoryEntry."QueueType"      = 'MQ';
+		SET rHistoryEntry."QueueName"      = chQueueName;
+		SET rHistoryEntry."Component"      = 'DNQ';
+		SET rHistoryEntry."Service"        = chService; --@P13C
+		SET rHistoryEntry."Destination"    = 'FIN';
+		SET rHistoryEntry."Function"       = 'OUTPUT';
+		SET rHistoryEntry."FunctionResult" = 'Ok';
+		
+		-- address target queue
+		SET OutputLocalEnvironment."Destination"."MQ"."DestinationData" = NULL;
+		SET OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueName" = chQueueName;
+
+		-- prepare SCPN request for MWH configuration, if needed
+                                                                 /* begin @P06D
+		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request" = NULL;
+		DECLARE rScpnRequest REFERENCE TO Environment;
+		IF LENGTH(chOptionsMwh) > 0 THEN
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+				"Request"."OU" AS rScpnRequest;
+			SET rScpnRequest."Name" = OutputRoot.MQRFH2."ComIbmDni"."OU";
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Type" = 'DnqOptionsMwh';
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Name" = chOptionsMwh;
+		END IF;
+*/                                                                 -- end @P06D
+		RETURN TRUE;
+	END;

@@ -1,0 +1,16 @@
+CREATE COMPUTE MODULE Acc_URL_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		
+		
+		SET OutputRoot.BLOB.BLOB.data[] = InputRoot.BLOB;
+        DECLARE chrRef CHARACTER CAST(OutputRoot.BLOB.BLOB.data[] AS CHARACTER CCSID 1208);
+        --SET OutputRoot.DFDL.mtxml.record[i].COMIBMDNI = chr_COMIBMDNI;
+	
+		
+		RETURN TRUE;
+	END;
+
+	
+END MODULE;

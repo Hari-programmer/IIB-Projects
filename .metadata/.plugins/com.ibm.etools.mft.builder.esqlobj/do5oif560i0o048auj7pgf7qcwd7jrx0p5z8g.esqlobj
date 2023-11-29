@@ -1,0 +1,12 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		DECLARE InRef REFERENCE TO InputRoot.DFDL.Input.record.Data;
+		
+		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' ;
+		
+		
+		RETURN TRUE;
+	END;
+
+	

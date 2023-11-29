@@ -1,0 +1,8 @@
+CREATE FILTER MODULE ComIbmDnqMwhUpdateInsert_PayloadPresent
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE rEnv REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		RETURN rEnv."bPayloadPresent";
+	END;
+
+END MODULE;

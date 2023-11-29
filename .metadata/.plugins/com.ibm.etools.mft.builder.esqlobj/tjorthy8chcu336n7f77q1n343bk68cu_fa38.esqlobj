@@ -1,0 +1,14 @@
+CREATE FUNCTION DnqUtil_GetNestedMessage(chFinMessage CHAR) RETURNS CHAR
+BEGIN
+	DECLARE chNestedMessage CHAR '';
+	DECLARE chMessageType   CHAR DnqUtil_GetMsgType(chFinMessage, FALSE);
+	DECLARE iMtPosition     INT POSITION( '{1:' IN chFinMessage FROM 3);
+
+	IF (chMessageType = '021') AND (iMtPosition > 0) THEN
+		SET chNestedMessage = DnqUtil_GetNestedMessage(SUBSTRING(chFinMessage FROM iMtPosition));
+	ELSE
+		SET chNestedMessage = chFinMessage;
+	END IF;
+
+RETURN chNestedMessage;
+END;

@@ -1,0 +1,6 @@
+CREATE FILTER MODULE ComIbmDnqMessageCopy_IsCopy
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		RETURN Environment."Variables"."ComIbmDni"."DnqMessageCopy"."bIsCopy";
+	END;
+END MODULE;

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?><xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" targetNamespace="http://tempuri.org/IIB_EMP_DETAILS" xmlns="http://tempuri.org/IIB_EMP_DETAILS" xmlns:ibmSchExtn="http://www.ibm.com/schema/extensions" xmlns:mrm="http://tempuri.org/IIB_EMP_DETAILS" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tns="http://tempuri.org/IIB_EMP_DETAILS" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+      <xsd:complexType name="GET_EMP_REQUEST">
+        <xsd:sequence>
+          <xsd:element ref="mrm:Emp_Id"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:complexType name="GET_EMP_RESPONSE">
+        <xsd:sequence>
+          <xsd:element ref="mrm:Emp_Id"/>
+          <xsd:element ref="mrm:Emp_Name"/>
+          <xsd:element ref="mrm:Emp_DOB"/>
+          <xsd:element ref="mrm:Emp_Phone"/>
+          <xsd:element ref="mrm:Emp_Mail"/>
+          <xsd:element ref="mrm:Emp_Address"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:complexType name="FAULT">
+        <xsd:sequence>
+          <xsd:element ref="mrm:Fault"/>
+          <xsd:element ref="mrm:Fstring"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:element name="Emp_Id" type="xsd:int"/>
+      <xsd:element name="Emp_Name" type="xsd:string"/>
+      <xsd:element name="Emp_Phone" type="xsd:int"/>
+      <xsd:element name="Emp_Address" type="xsd:string"/>
+      <xsd:element name="Emp_Mail" type="xsd:string"/>
+      <xsd:element name="Emp_DOB" type="xsd:date"/>
+      <xsd:element name="Fault" type="xsd:int"/>
+      <xsd:element name="Fstring" type="xsd:string"/>
+      <xsd:element ibmSchExtn:docRoot="true" name="GET_EMP_REQUEST" type="mrm:GET_EMP_REQUEST"/>
+      <xsd:element ibmSchExtn:docRoot="true" name="GET_EMP_RESPONSE" type="mrm:GET_EMP_RESPONSE"/>
+      <xsd:element name="FAULT" type="mrm:FAULT"/>
+    </xsd:schema>

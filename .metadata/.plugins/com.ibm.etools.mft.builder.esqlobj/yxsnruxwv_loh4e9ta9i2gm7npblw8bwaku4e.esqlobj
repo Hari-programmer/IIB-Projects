@@ -1,0 +1,32 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_GetAdjunctTableSettings(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT chAdjunctTableCoName CHAR) --@P29C
+BEGIN
+	DECLARE rEnv                  REFERENCE TO rEnvironment.Variables.ComIbmDni."DnqMwhUpdateInsert";
+	DECLARE rAdjunctTableSettings REFERENCE TO rEnvironment;
+	CREATE FIELD rEnv."AdjunctSettings" AS rAdjunctTableSettings;
+	DECLARE chDomain              CHAR rInputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain"; --@P05C
+
+	-- initialize adjunct table settings, if not present
+	IF CARDINALITY(rAdjunctTableSettings.*[]) = 0 THEN
+		SET rAdjunctTableSettings."DNIFIN"."ExtensionIdentifier"   = 'ComIbmDnfFIN';
+		SET rAdjunctTableSettings."DNIFIN"."AdjunctTableCoName"    = 'DnfMwhFin';
+		SET rAdjunctTableSettings."DNIFUNDS"."ExtensionIdentifier" = 'ComIbmDnfEfa';
+		SET rAdjunctTableSettings."DNIFUNDS"."AdjunctTableCoName"  = 'DnfMwhMsgEfa';
+                                                                 -- begin @P25A
+		SET rAdjunctTableSettings."DNIENI"."ExtensionIdentifier"   = 'ComIbmDnfEfa';
+		SET rAdjunctTableSettings."DNIENI"."AdjunctTableCoName"    = 'DnfMwhMsgEni';
+                                                                   -- end @P25A
+	END IF;
+                                                                 -- begin @P18A
+	DECLARE rElementCheck REFERENCE TO rInputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain";
+	IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+                                                                   -- end @P18A
+--		SET chExtensionId = COALESCE(rAdjunctTableSettings.{chDomain}."ExtensionIdentifier", 'ComIbmDnfEfa'); --@P25C @P29D
+		SET chAdjunctTableCoName = COALESCE(rAdjunctTableSettings.{chDomain}."AdjunctTableCoName", '');
+                                                                 -- begin @P18A
+	ELSE
+		-- set default values for MX, if no domain info found
+--		SET chExtensionId = rAdjunctTableSettings."DNIFUNDS"."ExtensionIdentifier"; @P29D
+		SET chAdjunctTableCoName = rAdjunctTableSettings."DNIFUNDS"."AdjunctTableCoName";
+	END IF;
+                                                                   -- end @P18A
+END;

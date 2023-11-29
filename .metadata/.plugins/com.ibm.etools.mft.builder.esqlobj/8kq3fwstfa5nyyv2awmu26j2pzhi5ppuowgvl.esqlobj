@@ -1,0 +1,12 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		
+		
+		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' || InputRoot.DFDL.Input.record.Data;
+		 
+		SET OutputLocalEnvironment.HTTP.Input.RequestLine.Method = 'GET'; 
+		
+		RETURN TRUE;
+	END;
+

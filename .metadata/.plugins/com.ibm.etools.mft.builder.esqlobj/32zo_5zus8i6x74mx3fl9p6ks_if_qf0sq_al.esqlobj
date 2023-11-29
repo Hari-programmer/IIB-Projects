@@ -1,0 +1,155 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment; --@P05A
+		
+		DECLARE CONVERT_CCSID CONSTANT INT 1208;
+
+		DECLARE rEnv                REFERENCE TO Environment;
+		CREATE FIELD Environment."Variables"."ComIbmDni"."DnqMsifInput" AS rEnv;
+		DECLARE iCcsid              INT  InputRoot.*[<2].CodedCharSetId;
+		DECLARE rInputPayload       REFERENCE TO InputRoot.*[<];
+		DECLARE chPayloadDomain     CHAR FIELDNAME(InputRoot.*[<]);
+		DECLARE rElementCheck       REFERENCE TO OutputRoot.MQRFH2;
+		DECLARE chOu                CHAR ''; --@P06A
+		DECLARE bMqrfh2InputMissing BOOLEAN FALSE;
+		DECLARE bTOSPropertyNeeded  BOOLEAN FALSE; -- TransferOptionSet property needed
+		
+		IF ((chPayloadDomain = 'XMLNSC') OR (chPayloadDomain = 'BLOB')) THEN -- @P19A
+	                                                                 -- begin @P18A
+			-- store original InputLocalEnvironment
+			DECLARE rOrgLocalEnv REFERENCE TO Environment;
+			CREATE FIELD rEnv."OriginalLocalEnv" AS rOrgLocalEnv;
+			SET rOrgLocalEnv = InputLocalEnvironment;
+	                                                                   -- end @P18A
+			IF chPayloadDomain = 'BLOB' THEN
+				MOVE rInputPayload TO InputRoot.BLOB.BLOB;
+			END IF;
+	
+			DECLARE	xPayload        BLOB BITSTREAM(rInputPayload);
+			DECLARE chPayload       CHAR CAST(xPayload AS CHAR CCSID iCcsid);
+	
+			SET rEnv."OriginalCCSID"   = iCcsid;
+			SET rEnv."OriginalPayload" = rInputPayload;
+			
+			SET rEnv."chPayloadDomain" = chPayloadDomain;
+	
+			IF (iCcsid <> CONVERT_CCSID) THEN
+				SET xPayload = CAST(chPayload AS BLOB CCSID CONVERT_CCSID);
+				SET OutputRoot.*[<] = NULL;
+				CREATE LASTCHILD OF OutputRoot DOMAIN chPayloadDomain PARSE(xPayload);
+				SET OutputRoot.*[<2].CodedCharSetId = CONVERT_CCSID;
+			END IF;
+			
+			SET rEnv."ConvertedPayload" = xPayload;
+			SET rEnv."ConvertedPayloadInBody" = OutputRoot.*[<].*[<];
+		END IF; -- @P19A
+
+		-- create MQRFH2, if it does not exist
+		IF NOT LASTMOVE(rElementCheck) THEN --@P04C
+			SET bMqrfh2InputMissing = TRUE;
+                                                                 /* begin @P04D
+			DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+			DECLARE rPreMqrfh2Header  REFERENCE To Environment;
+			CREATE NEXTSIBLING OF rPrePayloadHeader AS rElementCheck DOMAIN 'MQRFH2' NAME 'MQRFH2';
+			MOVE rPreMqrfh2Header TO OutputRoot.*[<3];
+			SET rElementCheck.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+			SET rElementCheck.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+			SET rElementCheck.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+			SET rElementCheck.(MQRFH2.Field)"NameValueCCSID" = 1208;
+*/                                                                 -- end @P04D
+		END IF;
+
+		-- check OU in MQRFH2
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+		IF bMqrfh2InputMissing OR (NOT LASTMOVE(rElementCheck)) OR (LENGTH(rElementCheck) = 0) THEN
+			-- check OU property
+			MOVE rElementCheck TO rEnv."chOu";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+                                                                 -- begin @P04A
+				IF bMqrfh2InputMissing THEN
+					DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+					DECLARE rPreMqrfh2Header  REFERENCE To Environment;
+					CREATE NEXTSIBLING OF rPrePayloadHeader AS rElementCheck DOMAIN 'MQRFH2' NAME 'MQRFH2';
+					MOVE rPreMqrfh2Header TO OutputRoot.*[<3];
+					SET rElementCheck.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+					SET rElementCheck.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+					SET rElementCheck.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+					SET rElementCheck.(MQRFH2.Field)"NameValueCCSID" = 1208;
+				END IF;
+                                                                   -- end @P04A
+				SET OutputRoot.MQRFH2."ComIbmDni"."OU" = TRIM(rEnv."chOu"); --@P04C @P17C
+			ELSE
+				-- OU missing in MQRFH2 and node property OU
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1250
+				VALUES ('DNQO1250E');
+			END IF;
+		END IF;
+		SET chOu = OutputRoot.MQRFH2."ComIbmDni"."OU"; --@P06A
+		
+		-- check TransferOptionSet for SendMsg requests (not mandatory)
+		-- ONLY for: ComIbmDni/Function/DNF_O_FT/SendMsg/Request/TransferOptionSet
+		-- NOT for:  ComIbmDni/Function/DNF_O_FT/SendMsg/Response/TransferOptionSet
+		-- NOT for:  ComIbmDni/Function/DNF_O_FT/MsgReceived/Notification/TransferOptionSet
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."MsgReceived";
+		IF NOT LASTMOVE(rElementCheck) THEN
+			MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Response";
+			IF NOT LASTMOVE(rElementCheck) THEN
+				MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request";
+				IF NOT LASTMOVE(rElementCheck) OR (rElementCheck."TransferOptionSet" IS NULL) OR
+					(LENGTH(rElementCheck."TransferOptionSet") = 0) THEN
+					SET bTOSPropertyNeeded = TRUE;
+				END IF;
+			END IF;
+		END IF;
+
+		IF bMqrfh2InputMissing OR bTOSPropertyNeeded THEN
+			-- check TransferOptionSet property
+			MOVE rElementCheck TO rEnv."chTransferOptionSet";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptionSet" = rElementCheck;
+			END IF;
+		END IF;
+                                                                 -- begin @P05A
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptionSet";
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET OutputLocalEnvironment."ComIbmDni"."Function"."CheckTransferOptionSetConfig".
+			"CheckConfig"."Request"."TransferOptionSetName" = rElementCheck;
+		END IF;
+                                                                   -- end @P05A
+                                                                 -- begin @P06A
+		DECLARE rScpnRequest  REFERENCE TO Environment;
+		DECLARE rConfigObject REFERENCE TO Environment;
+
+		CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request"."OU" AS rScpnRequest;
+		SET rScpnRequest."Name" = 'SYSOU';
+		CREATE FIELD rScpnRequest."ConfigObjectList" AS rScpnRequest NAME 'ConfigObjectList';
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DniOU';
+		SET rConfigObject."Name" = chOu;
+                                                                   -- end @P06A
+                                                                 -- begin @P09A
+		-- store original message information from mcd in MQRFH2
+		DELETE FIELD OutputRoot.MQRFH2."mcd";
+		DECLARE rRfhMcd REFERENCE TO InputRoot.MQRFH2."mcd";
+		IF LASTMOVE(rRfhMcd) THEN
+			DECLARE rMsgInfo REFERENCE TO Environment;
+			DELETE FIELD Environment."ComIbmDni"."Dnq"."OriginalMessageInformation"."MessageContentDescriptor"; --@P10C
+			CREATE FIELD Environment."ComIbmDni"."Dnq"."OriginalMessageInformation"."MessageContentDescriptor" AS rMsgInfo; --@P10C
+			MOVE rElementCheck TO rRfhMcd."Msd";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rMsgInfo."MessageServiceDomain"  = LOWER(rElementCheck);
+			END IF;
+			MOVE rElementCheck TO rRfhMcd."Set";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rMsgInfo."MessageSet"  = rElementCheck;
+			END IF;
+			MOVE rElementCheck TO rRfhMcd."Fmt";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rMsgInfo."MessageFormat"  = rElementCheck;
+			END IF;
+		END IF;
+                                                                   -- end @P09A
+		RETURN TRUE;
+	END;

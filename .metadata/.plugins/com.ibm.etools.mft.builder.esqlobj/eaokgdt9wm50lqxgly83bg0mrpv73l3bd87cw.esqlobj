@@ -1,0 +1,15 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/ BEGIN
+
+		SET OutputRoot = InputRoot;
+
+		Create LASTCHILD OF OutputRoot DOMAIN( 'MQMD' ); 
+		Set OutputRoot.MQMD.Format = 'MQHRF2  ';
+
+		Create LASTCHILD OF OutputRoot DOMAIN( 'MQRFH2' ); 
+		SET OutputRoot.MQRFH2.(MQRFH2.Field)Format = MQFMT_NONE;
+		SET OutputRoot.MQRFH2.ComIbmDni.OU = 'SYSOU';
+
+		RETURN TRUE;
+
+	END;
+

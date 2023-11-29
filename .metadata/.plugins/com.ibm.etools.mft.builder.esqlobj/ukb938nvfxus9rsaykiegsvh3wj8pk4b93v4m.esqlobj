@@ -1,0 +1,71 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node throws an WebSphere BI for FN exception including the last (incoming) WMQI exception.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+DECLARE pRef REFERENCE TO InputExceptionList.*[1];
+DECLARE fBreak BOOLEAN;
+SET     fBreak = FALSE;
+
+DECLARE chException CHARACTER;
+DECLARE iCountLoop INTEGER;
+DECLARE iCountInserts INTEGER;
+
+--------------------------------------------------------------------------------------------------------------
+-- get last exception in the list
+--------------------------------------------------------------------------------------------------------------
+WHILE (LASTMOVE(pRef) = TRUE AND fBreak = FALSE) DO
+  -- check if pRef still refers to an exception 
+  IF (pRef.Number IS NOT NULL) THEN
+    MOVE pRef LASTCHILD; -- jump to next exception in the list
+  ELSE
+    MOVE pRef PARENT;    -- jump to last exception 
+    SET fBreak = TRUE;   -- break the loop       
+  END IF;
+END WHILE; -- end looping exception list 
+
+--------------------------------------------------------------------------------------------------------------
+-- decide, if it has to rethrow a WebSphere BI for FN exception or to throw a WMQI
+-- exception
+--------------------------------------------------------------------------------------------------------------
+IF (pRef.Catalog = 'dniccmsg') THEN
+  ------------------------------------------------------------------------------------------------------------
+  -- rethrow a WFNI exception
+  ------------------------------------------------------------------------------------------------------------
+  SET chException =    'THROW USER EXCEPTION SEVERITY ' 
+		    || CAST(pRef.Severity AS CHAR) || ' '
+		    || 'CATALOG ''dniccmsg'' MESSAGE '
+		    || CAST(pRef.Number AS CHAR) || ' '
+		    || 'VALUES( ';
+  
+  SET iCountLoop = 1;
+  SET iCountInserts = CARDINALITY(pRef."Insert"[]);
+  WHILE (iCountLoop <= iCountInserts) DO
+    IF (iCountLoop <> 1) THEN
+      SET chException = chException || ',';
+    END IF;
+    SET chException = chException || '''' || pRef."Insert"[iCountLoop].Text || '''';
+    SET iCountLoop = iCountLoop + 1;
+  END WHILE;
+
+  SET chException = chException || ');';
+  EVAL(chException);   
+
+ELSE
+  ------------------------------------------------------------------------------------------------------------
+  -- generate a WebSphere BI for FN exception out of the WMQI exception and throw it
+  ------------------------------------------------------------------------------------------------------------
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6013 VALUES(pRef.Number,
+    pRef."Insert"[1].Text, pRef."Insert"[2].Text, pRef."Insert"[3].Text, pRef."Insert"[4].Text,
+    pRef."Insert"[5].Text, pRef."Insert"[6].Text, pRef."Insert"[7].Text, pRef."Insert"[8].Text,
+    pRef."Insert"[9].Text, 'DNIT6013E');
+   
+END IF;
+
+
+
+RETURN true;
+END;
+

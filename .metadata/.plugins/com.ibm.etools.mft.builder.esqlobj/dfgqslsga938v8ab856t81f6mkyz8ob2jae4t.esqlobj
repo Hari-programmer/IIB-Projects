@@ -1,0 +1,8 @@
+CREATE FUNCTION ComIbmDnqMwhUpdateInsert_GetRequestPath(IN bUpdateMsg BOOLEAN) RETURNS CHAR
+BEGIN
+	DECLARE chMwhPath CHAR 'Insert';
+	IF bUpdateMsg THEN
+		SET chMwhPath = 'Update';
+	END IF;
+	RETURN chMwhPath;
+END;

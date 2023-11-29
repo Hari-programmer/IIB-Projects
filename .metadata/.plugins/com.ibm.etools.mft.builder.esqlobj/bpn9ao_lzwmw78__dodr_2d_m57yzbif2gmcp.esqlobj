@@ -1,0 +1,187 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		--CALL CopyEntireMessage();
+		
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		DECLARE i INTEGER 1;
+		--DECLARE Blobref BLOB ;
+		DECLARE Blob2 BLOB;
+		
+		
+		FOR ref AS InputRoot.DFDL.InputCSV.record[] DO
+			
+		DECLARE Dref BLOB CAST(ref.PAYLOAD AS BLOB CCSID 1208);
+		--SET OutputRoot.XMLNSC.payload =Dref;
+		--SET EV.Blobref = Dref;
+		--DECLARE CharRef CHARACTER CAST(EV.Blobref AS CHARACTER CCSID 1208);
+		
+		
+		
+		
+		--DECLARE CharRef1 CHARACTER CAST(CHAR1 As CHARACTER CCSID 1208);
+		--SET OutputRoot.BLOB.BLOB.record[i].payload= EV.Blobref;
+		
+		
+		
+		--  DECLARE charref1 CHARACTER CAST(CharRef AS CHARACTER CCSID 1208);	
+----		DECLARE Dref2 BLOB CAST(CharRef AS BLOB CCSID 1208);
+----		SET EV.Blobref1 = CAST(Dref2 AS BLOB CCSID 1208);
+----		DECLARE CharRef1 CHARACTER CAST(EV.Blobref1 AS CHARACTER CCSID 1208);
+		--SET OutputRoot.DFDL.OutCSV.record[i].PAYLOAD =CharRef;
+		
+		SET i= i+1;	
+		END FOR;
+		
+		
+	
+		
+--		
+
+
+
+
+
+
+
+
+
+
+--		SET OutputRoot.BLOB.BLOB.data[i].PAYLOAD = Ref.PAYLOAD;
+--		DECLARE chr_PAYLOAD CHARACTER CAST(OutputRoot.BLOB.BLOB.data[i].PAYLOAD  AS CHARACTER CCSID 1208);
+--		SET OutputRoot.DFDL.Output_char.record[i].PAYLOAD = chr_PAYLOAD ;
+--		
+--		
+		
+		
+		
+		
+	
+		
+		
+		
+		
+		
+		
+		
+		
+		--DECLARE bPayload BLOB ASBITSTREAM(InputRoot.DFDL.CSV_FILE.record CCSID InputRoot.Properties.CodedCharSetId ENCODING InputRoot.Properties.Encoding);
+
+        --DECLARE cPayload CHARACTER CAST (bPayload AS CHARACTER CCSID InputRoot.Properties.CodedCharSetId ENCODING InputRoot.Properties.Encoding);	
+		
+		
+		
+--		
+--		CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC';	
+--		SET OutputRoot.XMLNSC.data.Payload = Ref.PAYLOAD;
+--		
+--		
+--        DECLARE inCCSID INT InputProperties.CodedCharSetId;                     
+--		DECLARE inEncoding INT InputProperties.Encoding; 
+--        
+--	    DECLARE inBitStream BLOB ASBITSTREAM(InputRoot.DFDL, inEncoding, inCCSID);
+--	    CREATE LASTCHILD OF OutputRoot DOMAIN('XMLNSC')    PARSE(inBitStream, inEncoding, inCCSID);
+--		DECLARE i INTEGER 1;
+--		FOR Ref AS InputRoot.DFDL.CSV_FILE.record[]  DO
+--			
+--		CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC';		
+--		SET OutputRoot.XMLNSC.data[i].Payload = Ref.PAYLOAD;
+--		DECLARE Payload BLOB ASBITSTREAM(OutputRoot.XMLNSC, inEncoding, inCCSID);
+--		DECLARE chr_Payload CHARACTER CAST(Payload  AS CHARACTER CCSID 1208);
+--		SET OutputRoot.DFDL.Output_char.record[i].Payload = chr_Payload;
+--		
+		
+		
+		
+--		SET i =i+1;
+--	END FOR;
+--	
+--	
+--	CREATE LASTCHILD OF OutputRoot DOMAIN ('XMLNSC') PARSE()
+--	
+--	DECLARE inBitStream BLOB ASBITSTREAM(InputRoot.DFDL, inEncoding, inCCSID);
+--	CREATE LASTCHILD OF OutputRoot DOMAIN('XMLNSC')                            
+--       PARSE(inBitStream, inEncoding, inCCSID); 
+--	
+--	
+--	DECLARE inCCSID INT InputProperties.CodedCharSetId;                     
+--	DECLARE inEncoding INT InputProperties.Encoding;                       
+--	DECLARE inBitStream BLOB ASBITSTREAM(InputRoot.XMLNSC, inEncoding, inCCSID);
+--	CREATE LASTCHILD OF OutputRoot DOMAIN('MRM') PARSE(inBitStream, inEncoding, inCCSID); 
+	
+	
+	
+	--DECLARE bPayload BLOB ASBITSTREAM(InputRoot.DFDL.CSV_FILE.record,InputRoot.Properties.Encoding,InputRoot.Properties.CodedCharSetId);
+
+    --DECLARE cPayload CHARACTER CAST (bPayload AS CHARACTER CCSID InputRoot.Properties.CodedCharSetId ENCODING InputRoot.Properties.Encoding);	
+		
+--	CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC';	
+--		DECLARE i INTEGER 1;
+--		FOR Ref AS InputRoot.DFDL.CSV.record[]  DO
+--			
+--		SET OutputRoot.XMLNSC.data[i].Payload = Ref.PAYLOAD;
+--		SET i =i+1;
+--	END FOR;
+--				
+--		DECLARE i INTEGER 1;
+--		DECLARE var CHARACTER;
+--		DECLARE var1 CHARACTER;
+--		
+--	FOR Ref AS InputRoot.DFDL.CSV.record[]  DO
+--		
+----		SET OutputRoot.DFDL.Output_char.record[i].ID = Ref.ID;	
+----		SET OutputRoot.DFDL.Output_char.record[i].ROW_ID = Ref.ROW_ID;	
+----		SET OutputRoot.DFDL.Output_char.record[i].EXTERNALID = Ref.EXTERNALID;	
+----		SET OutputRoot.DFDL.Output_char.record[i].STORETIME = Ref.STORETIME;	
+----		SET OutputRoot.DFDL.Output_char.record[i].OU = Ref.OU;	
+----		SET OutputRoot.DFDL.Output_char.record[i].ROUTINGREQ = Ref.ROUTINGREQ;	
+----		SET OutputRoot.DFDL.Output_char.record[i].MQHEADERENC = Ref.MQHEADERENC;
+----		SET OutputRoot.DFDL.Output_char.record[i].MSGTYPE = Ref.MSGTYPE;
+----		SET OutputRoot.DFDL.Output_char.record[i].DIRECTION = Ref.DIRECTION;
+----		SET OutputRoot.DFDL.Output_char.record[i].QUEUETYPE = Ref.QUEUETYPE;
+----		SET OutputRoot.DFDL.Output_char.record[i].LOCKTIME = Ref.LOCKTIME;
+----		SET OutputRoot.DFDL.Output_char.record[i].POSSIBLEDUPLICATE = Ref.POSSIBLEDUPLICATE;
+--				
+--		SET OutputRoot.BLOB.BLOB.data[i].MQHEADER =Ref.MQHEADER;	
+--		DECLARE chr_MQHEADER CHARACTER CAST(OutputRoot.BLOB.BLOB.data[i].MQHEADER AS CHARACTER CCSID 1208);
+--		SET OutputRoot.DFDL.Output_char.record[i].MQHEADER = chr_MQHEADER; 
+--		
+--		SET OutputRoot.BLOB.BLOB.data[i].COMIBMDNI = Ref.COMIBMDNI;
+--		DECLARE chr_COMIBMDNI CHARACTER CAST(OutputRoot.BLOB.BLOB.data[i].COMIBMDNI  AS CHARACTER CCSID 1208);
+--		SET OutputRoot.DFDL.Output_char.record[i].COMIBMDNI = chr_COMIBMDNI;
+--		
+--		SET OutputRoot.BLOB.BLOB.data[i].PAYLOAD = Ref.PAYLOAD;
+--		DECLARE chr_PAYLOAD CHARACTER CAST(OutputRoot.BLOB.BLOB.data[i].PAYLOAD  AS CHARACTER CCSID 1208);
+--		SET OutputRoot.DFDL.Output_char.record[i].PAYLOAD = chr_PAYLOAD ;
+----		
+----		SET OutputRoot.DFDL.Output_char.record[i].MSGDOMAIN = Ref.MSGDOMAIN;
+----		SET OutputRoot.DFDL.Output_char.record[i].QUEUE = Ref.QUEUE;
+----		SET OutputRoot.DFDL.Output_char.record[i].LOCALADDRESS = Ref.LOCALADDRESS;
+----		SET OutputRoot.DFDL.Output_char.record[i].REMOTEADDRESS = Ref.REMOTEADDRESS;
+----		SET OutputRoot.DFDL.Output_char.record[i].LOCKUSER = Ref.LOCKUSER;
+----		SET OutputRoot.DFDL.Output_char.record[i].LASTCHGUSER = Ref.LASTCHGUSER;
+----		
+--		SET OutputRoot.XMLNSC.data[i].Payload = Ref.PAYLOAD;
+--		
+--		SET i =i+1;
+--			
+--	END FOR;
+	
+	
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;

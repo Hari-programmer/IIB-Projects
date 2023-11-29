@@ -1,0 +1,88 @@
+CREATE COMPUTE MODULE Consumer_Compute1
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		CALL CopyEntireMessage();
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		CREATE LASTCHILD OF EV.Req DOMAIN 'JSON' PARSE(InputRoot.BLOB.BLOB);
+		
+		IF EV.Req.JSON.Data.Name='Gnaneswar' THEN
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+		
+		ELSEIF EV.Req.JSON.Data.Name='Pravalika' THEN
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+		
+		ELSEIF EV.Req.JSON.Data.Name='Sudisna' THEN
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+			
+		ELSEIF EV.Req.JSON.Data.Name='Pavan' THEN
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+			
+		ELSEIF EV.Req.JSON.Data.Name='Akash' THEN 
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+			
+		ELSEIF EV.Req.JSON.Data.Name='Akshay' THEN
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+			
+		ELSEIF EV.Req.JSON.Data.Name='Amith' THEN
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+			
+		ELSEIF EV.Req.JSON.Data.Name='Hari' THEN
+			SET OutputRoot.XMLNSC.Emp.Name = EV.Req.JSON.Data.Name;
+			SET OutputRoot.XMLNSC.Emp.Eduaction =EV.Req.JSON.Data.Eduaction;
+			SET OutputRoot.XMLNSC.Emp.Passed_out = EV.Req.JSON.Data.Passed_out ;
+			SET OutputRoot.XMLNSC.Emp.From = EV.Req.JSON.Data.From ;
+			SET OutputRoot.XMLNSC.Emp.Phone = EV.Req.JSON.Data.Phone;
+		
+		
+		ELSE 
+			SET OutputRoot.XMLNSC.Error='Invalid Name';
+			
+		END IF;
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;

@@ -1,0 +1,467 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rTplRequest REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request; -- @P01A
+		DECLARE rTrace REFERENCE TO Environment;
+                                                                 -- begin @P19A
+		-- code moved from Compute node CopySCPNResponse
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+		DECLARE rEnvironment           REFERENCE TO Environment;
+                                                                 /* begin @P21D
+		CALL DnqUtil_CopyScpnToEnv(rInputLocalEnvironment, rEnvironment);
+		
+		SET Environment.ComIbmDni.Properties.Common.LastUpdate = InputLocalEnvironment.ComIbmDni.Properties.Common.LastUpdate;
+		
+		DECLARE chFinRefConfigValue CHAR '';
+                                                                   -- end @P19A
+		IF (Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeFin) THEN        -- @P12A
+			-- FIN
+			DELETE FIELD OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.MTFIN;
+		ELSE                                                                          -- @P12A
+			-- MSIF
+			CREATE FIELD Environment.ComIbmDni.Dnq.ER; -- required for ER header API
+		END IF;                                                                       -- @P12A
+
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Trace AS rTrace;
+
+		SET OutputRoot.MQRFH2.ComIbmDni.Dnq.ExternalMessageId = InputRoot.MQMD.MsgId;
+*/                                                                 -- end @P21D
+		/*-------------------------------*\
+		|  Create message history record  |
+		\*-------------------------------*/
+		DECLARE rHistoryEntry REFERENCE TO Environment;
+		CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.History AS rHistoryEntry;
+		CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+
+		SET rHistoryEntry."UserId"         = RTRIM( InputRoot.MQMD.UserIdentifier );
+		SET rHistoryEntry."TimeStamp"      = DnqUtil_GetCurrentWbifnTimestamp();
+		SET rHistoryEntry."QueueType"      = 'MAIN';
+		SET rHistoryEntry."QueueName"      = InputLocalEnvironment.Destination.Dnq.DestinationData.QueueName;
+		SET rHistoryEntry."Component"      = 'DNQ';
+		SET rHistoryEntry."Service"        = 'ER';
+		IF LASTMOVE(rTplRequest) THEN                   -- @P01A begin
+			SET rHistoryEntry."Function"   = 'TPLIMP';
+		ELSE                                            -- @P01A end
+			SET rHistoryEntry."Function"   = 'INPUT';
+		END IF;                                         -- @P01A
+		SET rHistoryEntry."FunctionResult" = 'Ok';
+                                                                 -- begin @P21A
+		DECLARE rInputRoot              REFERENCE TO InputRoot;
+		DECLARE rOutputRoot             REFERENCE TO OutputRoot;
+		DECLARE rOutputLocalEnvironment REFERENCE TO OutputLocalEnvironment;
+		DECLARE chFinRefConfigValue     CHAR rTrace.chFinRefConfigValue;
+		DECLARE chSchema                CHAR Environment.Variables.ComIbmDni.Dnq.Properties.SchemaName;
+
+		CALL DnqErCommon_PutMessageToErQueue(rEnvironment, rInputLocalEnvironment, rOutputLocalEnvironment, rInputRoot, rOutputRoot, FALSE, 0);
+
+		SET chFinRefConfigValue = rTrace.chFinRefConfigValue;
+                                                                   -- end @P21A
+                                                                 /* begin @P21D
+   	    /* create workfolder structure for DB
+   	    <Root>
+   	    	<MQRFH2>
+   	    		<ComIbmDni>
+   	    		...
+   	    		</ComIbmDni>
+   	    	</MQRFH2>
+   	    	<Environment>
+   	    		<ComIbmDni>
+   	    		...
+   	    		</ComIbmDni>
+   	    	</Environment>
+   	    </Root>
+   	    */
+		DECLARE xComIbmDni BLOB;
+		DECLARE rComIbmDni REFERENCE TO OutputRoot.MQRFH2.ComIbmDni;
+		DECLARE rTemp      REFERENCE TO Environment;
+
+		DELETE FIELD OutputRoot.XMLNSC;
+		SET OutputRoot.MQRFH2.CodedCharSetId = 1208;
+		CREATE FIELD OutputRoot.XMLNSC.Root;
+		CREATE FIRSTCHILD OF OutputRoot.XMLNSC.Root NAME 'MQRFH2';
+		CREATE LASTCHILD  OF OutputRoot.XMLNSC.Root AS rTemp NAME 'Environment';
+		CREATE LASTCHILD  OF rTemp AS rTemp NAME 'ComIbmDni';
+		IF LASTMOVE(rComIbmDni) THEN
+			SET xComIbmDni = ASBITSTREAM( OutputRoot.MQRFH2.ComIbmDni OPTIONS FolderBitStream CCSID 1208 );
+			CREATE LASTCHILD OF OutputRoot.XMLNSC.Root.MQRFH2 DOMAIN('XMLNSC') PARSE( xComIbmDni CCSID 1208 OPTIONS FolderBitStream );
+		END IF;
+		MOVE rComIbmDni TO Environment.ComIbmDni.Dnq;
+		IF LASTMOVE(rComIbmDni) THEN
+			CALL ComIbmDnqRouting.DnqUtil_CopyTree(rComIbmDni, rTemp);
+		END IF;
+		SET xComIbmDni = ASBITSTREAM( OutputRoot.XMLNSC.Root OPTIONS FolderBitStream CCSID 1208 );
+
+		-- Restore payload
+		DELETE FIELD OutputRoot.XMLNSC;
+		SET OutputRoot.XMLNSC = InputRoot.XMLNSC;
+		MOVE rComIbmDni TO OutputRoot.MQRFH2.ComIbmDni;
+
+		-- Parse all headers to a bitstream as XML
+		DECLARE J INTEGER CARDINALITY( InputRoot.*[] );
+		DECLARE I INTEGER;
+		DECLARE chHdrId CHARACTER;
+		DECLARE chHdrName CHARACTER;
+		DECLARE xHeaders BLOB;
+		DECLARE xTmp BLOB;
+		DECLARE bEmptyPayload BOOLEAN FALSE;
+
+		IF (    (FIELDNAME(InputBody) <> 'XMLNSC')
+		    AND (FIELDNAME(InputBody) <> 'BLOB')  ) THEN
+
+			-- Save also last header if there's no payload; 
+			SET rTrace.BodyName = FIELDNAME(InputBody);
+			SET J=J+1;
+			SET bEmptyPayload = TRUE;
+		END IF;
+
+		SET xHeaders = '';
+		SET I = 1;
+		WHILE I < J DO
+			SET xTmp = ASBITSTREAM( OutputRoot.*[I] CCSID 1208 ENCODING InputRoot.MQMD.Encoding );
+			SET chHdrName = FIELDNAME( OutputRoot.*[I] ) || ';';
+			SET chHdrId = CAST( ( LENGTH( xTmp ) ) AS CHARACTER CCSID 1208 ) || ';';
+			SET xHeaders = xHeaders || CAST( chHdrId AS BLOB CCSID 1208 ) || CAST( CAST( chHdrName AS CHARACTER CCSID 1208 ) AS BLOB CCSID 1208 ) || xTmp;
+			SET I = I + 1;
+		END WHILE;
+
+		/*------------------------------------*\
+		|  Prepare data for INSERT statements  |
+		\*------------------------------------*/
+		DECLARE rProperties    REFERENCE TO Environment.ComIbmDni.Dnq.Properties;
+		DECLARE rTmp           REFERENCE TO Environment;
+		DECLARE iEncoding      INT  InputRoot.MQMD.Encoding;
+		DECLARE chMsgDomain    CHAR InputRoot.MQRFH2.ComIbmDni.MsgStandardInfo.Domain;
+		DECLARE chMsgType      CHAR InputRoot.MQRFH2.ComIbmDni.MsgStandardInfo.Type;
+		DECLARE chOu           CHAR InputRoot.MQRFH2.ComIbmDni.OU;
+		DECLARE chQueue        CHAR InputLocalEnvironment.Destination.Dnq.DestinationData.QueueName;
+		DECLARE chSchema       CHAR Environment.Variables.ComIbmDni.Dnq.Properties.SchemaName; 
+		DECLARE chQueueType    CHAR SUBSTRING( InputLocalEnvironment.Destination.Dnq.DestinationData.QueueType FROM 1 FOR 1 );
+		DECLARE chNextProcType CHAR SUBSTRING( InputLocalEnvironment.Destination.Dnq.DestinationData.NextProcessingType FROM 1 FOR 1 );
+		DECLARE chRemoteAddr   CHAR rProperties.RemoteAddress;
+		DECLARE chDirection    CHAR rProperties.MessageDirection;
+		DECLARE chPdIndicator  CHAR 'N';
+		DECLARE chLocalAddr    CHAR;
+		DECLARE chApplRef      CHAR '';
+		DECLARE chValueDate    CHAR;
+		DECLARE chStmtInsert1  CHAR;
+		DECLARE chStmtInsert2  CHAR;
+		DECLARE chStmtSelect   CHAR;
+		DECLARE xMsgID         BLOB InputRoot.MQMD.MsgId;
+		DECLARE xPayload       BLOB;
+
+		IF chDirection = 'I' THEN
+			SET chDirection = 'S';
+		ELSE
+			IF chDirection = 'O' THEN
+				SET chDirection = 'R';
+			END IF;
+		END IF;
+
+		IF (LOWER(rProperties.PossibleDuplicate) = 'true') THEN
+			SET chPdIndicator = 'Y';
+		END IF;
+
+		IF (NOT bEmptyPayload) THEN
+			SET xPayload = ASBITSTREAM( OutputRoot.*[<] CCSID InputRoot.MQRFH2.CodedCharSetId );
+		END IF;
+
+		IF (Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeFin) THEN -- @P12A
+
+			/*----------------------*\
+			|  Prepare data for FIN  |
+			\*----------------------*/
+			SET chValueDate = rProperties.DNIFIN.ValueDate;
+
+			-- Set local address
+			SET chLocalAddr = rProperties.LocalAddress;
+			IF ((chLocalAddr IS NULL) OR (LENGTH(chLocalAddr) = 0)) THEN
+				SET chLocalAddr = 'DNIUNPARSABLE';
+			END IF;
+
+			-- Set application reference based on config
+                                                                 -- begin @P19A
+			DECLARE rReferenceExtraction  REFERENCE TO Environment.ComIbmDni.Properties.{chOu}.DnqEROUOptions.DnqEROUOptions.FINReferenceExtraction;
+			DECLARE chReferenceExtraction CHAR '108,20'; -- default: ApplicationReference then TransactionReference
+
+			--((rReferenceExtraction = '20') OR (rReferenceExtraction = '108,20'))
+
+			-- only default ('108,20') and '20' are allowed options, otherwise raise event
+			IF LASTMOVE(rReferenceExtraction) AND (LENGTH(rReferenceExtraction) > 0) THEN
+				
+				IF ((rReferenceExtraction = '20') OR (rReferenceExtraction = '108,20'))  THEN
+					SET chReferenceExtraction = rReferenceExtraction;
+				ELSE
+					-- prepare config error event
+					SET chFinRefConfigValue = rReferenceExtraction;
+				END IF;
+				
+			END IF;
+			
+			SET rTrace.chReferenceExtraction = chReferenceExtraction;
+
+			IF (    (CARDINALITY(rProperties.DNIFIN.TransactionReference[]) > 0)
+			    AND (LENGTH     (rProperties.DNIFIN.TransactionReference)   > 0)) THEN
+
+				SET chApplRef = rProperties.DNIFIN.TransactionReference;
+			END IF;
+
+			IF (chReferenceExtraction = '108,20') AND
+				((CARDINALITY(rProperties.DNIFIN.ApplicationReference[]) > 0) AND
+				(LENGTH(rProperties.DNIFIN.ApplicationReference) > 0)) THEN
+
+				SET chApplRef = rProperties.DNIFIN.ApplicationReference;
+			END IF;
+                                                                   -- end @P19A
+                                                                 /* begin @P19D
+			IF (    (CARDINALITY(rProperties.DNIFIN.ApplicationReference[]) > 0)
+				AND (LENGTH     (rProperties.DNIFIN.ApplicationReference)   > 0)) THEN
+
+				SET chApplRef = rProperties.DNIFIN.ApplicationReference;
+
+			ELSEIF (    (CARDINALITY(rProperties.DNIFIN.TransactionReference[]) > 0)
+				    AND (LENGTH     (rProperties.DNIFIN.TransactionReference)   > 0)) THEN
+
+				SET chApplRef = rProperties.DNIFIN.TransactionReference;
+				
+			-- RelatedReference is not documented as possible field value
+			ELSEIF (    (CARDINALITY(rProperties.DNIFIN.RelatedReference[]) > 0)
+					AND (LENGTH     (rProperties.DNIFIN.RelatedReference)   > 0)) THEN
+
+					SET chApplRef = rProperties.DNIFIN.RelatedReference;
+			END IF;
+*/                                                                 -- end @P19D
+			IF (LENGTH(chApplRef) > 32) THEN
+				SET chApplRef = SUBSTRING(chApplRef FROM 1 FOR 32);
+			END IF;
+
+		ELSE                                                                          -- @P12A begin
+
+			/*-----------------------*\
+			|  Prepare data for MSIF  |
+			\*-----------------------*/
+			SET chValueDate = rProperties.DNIFUNDS.TradeDateTime;
+
+			-- Set local address
+			IF ((CARDINALITY(rProperties.LocalAddress[]) > 0) AND (LENGTH(rProperties.LocalAddress) > 0)) THEN
+				SET chLocalAddr = rProperties.LocalAddress;
+			ELSE
+				IF (CARDINALITY(Environment.Variables.ComIbmDni.Dnq.Properties.LocalAddress[]) > 0) THEN
+					SET chLocalAddr = Environment.Variables.ComIbmDni.Dnq.Properties.LocalAddress;
+					SET rProperties.LocalAddress = chLocalAddr;
+				ELSE
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 3014 VALUES( 'DNQK3014E' );
+				END IF;
+			END IF;
+
+		END IF; -- switch on node type (FIN or MSIG)                                     @P12A end
+
+		/*------------------------------------------------*\
+		|  Insert general message data into DNQE_MESSAGES  |
+		\*------------------------------------------------*/
+		SET chStmtInsert1 = 'INSERT INTO ' || chSchema || '.DNQE_MESSAGES (' ||
+			'STORETIME, EXTERNALID, OU, QUEUE, QUEUETYPE, ROUTINGREQ, LASTCHGUSER, MQHEADERENC, ' ||
+			'MQHEADER, COMIBMDNI, PAYLOAD, LOCALADDRESS, REMOTEADDRESS, MSGDOMAIN, MSGTYPE, DIRECTION, POSSIBLEDUPLICATE)  ' ||
+			'VALUES( CURRENT TIMESTAMP - CURRENT TIMEZONE, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )';
+
+		SET rTrace.chStmtInsert1  = chStmtInsert1;
+		SET rTrace.xMsgID         = xMsgID;
+		SET rTrace.chOu           = chOu;
+		SET rTrace.chQueue        = chQueue;
+		SET rTrace.chQueueType    = chQueueType;
+		SET rTrace.chNextProcType = chNextProcType;
+		SET rTrace.LASTCHGUSER    = 'NULL';
+		SET rTrace.iEncoding      = iEncoding;
+		SET rTrace.Headers        = xHeaders;
+		SET rTrace.xComIbmDni     = xComIbmDni;
+		SET rTrace.xPayload       = xPayload;
+		SET rTrace.chLocalAddr    = chLocalAddr;
+		SET rTrace.chRemoteAddr   = chRemoteAddr;
+		SET rTrace.chMsgDomain    = chMsgDomain;
+		SET rTrace.chMsgType      = chMsgType;
+		SET rTrace.chDirection    = chDirection;
+		SET rTrace.chPdIndicator  = chPdIndicator;
+
+		PASSTHRU( chStmtInsert1, xMsgID, chOu, chQueue, chQueueType, chNextProcType, NULL,
+			iEncoding, xHeaders, xComIbmDni, xPayload, chLocalAddr, chRemoteAddr, chMsgDomain, chMsgType, chDirection, chPdIndicator );
+
+		-- Retrieve generated Id
+		-- SET Environment.Variables.ComIbmDni.Dnq.Tmp[] = PASSTHRU( 'SELECT IDENTITY_VAL_LOCAL() AS ID from SYSIBM.SYSDUMMY1' );
+		/* CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Tmp AS rTmp;
+		SET Environment.Variables.ComIbmDni.Dnq.Tmp[] = PASSTHRU( chStmtSelect, xMsgID );
+
+		IF ( (CARDINALITY(Environment.Variables.ComIbmDni.Dnq.Tmp[]) = 1) AND (rTmp.ID <> '') ) THEN
+			SET iID = CAST(rTmp.ID AS INT);
+		ELSE
+			IF (CARDINALITY(Environment.Variables.ComIbmDni.Dnq.Tmp[]) > 1) THEN
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1118 VALUES( xMsgID, 'DNQK1118E' );
+			ELSE
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 2008 VALUES( 'DNQK2008E' );
+			END IF;
+		END IF; */
+
+		/*----------------------*\
+		|  Insert specific data  |
+		\*----------------------*/
+
+		IF (Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeFin) THEN -- @P12A
+
+			-- -----------------
+			-- FIN specific data
+			-- -----------------
+
+			DECLARE chAmount    CHAR rProperties.DNIFIN.Amount;
+			DECLARE chCurrency  CHAR rProperties.DNIFIN.Currency;
+			DECLARE chPriority  CHAR rProperties.Priority;
+			DECLARE iSessionId  INT  CAST( rProperties.DNIFIN.SessionId  AS INTEGER );
+			DECLARE iISN        INT  CAST( rProperties.DNIFIN.SessionISN AS INTEGER );
+			DECLARE iOSN        INT  CAST( rProperties.DNIFIN.SessionOSN AS INTEGER );
+			
+			SET rTrace.chStmtInsert2 = chStmtInsert2;
+			SET rTrace.chApplRef     = chApplRef;
+			SET rTrace.chValueDate   = chValueDate;
+			SET rTrace.chAmount      = chAmount;
+			SET rTrace.chCurrency    = chCurrency;
+			SET rTrace.chPriority    = chPriority;
+			SET rTrace.iSessionId    = iSessionId;
+			SET rTrace.iISN          = iISN;
+			SET rTrace.iOSN          = iOSN;
+
+			SET chStmtInsert2 = 'INSERT INTO ' || chSchema || '.DNQE_ME_DNIFIN (' ||
+				'ID, APPLREFERENCE, VALUEDATE, AMOUNT, CURRENCY, PRIORITY, SESSION, ISN, OSN) ' ||
+				'VALUES( IDENTITY_VAL_LOCAL(), ?, ?, ?, ?, ?, ?, ?, ? )';
+
+			PASSTHRU( chStmtInsert2, chApplRef, chValueDate, chAmount, chCurrency, chPriority, iSessionId, iISN, iOSN);
+
+		ELSE                                                              -- @P12A begin
+			-- ------------------
+			-- MSIF specific data
+			-- ------------------
+
+			IF (chMsgDomain = 'DNIFUNDS') THEN
+
+				-- Insert FUNDS fields
+				DECLARE chUnits        CHAR rProperties.DNIFUNDS.Units;
+				DECLARE chSecurityID   CHAR rProperties.DNIFUNDS.ID;
+				DECLARE chOrderRef     CHAR rProperties.DNIFUNDS.OrderReference;
+				DECLARE chSecurityStd  CHAR; -- rProperties.SecurityStandard;
+
+				SET chStmtInsert2 = 'INSERT INTO ' || chSchema || '.DNQE_ME_DNIFUNDS (' ||
+					'ID, VALUEDATE, UNITS, SECURITYID, SECSTANDARD, ORDERREFERENCE) ' ||
+					'VALUES( IDENTITY_VAL_LOCAL(), ?, ?, ?, ?, ? )';
+
+				SET rTrace.chStmtInsert2 = chStmtInsert2;
+				SET rTrace.chValueDate   = chValueDate;
+				SET rTrace.chUnits       = chUnits;
+				SET rTrace.chSecurityID  = chSecurityID;
+				SET rTrace.chSecurityStd = chSecurityStd;
+				SET rTrace.chOrderRef    = chOrderRef;
+
+				PASSTHRU( chStmtInsert2, chValueDate, chUnits, chSecurityID, chSecurityStd, chOrderRef );
+
+			ELSEIF (chMsgDomain = 'DNIENI') THEN
+
+				-- Insert ENI fields
+				DECLARE chCaseId       CHAR rProperties.DNIENI.CaseId;
+				DECLARE chCaseCreator  CHAR rProperties.DNIENI.CaseCreator;
+
+				SET chStmtInsert2 = 'INSERT INTO ' || chSchema || '.DNQE_ME_DNIENI' ||
+					'(ID, CASEID, CASECREATOR) ' ||
+		            'VALUES( IDENTITY_VAL_LOCAL(), ?, ? )';
+
+				SET rTrace.chStmtInsert2 = chStmtInsert2;
+				SET rTrace.chCaseId      = chCaseId;
+				SET rTrace.chCaseCreator = chCaseCreator;
+
+				PASSTHRU( chStmtInsert2, chCaseId, chCaseCreator );
+
+			END IF;
+		END IF; -- switch on node type (FIN or MSIG)                 @P12A end
+*/                                                                 -- end @P21D
+		/*----------------------------------------*\
+		|  Special processing for template import  |                 @P01A begin
+		\*----------------------------------------*/
+		IF LASTMOVE(rTplRequest) THEN
+
+			-- Drop history entry because it must not be present for auditing
+			DECLARE rHistory REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.History;
+			DELETE FIELD rHistory;
+
+			-- Drop Dnf folder because it must not be present for auditing
+			DECLARE rDnf REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Dnf;
+			IF LASTMOVE(rDnf) THEN
+				DELETE FIELD rDnf;
+			END IF;
+
+			-- Insert template description if present
+			DECLARE rTplDescription REFERENCE TO rTplRequest.Description;
+			IF LASTMOVE(rTplDescription) THEN
+				DECLARE xDescription BLOB CAST(rTplDescription AS BLOB CCSID 1208);
+				DECLARE chStmtInsert3 CHAR;
+				SET chStmtInsert3 = 'INSERT INTO ' || chSchema || '.DNQE_MSGDESC' ||
+					'(MSGID, DESCRIPTION) ' ||
+					'VALUES( IDENTITY_VAL_LOCAL(), ? )';
+				SET rTrace.chStmtInsert3 = chStmtInsert3;
+				SET rTrace.chDescription = rTplDescription;
+
+				PASSTHRU( chStmtInsert3, xDescription);
+
+			END IF; -- Template description available?
+		END IF; -- Template import?                  @P01A end
+                                                                 -- begin @P19D @P20A
+		-- Set up SCPN request to retrieve audit configuration
+		-- Flow structure to get configuration data is different between FIN and MSIF processing!!!
+		IF (Environment.Variables.ComIbmDni.Dnq.NodeType <> chNodeTypeFin) THEN --@P20A
+			SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.Name = COALESCE(InputRoot.MQRFH2.ComIbmDni.OU,'DNFSYSOU');
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Type = 'DniMsgAudit';
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Name = 'DniMsgAudit';
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Type = 'DniOptionsMsgAudit';
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Name = 'DnqER';
+		END IF; --@P20A
+                                                                   -- end @P19D @P20A
+		DELETE FIELD Environment.Variables.ComIbmDni.Dnq.Tmp;
+                                                                 -- begin @P19A
+		-- use different output terminal for config error event
+		DECLARE chOutputTerminal CHAR 'out';
+		IF (chFinRefConfigValue <> '') THEN
+			
+		    DECLARE chEvtTS CHAR CAST(CURRENT_GMTTIMESTAMP AS CHAR);
+		    DECLARE iPos    INT  POSITION('''' in chEvtTS) + 1;
+		    DECLARE evt     REFERENCE TO OutputRoot;
+			DECLARE chInst  CHAR Environment.Variables.ComIbmDni.Dnq.Properties.Instance;
+			
+		    SET chEvtTS = SUBSTRING(chEvtTS FROM iPos FOR LENGTH(chEvtTS) - iPos);
+		    SET chEvtTS = OVERLAY  (chEvtTS PLACING 'T' FROM 11);
+		
+		    -- Create a WBI FN event message
+		    DELETE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store;
+		    CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request AS evt;
+		
+		    SET evt.TimeStamp = chEvtTS;
+		    SET evt.TimeStamp.(NameValue)dnidt = 'dateTime';
+		
+		    SET evt.EventId  = 'DNQK2014E';
+		    SET evt.OU       = OutputRoot.MQRFH2.ComIbmDni.OU;
+		    SET evt.Service  = Environment.ComIbmDni.Properties.Common.Service;
+		    SET evt.SystemId = 'QM_' || Environment.ComIbmDni.Properties.Common.QueueManager;
+		    SET evt.MessageFlow    = Environment.ComIbmDni.Properties.Common.MessageFlow;
+		    SET evt.ExecutionGroup = Environment.ComIbmDni.Properties.Common.ExecutionGroup;
+		    SET evt.Broker         = Environment.ComIbmDni.Properties.Common.Broker;
+		    SET evt.ComponentName  = 'DNQK';
+		    SET evt.SearchKey      = 'Exception';
+		    SET evt.Parameter1     = chFinRefConfigValue;
+		    SET evt.Parameter2     = '108,20';
+			
+			-- address event queue
+			SET OutputLocalEnvironment.Destination.MQ.DestinationData.queueName = chInst || '.SYSOU.DNI_R_EVENT';
+			
+			SET chOutputTerminal = 'out1';
+		END IF;
+		PROPAGATE TO TERMINAL chOutputTerminal;
+                                                                   -- end @P19A
+  	  RETURN FALSE; --@P19C
+	END;

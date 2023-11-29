@@ -1,0 +1,8 @@
+CREATE COMPUTE MODULE ComIbmDnqErQueueInput_SetOU
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputRoot.MQRFH2.ComIbmDni.OU = COALESCE(Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.OU,'SYSOU');
+		RETURN TRUE;
+	END;
+END MODULE;

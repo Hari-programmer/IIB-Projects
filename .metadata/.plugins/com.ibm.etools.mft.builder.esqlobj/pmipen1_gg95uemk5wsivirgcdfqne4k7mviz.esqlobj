@@ -1,0 +1,4 @@
+CREATE FUNCTION DnqUtil_ExtractBasicHeaderLT(chFinMessage CHAR) RETURNS CHAR
+BEGIN
+	RETURN SUBSTRING(chFinMessage FROM 7 FOR 9);
+END;

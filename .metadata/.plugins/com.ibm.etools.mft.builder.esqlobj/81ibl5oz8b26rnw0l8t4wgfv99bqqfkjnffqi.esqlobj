@@ -1,0 +1,209 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot; -- @P11A (must be done for non-template-import request messages too!)
+
+		DECLARE bRouteToOut       BOOLEAN TRUE;  -- Default: Route message to terminal out (i.e., to subflow DnqCatch)
+		DECLARE bMapException     BOOLEAN FALSE; -- Default: Don't map exception on WBI FN exception
+		DECLARE iWbiFnException   INT;           -- WBI FN message number for WMB exceptions (@P11A)
+		DECLARE chCatalogPrefixes CHAR UPPER(COALESCE(Environment."ComIbmDni"."DniEnhancedExceptionToEvent"."chCatalogPrefixes", 'DNI,DNF,DNQ'));
+		DECLARE chCatalogPrefix   CHAR;
+		DECLARE rTplRequest       REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request;
+
+		-- Get last exception in list
+		DECLARE rException REFERENCE TO InputExceptionList.*[1];
+		WHILE (FIELDNAME(rException.*[<]) LIKE '%Exception') DO
+			MOVE rException LASTCHILD;
+		END WHILE;
+
+		SET chCatalogPrefix = UPPER(SUBSTRING(rException.Catalog FROM 1 FOR 3));
+
+		IF (chCatalogPrefixes IS NOT NULL) AND (chCatalogPrefixes <> '') THEN
+			IF chCatalogPrefixes LIKE '%' || chCatalogPrefix || '%' THEN
+				/*---------------------------*\
+				|  WBI FN exception occurred  |
+				\*---------------------------*/
+				IF LASTMOVE(rTplRequest) THEN                                             -- @P11A
+
+					/**  ---------------
+					 **  Template import
+					 **  ---------------
+					 **  In case of an exception that occurred BEFORE any DB update
+					 **  do following:
+					 **  - Route the message to subflow GenerateErrorResponse (terminal out1)
+					 **  - Don't write event log entry
+					 **  - Don't retry processing, i.e., don't route message to
+					 **    subflow DnqCatch (terminal out)
+					 **  Note that DB updates are NOT rolled back if message is finally
+					 **  processed on the catch path of the MQInput node!
+					 **/
+					DECLARE chExceptions CHAR                                             -- @P11A begin
+
+					     /* ===== Common exceptions ===== */
+					     'DNQK1050E' -- No message body available in tpl-import request      @P17A
+					  || 'DNQK1120E' -- Mandatory element not specified in tpl-import request
+					  || 'DNQK1121E' -- No value specified for element in tpl-import request
+					  || 'DNQK1122E' -- Value of element exceeds max. length
+					  || 'DNQK1123E' -- Specified MER queue does not exist
+					  || 'DNQK1124E' -- Purpose of MER queue is not 'Create'
+					  || 'DNQK1125E' -- Parsing errors prevented message from being imported
+
+					     /* ===== FIN specific exceptions ===== */
+					  || 'DNQO1001E' -- OU cannot be determined for LT                       @P13A (does not actually deal with d24088)
+					  || 'DNQO1002E' -- LT not configured in OU                              @P13A (does not actually deal with d24088)
+					  || 'DNQO1003E' -- LT is mapped to other OU than the specified OU       @P13A
+					  || 'DNQK2055E' -- Input queue not valid for tpl-import request
+
+					     /* ===== MSIF specific exceptions ===== */
+					  || 'DNQO1251E' -- TransferOptionSet not configured                     @P14A
+					  || 'DNQO1252E' -- Invalid OU                                           @P16A
+					  || 'DNQO1254E' -- LocalDN not vailable                                 @P15A
+					  || 'DNQK3055E' -- Input queue not valid for tpl-import request         @P12A
+					;
+					IF (chExceptions LIKE '%' || rException.Insert[<].Text || '%') THEN   -- @P11A end
+						PROPAGATE TO TERMINAL 1; -- Terminal out1
+						SET bRouteToOut = FALSE;
+					END IF;                                                               -- @P11A
+				END IF; -- Template import request ?                                      -- @P11A
+			ELSE
+				/*-------------------------------*\
+				|  Non-WBI FN exception occurred  |
+				\*-------------------------------*/
+				IF LASTMOVE(rTplRequest) THEN                                             -- @P11A begin
+					SET iWbiFnException = 1119;
+				ELSE
+					IF Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeFin THEN  -- @P12A
+						SET iWbiFnException = 2056;
+					ELSE                                                                  -- @P12A begin
+						SET iWbiFnException = 3056;
+					END IF;                                                               -- @P12A end
+				END IF; -- Template import request ?                                      -- @P11A end
+
+				IF (    chCatalogPrefix = 'BIP'
+					AND rException.Number = 4394) THEN
+
+					-- BIP4394: Java exception --> Check if thrown by WBI FN
+
+					SET chCatalogPrefix = UPPER(SUBSTRING(rException.Insert[7].Text FROM 1 FOR 3));
+					IF (chCatalogPrefixes IS NOT NULL) AND (chCatalogPrefixes <> '') THEN
+						IF chCatalogPrefixes LIKE '%' || chCatalogPrefix || '%' THEN
+							-- Java exception thrown by WBI FN
+							-- So create original WBI FN exception and add it to exception list.
+							DECLARE rNewException REFERENCE TO OutputRoot; -- Dummy for declaration only
+							DECLARE rInsert       REFERENCE TO OutputRoot; -- Dummy for declaration only
+							CREATE FIELD rException.UserException AS rNewException;
+							SET rNewException.Catalog = rException.Insert[7].Text;
+							SET rNewException.Severiy = 3;
+							SET rNewException.Number = rException.Insert[8].Text;
+
+							DECLARE iTotalInsert INT CARDINALITY(rException.Insert[]);
+							DECLARE iInsertCounter INT 9;
+
+							WHILE (iInsertCounter <= iTotalInsert) DO
+								IF iInsertCounter = 9 THEN
+									-- First Insert
+									CREATE LASTCHILD OF rNewException AS rInsert NAME 'Insert';
+								ELSE
+									CREATE NEXTSIBLING OF rInsert AS rInsert NAME 'Insert';
+								END IF;
+								SET rInsert.Type = rException.Insert[iInsertCounter].Type;
+								SET rInsert.Text = rException.Insert[iInsertCounter].Text;
+								SET iInsertCounter = iInsertCounter + 1; -- Process next Insert element
+							END WHILE;
+							-- Route message to subflow GenerateErrorResponse (terminal out1),
+							-- but don't write event log entry and don't retry processing, i.e.,
+							-- don't route message to subflow DnqCatch (terminal out).
+							PROPAGATE TO TERMINAL 1; -- Terminal out1
+							SET bRouteToOut = FALSE;
+						END IF; -- Java exception thrown by WBI FN
+					END IF;
+				ELSE
+					SET bMapException = TRUE;
+				END IF; -- rException.Number = 4397 (i.e., BIP4394 Java exception)
+
+				IF bMapException THEN
+
+					/*----------------------------------------------*\
+					|  Map non-WBI FN exception on WBI FN exception  |
+					\*----------------------------------------------*/
+
+					DECLARE rNewException REFERENCE TO OutputRoot; -- Dummy for declaration only
+					DECLARE rInsert       REFERENCE TO OutputRoot; -- Dummy for declaration only
+					CREATE FIELD rException.UserException AS rNewException;
+					SET rNewException.Catalog = 'dnqckmsg';
+					SET rNewException.Severiy = 3;
+					SET rNewException.Number = iWbiFnException; -- @P11C: 1119 replaced with iWbiFnException
+
+					-- Concatenate Insert elements of non-WBI FN exception
+					DECLARE iTotalInsert INT CARDINALITY(rException.Insert[]);
+					DECLARE iInsertCounter INT 1;
+					DECLARE chInsert CHAR;
+					DECLARE chParameters CHAR '';
+
+					WHILE (iInsertCounter <= iTotalInsert) DO
+						SET chInsert = '''' || CAST (rException.Insert[iInsertCounter].Text AS CHAR) || '''';
+						IF iInsertCounter > 1 THEN
+							SET chParameters = chParameters || ',' || chInsert;
+						ELSE
+							SET chParameters = chParameters || chInsert;
+						END IF;
+						SET iInsertCounter = iInsertCounter + 1; -- Process next Insert element
+					END WHILE;
+					SET chParameters = REPLACE(chParameters, CAST(x'0085' AS CHAR CCSID 1200), ''); -- @P04A
+
+					-- Create Insert elements
+					CREATE LASTCHILD OF rNewException AS rInsert NAME 'Insert';
+					SET rInsert.Type = 5; -- Character (see note below!)
+					/** Note: Don't use value 2 for integer here, because then the
+					 **       thousand separator is used when displaying the event,
+					 **       that is, number 9999 is displayed as 9.999.
+					 **/
+					SET rInsert.Text = rException.Number;
+
+					CREATE NEXTSIBLING OF rInsert AS rInsert NAME 'Insert'; -- @P10A begin
+					SET rInsert.Type = 12; -- BLOB
+					SET rInsert.Text = InputRoot.MQMD.MsgId;                -- @P10A end
+
+					CREATE NEXTSIBLING OF rInsert AS rInsert NAME 'Insert';
+					SET rInsert.Type = 5; -- Character
+					SET rInsert.Text = chParameters;
+
+					CREATE NEXTSIBLING OF rInsert AS rInsert NAME 'Insert';
+					SET rInsert.Type = 5; -- Character
+					SET rInsert.Text = 'DNQK' || CAST(iWbiFnException AS CHAR) || 'E'; -- @P11C: 1119 replaced with iWbiFnException
+
+					-- Write event log entry and retry processing
+					SET bRouteToOut = TRUE;
+
+				END IF; -- rException.Number = 4397 -- BIP4394 Java exception
+			END IF;    -- WBI FN exception ?
+		END IF;       -- chCatalogPrefixes set ?
+
+		IF bRouteToOut THEN                                              -- @P11A begin
+			/*---------------------------------------------------------*\
+			|  Provide MQRFH2.ComIbmDni.MessageGroup for event message  |
+			\*-------------------------------------------------------- */
+			/**  Notes:
+			 **  - This allows to correlate the event log entry with the originating message.
+			 **  - The MessageGroup value provided by the user in the input message
+			 **    is not lost because later on a rollback is done and -- therefore --
+			 **    the original input message is restored before being put on the ReplyToQ.
+			 **/
+
+			-- Check if MQRFH2 exists
+			DECLARE rMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+			IF NOT LASTMOVE(rMQRFH2) THEN
+				-- MQRFH2 does not yet exist, so create it
+				DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+				CREATE NEXTSIBLING OF rPrePayloadHeader AS rMQRFH2 DOMAIN 'MQRFH2' NAME 'MQRFH2';
+				DECLARE rPreMqrfh2Header REFERENCE TO OutputRoot.*[<3];
+				SET rMQRFH2.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+				SET rMQRFH2.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+				SET rMQRFH2.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+				SET rMQRFH2.(MQRFH2.Field)"NameValueCCSID" = 1208;
+			END IF;
+			SET OutputRoot.MQRFH2.ComIbmDni.MessageGroup =
+				SUBSTRING(CAST(InputRoot.MQMD.MsgId AS CHAR) FROM 3 FOR 48);
+		END IF;                                                     -- @P11A end
+
+		RETURN bRouteToOut;
+	END;

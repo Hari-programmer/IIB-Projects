@@ -1,0 +1,51 @@
+CREATE PROCEDURE AddHistoryEntry                               -- @P06A begin
+(
+	IN rRoot           REFERENCE,
+	IN cService        CHAR,
+	IN cQueueName      CHAR,
+	IN cQueueType      CHAR,
+	IN cQueueManager   CHAR,
+	IN cFunction       CHAR,
+	IN cFunctionResult CHAR
+)
+BEGIN
+	/*-------------*\
+	|  Get user ID  |
+	\*-------------*/
+	DECLARE cUserId CHAR rRoot.MQMD.UserIdentifier;
+
+	-- Check for long UserID
+	DECLARE rLongUserId REFERENCE TO rRoot.MQRFH2.ComIbmDni.UserIdentifier;
+	IF (     LASTMOVE(rLongUserId)
+	    AND (LENGTH(rLongUserId) > 0))
+	THEN
+		-- @P08C (next line): ComIbmDniSec.DecryptSecVal() replaced with DnqPrintDecryptSecVal()
+		SET cUserId = DnqPrintDecryptSecVal(rLongUserId); -- (function is defined in module ComIbmDnqPrintCommon.esql)
+	END IF;
+	SET cUserId = TRIM(cUserId); -- TRIM() is required to fix defect 25150
+
+	/*----------------------------*\
+	|  Create folder HistoryEntry  |
+	\*----------------------------*/
+	DECLARE	rHistory REFERENCE TO rRoot.MQRFH2.ComIbmDni.History;
+
+	IF (NOT LASTMOVE(rHistory)) THEN
+		CREATE LASTCHILD OF rRoot.MQRFH2.ComIbmDni AS rHistory NAME 'History';
+	END IF; -- rHistory IS NOT NULL ?
+
+	CREATE LASTCHILD OF rHistory AS rHistory NAME 'HistoryEntry';
+
+	SET rHistory.Component      = VALUE_HISTORY_COMPONENT;
+	SET rHistory.Service        = cService;
+	SET rHistory.UserId         = cUserId;
+	SET rHistory.TimeStamp      = CAST(CURRENT_GMTTIMESTAMP AS CHARACTER
+		                              FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSSSSS');
+	SET rHistory.QueueName      = cQueueName;
+	IF (cQueueName IS NOT NULL) THEN
+		SET rHistory.QueueType  = cQueueType;
+	END IF;
+	SET rHistory.QueueManager   = cQueueManager;
+	SET rHistory.Function       = cFunction;
+	SET rHistory.FunctionResult = cFunctionResult;
+
+END;

@@ -1,0 +1,7 @@
+CREATE FILTER MODULE ComIbmDnqFinExtractFromMT021_IsError
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		RETURN Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."bIsError";
+	END;
+
+END MODULE;

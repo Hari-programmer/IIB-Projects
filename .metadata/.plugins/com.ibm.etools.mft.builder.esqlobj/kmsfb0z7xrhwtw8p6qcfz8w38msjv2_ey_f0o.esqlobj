@@ -1,0 +1,11 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE bEmptyPayload BOOLEAN FALSE;
+		
+		IF (Root.MQRFH2."ComIbmDni"."MsgStandardInfo"."Type" = 'DNIEMPTY') THEN
+			SET bEmptyPayload = TRUE;
+		END IF;
+		
+		RETURN bEmptyPayload;
+	END;
+

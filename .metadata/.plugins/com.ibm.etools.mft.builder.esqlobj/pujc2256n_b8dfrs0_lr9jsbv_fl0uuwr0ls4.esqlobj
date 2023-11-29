@@ -1,0 +1,85 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+
+    DECLARE chUnknown CONSTANT CHAR 'DNI_UNKNOWN';
+
+    SET OutputRoot = InputRoot;
+    SET OutputLocalEnvironment = InputLocalEnvironment;
+
+    DECLARE dni  REFERENCE TO OutputRoot;
+    DECLARE prop REFERENCE TO OutputRoot;
+
+    IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+      MOVE dni  TO OutputLocalEnvironment.ComIbmDni;
+      MOVE prop TO Environment.ComIbmDni.Properties.Common;      
+    ELSE
+      MOVE dni  TO OutputRoot.MQRFH2.ComIbmDni;
+      MOVE prop TO dni.Properties.Common;
+    END IF;
+
+    DECLARE evt REFERENCE TO OutputRoot;
+    DECLARE exc REFERENCE TO InputExceptionList;
+
+    -- Retrieve current date and time as WBI-FN dateTime value.
+
+    DECLARE chEvtTS CHAR CAST(CURRENT_GMTTIMESTAMP AS CHAR);
+    DECLARE iPos    INT  POSITION('''' in chEvtTS) + 1;
+
+    SET chEvtTS = SUBSTRING(chEvtTS FROM iPos FOR LENGTH(chEvtTS) - iPos);
+    SET chEvtTS = OVERLAY  (chEvtTS PLACING 'T' FROM 11);
+
+    -- Retrieve innermost exception, exception source and parameter(s).
+
+    DECLARE chSource CHAR '';
+
+    WHILE (FIELDNAME(exc.*[<]) LIKE '%Exception') DO
+      IF (exc.Label <> '') THEN
+        SET chSource = exc.Label;
+      END IF;
+      MOVE exc LASTCHILD;
+    END WHILE;
+
+    DECLARE chParams CHAR '';
+
+    FOR param AS exc.Insert[] DO
+      SET chParams = chParams || ' (' || RTRIM(param.Text) || ')';
+    END FOR;
+
+    -- Create an appropriate WBI-FN event message.
+
+    DELETE FIELD dni.Function.DniEvent.Store;
+    CREATE FIELD dni.Function.DniEvent.Store.Request AS evt;
+
+    SET evt.TimeStamp = chEvtTS;
+    SET evt.TimeStamp.(NameValue)dnidt = 'dateTime';      
+
+    SET evt.EventId = CASE FIELDNAME(exc)
+                        WHEN 'DatabaseException' THEN 'DNIE4005E'
+                                                 ELSE 'DNIE4004E'
+                      END;
+
+    SET evt.OU = COALESCE(OutputRoot.MQRFH2.ComIbmDni.OU, 'SYSOU');
+    SET evt.Service = COALESCE(prop.Service, 'DNI_UNKNOWN');
+    SET evt.SystemId = COALESCE('CP_' || prop.QueueManager, 'DNI_UNKNOWN');
+
+    SET evt.ComponentName  = 'DniEventStore';
+    SET evt.Broker         =  prop.Broker;
+    SET evt.ExecutionGroup =  prop.ExecutionGroup;
+    SET evt.MessageFlow    =  prop.MessageFlow;
+    SET evt.SearchKey      = 'Exception';
+
+    SET evt.Parameter1 = chSource;
+    SET evt.Parameter2 = exc.Catalog;
+    SET evt.Parameter3 = CAST(exc.Number AS CHAR);
+    SET evt.Parameter4 = TRIM(chParams);
+
+    -- Set routing target for publication.
+
+    DECLARE rl REFERENCE TO OutputLocalEnvironment;
+
+    CREATE FIELD OutputLocalEnvironment.Destination.RouterList AS rl;
+    SET rl.DestinationData.labelname = 'Publish';
+
+    RETURN TRUE;
+
+  END; -- main()
+

@@ -1,0 +1,114 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+
+    DECLARE fContinue   BOOLEAN TRUE;
+
+    DECLARE chAuditFlag CHAR 'Yes';
+    DECLARE chFct       CHAR 'DniMessageAudit';                       -- @P01A
+    DECLARE chOptions   CHAR;                                         -- @P01A
+
+    IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+
+                                                                /* begin @P01D
+      DECLARE cfgRef REFERENCE TO
+        Environment.ComIbmDni.Properties.{Root.MQRFH2.ComIbmDni.OU};                                                                
+                                                              
+      IF (cfgRef.DniOptionsMsgAudit.*.DniFlagMsgAudit IS NULL) THEN
+        SET chAuditFlag = 'Yes';
+      ELSE
+        SET chAuditFlag = cfgRef.DniOptionsMsgAudit.*.DniFlagMsgAudit;
+      END IF;
+                                                                   end @P01D */
+      DECLARE ref REFERENCE TO LocalEnvironment.ComIbmDni;    /* begin @P01A */
+
+      IF (CARDINALITY(ref.Function.DniAuditMessage[]) > 0) THEN
+
+        SET chOptions  = ref.Function.DniAuditMessage.Store.Request.Options;
+        IF (chOptions IS NULL) THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+          VALUES( chFct, 'LocalEnvironment.ComIbmDni.Function' ||
+                 '.DniAuditMessage.Store.Request.Options', 'DNIX2302E');
+        END IF;
+
+      END IF; -- (CARDINALITY(ref.Function.DniAuditMessage[]) > 0)
+
+      MOVE ref TO Environment.ComIbmDni.Properties.{Root.MQRFH2.ComIbmDni.OU};
+      
+      IF (chOptions IS NOT NULL) THEN
+
+        MOVE ref TO ref.DniOptionsMsgAudit.{chOptions};
+        IF (LASTMOVE(ref) = FALSE) THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2310
+          VALUES(chFct, chOptions, 'DniOptionsMsgAudit', 'DNIX2310E');
+        END IF;
+
+      ELSE
+
+        MOVE ref TO ref.DniOptionsMsgAudit.*[1];
+
+      END IF; -- IF (chOptions IS NOT NULL) 
+
+      SET chAuditFlag = COALESCE(ref.DniFlagMsgAudit, 'Yes');   /* end @P01A */
+
+    ELSE
+
+      DECLARE ref REFERENCE TO Root.MQRFH2.ComIbmDni;         /* begin @P01A */
+
+      IF (CARDINALITY(ref.Function.DniAuditMessage[]) > 0) THEN
+
+        SET chOptions  = ref.Function.DniAuditMessage.Store.Request.Options;
+
+        IF (chOptions IS NULL) THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+          VALUES( chFct, 'MQRFH2.ComIbmDni.Function.DniAuditMessage' ||
+                 '.Store.Request.Options', 'DNIX2302E');
+        END IF;
+
+      END IF;                                                   /* end @P01A */
+
+      MOVE ref TO
+        Root.MQRFH2.ComIbmDni.Properties.OU.ConfigObjectList.ConfigObject[1];
+
+      WHILE ((LASTMOVE(ref) = TRUE) AND (fContinue = TRUE)) DO
+      	
+        IF (     (ref.Type = 'DniOptionsMsgAudit')                    -- @P01C
+             AND (chOptions IS NULL OR ref.Name = chOptions))         -- @P01C
+        THEN                                                          -- @P01C
+        	
+          /** Note: In WMQI 2.0.2 and WMQI 2.1 without CSD2 the next statement doesn't work.
+           **       It results in following WMQI error:
+           **       BIP2110E: Message broker internal program error.
+           **/
+           
+          SET chAuditFlag = THE (SELECT ITEM A.Value
+                                   FROM ref.AttributeList.Attribute[] AS A
+                                  WHERE A.Name = 'DniFlagMsgAudit');
+            
+          IF (chAuditFlag IS NULL) THEN    /* required resource not found */
+            SET chAuditFlag = 'Yes';
+          END IF;                          /* required resource found? */
+
+          SET fContinue = FALSE;           /* exit while loop */
+          
+        ELSE
+
+          MOVE ref NEXTSIBLING;            /* next ConfigObject */
+          
+        END IF;                            /* is ConfigObject of type 'DniOptionsMsgAudit'? */
+
+      END WHILE;
+                                                              /* begin @P01A */
+      IF ((fContinue =TRUE) AND (chOptions IS NOT NULL)) THEN
+        THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2310
+        VALUES(chFct, chOptions, 'DniOptionsMsgAudit', 'DNIX2310E');
+      END IF;
+                                                                /* end @P01A */
+    END IF;
+
+    /* return filter result */
+    /* Note: Only values 'Yes' and 'No' are allowed;
+             values other than these are interpreted as 'Yes',
+             i.e., default is to audit messages.               */
+    RETURN (chAuditFlag <> 'No');
+
+  END; -- main()
+

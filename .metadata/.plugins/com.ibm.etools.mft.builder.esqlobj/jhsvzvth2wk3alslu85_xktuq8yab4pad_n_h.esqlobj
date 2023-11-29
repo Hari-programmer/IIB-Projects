@@ -1,0 +1,5 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		RETURN Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."bIsError";
+	END;
+

@@ -1,0 +1,14 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rOutputRoot            REFERENCE TO OutputRoot;
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+
+		CALL DnqErCommon_FillExplanation(rOutputRoot, rInputLocalEnvironment);
+
+		DELETE FIELD OutputLocalEnvironment.ComIbmDni.Function.DniUMG;
+
+		RETURN TRUE;
+	END;

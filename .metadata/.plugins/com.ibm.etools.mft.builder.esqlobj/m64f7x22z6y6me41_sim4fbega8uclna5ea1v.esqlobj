@@ -1,0 +1,20 @@
+CREATE PROCEDURE ComIbmDniEnhancedExceptionToEvent_CopyRfh2TreeToEnv(IN rSourceTree REFERENCE, INOUT rTargetParentTree REFERENCE)
+BEGIN
+	IF (FIELDTYPE(rSourceTree) = Name) THEN
+		DECLARE rChild REFERENCE TO rSourceTree;
+		MOVE rChild FIRSTCHILD;
+		DECLARE rNewTree REFERENCE TO rSourceTree;
+		CREATE LASTCHILD OF rTargetParentTree AS rNewTree TYPE Name NAME FIELDNAME(rSourceTree);
+		WHILE LASTMOVE(rChild) DO
+			CALL ComIbmDniEnhancedExceptionToEvent_CopyRfh2TreeToEnv(rChild, rNewTree);
+			MOVE rChild NEXTSIBLING;
+		END WHILE;
+	ELSE
+		IF (FIELDTYPE(rSourceTree) = NameValue) THEN
+			CREATE LASTCHILD OF rTargetParentTree TYPE NameValue NAME FIELDNAME(rSourceTree) VALUE FIELDVALUE(rSourceTree);
+		ELSE
+--			CREATE LASTCHILD OF rTargetParentTree TYPE Value VALUE FIELDVALUE(rSourceTree); @P06D
+			SET rTargetParentTree = FIELDVALUE(rSourceTree); --@P06A
+		END IF;
+	END IF;
+END;

@@ -1,0 +1,114 @@
+CREATE COMPUTE MODULE Cast_Function_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		CREATE LASTCHILD OF EV.Req DOMAIN 'JSON' PARSE(InputRoot.BLOB.BLOB);
+	
+	
+	
+	   	SET OutputRoot.JSON.Data.date = CAST(CAST(EV.Req.JSON.Data.date AS  DATE  FORMAT  'dd-MM-yyyy' ) AS  char FORMAT 'yyyy-MM-dd') ;
+		
+		SET OutputRoot.JSON.Data.Cast1= CAST(CAST(EV.Req.JSON.Data.date AS  DATE FORMAT  'dd-MM-yyyy'  ) AS CHARACTER  FORMAT 'yyyy-MM' );
+		
+		SET OutputRoot.JSON.Data.Cast2= CAST(CAST(EV.Req.JSON.Data.date AS  DATE FORMAT  'dd-MM-yyyy'  ) AS CHARACTER  FORMAT 'yyyy' );
+		
+		SET OutputRoot.JSON.Data.Cast3= CAST(CAST(EV.Req.JSON.Data.date AS  DATE FORMAT  'dd-MM-yyyy'  ) AS CHARACTER  FORMAT 'MM-dd' );
+		
+		SET OutputRoot.JSON.Data.Cast4= CAST(CAST(EV.Req.JSON.Data.date AS  DATE FORMAT  'dd-MM-yyyy'  ) AS CHARACTER  FORMAT 'MM' );
+		
+		SET OutputRoot.JSON.Data.Cast5= CAST(CAST(EV.Req.JSON.Data.date AS  DATE FORMAT  'dd-MM-yyyy'  ) AS CHARACTER  FORMAT 'dd' );
+		
+		SET OutputRoot.JSON.Data.date = CAST(CAST(EV.Req.JSON.Data.date AS  DATE  FORMAT  'dd-MM-yyyy' ) AS  char FORMAT 'yyyy/MM/dd') ;
+		
+		SET OutputRoot.JSON.Data.currentTime= CAST(CURRENT_DATE AS CHARACTER FORMAT 'yyyy-MM-dd-hh:mm:ssa');
+		
+		--Decimal to charecter
+		
+		SET OutputRoot.JSON.Data.Deci= CAST(EV.Req.JSON.Data.Decimal AS CHARACTER FORMAT '#,##0.000');
+		
+		--- charecter to date
+		
+		SET OutputRoot.JSON.Data.current= CAST(CURRENT_DATE AS CHARACTER FORMAT 'yyyyMMdd-hhmmss');
+		
+		
+		--Date to Charecter
+		
+		SET OutputRoot.JSON.Data.dat=CAST(EV.Req.JSON.Data.date AS DATE FORMAT 'dd-MM-yyyy');
+
+		-- charecter to TimeStamp	
+		
+		SET OutputRoot.JSON.Data.timestmp= CAST(EV.Req.JSON.Data.timestamp AS TIMESTAMP FORMAT 'yyyy MMM dd, hh:mm');
+		
+		-- charecter to Time
+		
+		SET OutputRoot.JSON.Data.time= CAST(CURRENT_TIME AS TIME FORMAT 'hh:mm:ss');
+		
+		--
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		/*
+		--SET EV.Req.JSON.Data.date =CAST(EV.Req.JSON.Data.numeric AS DATE);
+		--SET EV.Req.JSON.Data.string =CAST('Hi... ' AS DATE);
+		
+		--
+		--SET  OutputRoot.JSON.Data.stampT =CAST(DATE '2022-06-21', TIME '04:05:06' AS TIMESTAMP);
+		--SET  OutputRoot.JSON.Data.stampT1 =CAST(EV.Req.JSON.Data.Stamp1 AS TIMESTAMP);
+		
+		--
+		SET  OutputRoot.JSON.Data.intervals=CAST(EV.Req.JSON.Data.intervals AS INTERVAL YEAR);
+		SET  OutputRoot.JSON.Data.intervals1=CAST(EV.Req.JSON.Data.intervals1 AS INTERVAL YEAR   TO MONTH );
+		
+		
+		--SET OutputRoot.JSON.Data.date =CAST(EV.Req.JSON.Data.numeric AS DATE);
+		--
+		SET  OutputRoot.JSON.Data.Default= CAST(EV.Req.JSON.Data.default AS DATE DEFAULT DATE '2047-10-24');
+		SET  OutputRoot.JSON.Data.Default1=CAST(EV.Req.JSON.Data.default1 AS TIMESTAMP DEFAULT TIMESTAMP '2022-06-21 10:50:49');
+		
+		
+		
+		SET OutputRoot.JSON.Data.Cast1=CAST(CAST(EV.Req.JSON.Data.Name AS  BLOB FORMAT  '' ) AS CHARACTER    FORMAT '521226');
+		
+		--returns  X''
+		
+		SET OutputRoot.JSON.Data.Cast2=CAST(CAST(EV.Req.JSON.Data.Name1 AS  BLOB FORMAT  'Hari' ) AS CHARACTER    FORMAT '6564454');
+		
+		-- input 6532 its  return "X'6532'"       @String is not of correct form for byte array. Must consist of only 0..9,a..f,A..Z
+		
+		SET OutputRoot.JSON.Data.Cast3=CAST(CAST(EV.Req.JSON.Data.Name2 AS  BLOB FORMAT  '') AS CHARACTER    FORMAT '766757');
+		
+		--its return nothing there is no data displayed
+		
+			
+		--SET OutputRoot.JSON.Data.Cast=CAST(EV.Req.JSON.Data AS CHARACTER FORMAT );
+	
+	--	SET OutputRoot.JSON.Data.Cast = CAST(EV.Req.JSON.Data.Date AS DATE FORMAT 'dd-MM-yy');
+		
+	*/
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;

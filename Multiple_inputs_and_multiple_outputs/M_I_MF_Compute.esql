@@ -1,0 +1,71 @@
+
+
+CREATE COMPUTE MODULE M_I_MF_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		CALL CopyMessageHeaders();
+		CALL CopyEntireMessage();
+		
+		
+	     DECLARE EV REFERENCE TO Environment.Variables;
+	     CREATE LASTCHILD OF EV.Req DOMAIN 'XMLNSC' PARSE(InputRoot.BLOB.BLOB);
+		
+		IF EV.Req.MQMD.SourceQueue = 'In.Q09' THEN
+			
+			SET OutputRoot.XMLNSC.Emp.phn =InputRoot.XMLNSC.Emp.phn;
+			SET OutputRoot.XMLNSC.Emp.Gender =InputRoot.XMLNSC.Emp.Gender;
+			SET OutputRoot.XMLNSC.Emp.from =InputRoot.XMLNSC.Emp.from;
+			
+		PROPAGATE TO TERMINAL 'Out' DELETE NONE;
+		RETURN FALSE;	
+			
+		ELSEIF EV.Req.MQMD.SourceQueue = 'In.Q091' THEN
+			
+			SET OutputRoot.XMLNSC.Emp.phn =InputRoot.XMLNSC.Emp.phn;
+			SET OutputRoot.XMLNSC.Emp.Gender =InputRoot.XMLNSC.Emp.Gender;
+			SET OutputRoot.XMLNSC.Emp.from =InputRoot.XMLNSC.Emp.from;
+					
+		PROPAGATE TO TERMINAL 'Out1' DELETE NONE;
+		RETURN FALSE;	
+			
+	  /*  ELSEIF InputRoot.XMLNSC.root.name = 'Gnaneswar' THEN
+			
+			SET OutputRoot.XMLNSC.Emp.phn ='774847474';
+			SET OutputRoot.XMLNSC.Emp.Gender ='Male';
+			SET OutputRoot.XMLNSC.Emp.from ='ViZag';
+			
+						
+		PROPAGATE TO TERMINAL 'Out2' DELETE NONE;
+		RETURN FALSE;	
+	 */
+			
+		ELSE
+				
+			SET OutputRoot.XMLNSC.Emp.Error ='Invalid Name';
+			
+			
+		END IF;
+		
+		
+		
+		
+		
+		
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		--SET OutputRoot = InputRoot;
+	END;
+END MODULE;

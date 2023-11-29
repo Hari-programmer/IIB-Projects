@@ -1,0 +1,60 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE rElementCheck   REFERENCE TO Environment;
+		DECLARE rTosConfigCheck REFERENCE TO Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig"; --@P12A
+                                                                 -- begin @P12A
+		-- check LocalDN
+		IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress"[]) = 0) THEN
+			IF (CARDINALITY(rTosConfigCheck."ConfiguredLocalAddress"[]) > 0) THEN
+				SET Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress" =
+					rTosConfigCheck."ConfiguredLocalAddress";
+			ELSE
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1303
+				VALUES (rTosConfigCheck."chTransferOptionSetName", 'DNQO1303E');
+			END IF;
+		END IF;
+		DELETE FIELD Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig";
+                                                                   -- end @P12A
+                                                                 -- begin @P08A
+		-- restore original message format, if present, otherwise set to 'MQSTR   '
+		DELETE FIELD OutputRoot.MQRFH2."mcd";
+		DECLARE chMsd CHAR '';
+		DECLARE rRfh2Mcd REFERENCE TO Environment."ComIbmDni"."Dnq"."OriginalMessageInformation"."MessageContentDescriptor"; --@P09C
+		IF LASTMOVE(rRfh2Mcd) THEN
+			DECLARE rMcd REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2."mcd" AS rMcd;
+			MOVE rElementCheck TO rRfh2Mcd."MessageServiceDomain";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET chMsd = rElementCheck;
+				SET rMcd."Msd" = chMsd;
+			END IF;
+			MOVE rElementCheck TO rRfh2Mcd."MessageSet";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rMcd."Set" = rElementCheck;
+			END IF;
+			MOVE rElementCheck TO rRfh2Mcd."MessageFormat";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rMcd."Fmt" = rElementCheck;
+			END IF;
+		ELSE
+			SET OutputRoot.MQRFH2."Format" = MQFMT_STRING;
+		END IF;
+
+		DELETE FIELD Environment."ComIbmDni"."Dnq"."OriginalMessageInformation"."MessageContentDescriptor"; --@P09C
+
+		IF (chMsd <> '') AND SUBSTRING(chMsd FROM 1 for 3) = 'xml' THEN --@P10C
+			IF chMsd <> 'xmlnsc' THEN
+				DELETE FIELD OutputRoot.XMLNSC;
+				SET OutputRoot.{UPPER(chMsd)} = InputBody;
+			END IF;
+		ELSE
+			DELETE FIELD OutputRoot.XMLNSC;
+			SET OutputRoot.BLOB.BLOB = ASBITSTREAM(InputRoot.XMLNSC CCSID 1208);
+		END IF;
+                                                                   -- end @P08A
+		SET OutputRoot.MQMD."MsgType" = MQMT_REQUEST; --@P15A
+		
+		RETURN TRUE;
+	END;

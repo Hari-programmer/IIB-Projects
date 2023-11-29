@@ -1,0 +1,33 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		-- Restore original payload (must be done BEFORE auditing!)
+		DECLARE rTplImport REFERENCE TO Environment.Variables.ComIbmDni.DnqTplImport;
+		IF LASTMOVE(rTplImport) THEN
+			SET OutputRoot.*[<2].CodedCharSetId = rTplImport.chCcsid;
+			DELETE FIELD OutputRoot.*[<]; -- Delete current payload
+			SET OutputRoot.BLOB.BLOB = rTplImport.xBlob;
+		END IF;
+
+		-- In case of Msif restore original DNF_O_FT folder
+		IF Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeMsif THEN           -- @P12A begin
+			SET OutputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT = rTplImport.DNF_O_FT;
+		END IF;                                                                         -- @P12A
+
+		DELETE FIELD rTplImport;
+
+		-- Remove Dnq folder from response
+		DELETE FIELD OutputRoot.MQRFH2.ComIbmDni.Dnq;                                   -- @P02A
+
+		-- Create request to format the Reason elements in ReasonList                      @P06A begin
+		DECLARE rReasonList REFERENCE TO
+		        OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.ReasonList;
+
+		IF LASTMOVE(rReasonList) THEN
+			DECLARE rOutputLocalEnvironment REFERENCE TO OutputLocalEnvironment;
+			CALL DnqErCommon_CreateFormatRequest(rReasonList, rOutputLocalEnvironment); -- @P06A end
+		END IF;
+
+		RETURN TRUE;
+	END;

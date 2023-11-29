@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?><xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <xsd:complexType name="GET_EMP_REQUEST">
+    <xsd:sequence>
+      <xsd:element ref="Emp_Id"/>
+    </xsd:sequence>
+  </xsd:complexType>
+  <xsd:complexType name="GET_EMP_RESPONSE">
+    <xsd:sequence>
+      <xsd:element ref="Emp_Id"/>
+      <xsd:element ref="Emp_Name"/>
+      <xsd:element ref="Emp_DOB"/>
+      <xsd:element ref="Emp_Phone"/>
+      <xsd:element ref="Emp_Mail"/>
+      <xsd:element ref="Emp_Address"/>
+    </xsd:sequence>
+  </xsd:complexType>
+  <xsd:complexType name="FAULT">
+    <xsd:sequence>
+      <xsd:element ref="Fault"/>
+      <xsd:element ref="Fstring"/>
+    </xsd:sequence>
+  </xsd:complexType>
+  <xsd:element name="Emp_Id" type="xsd:int"/>
+  <xsd:element name="Emp_Name" type="xsd:string"/>
+  <xsd:element name="Emp_Phone" type="xsd:int"/>
+  <xsd:element name="Emp_Address" type="xsd:string"/>
+  <xsd:element name="Emp_Mail" type="xsd:string"/>
+  <xsd:element name="Emp_DOB" type="xsd:date"/>
+  <xsd:element name="Fault" type="xsd:int"/>
+  <xsd:element name="Fstring" type="xsd:string"/>
+  <xsd:element name="GET_EMP_REQUEST" type="GET_EMP_REQUEST">
+    <xsd:annotation>
+      <xsd:appinfo source="WMQI_APPINFO">
+        <MRMessage messageDefinition="/0/GET_EMP_REQUEST;XSDElementDeclaration=8$MRObject"/>
+      </xsd:appinfo>
+    </xsd:annotation>
+  </xsd:element>
+  <xsd:element name="GET_EMP_RESPONSE" type="GET_EMP_RESPONSE">
+    <xsd:annotation>
+      <xsd:appinfo source="WMQI_APPINFO">
+        <MRMessage messageDefinition="/0/GET_EMP_RESPONSE;XSDElementDeclaration=9$MRObject"/>
+      </xsd:appinfo>
+    </xsd:annotation>
+  </xsd:element>
+  <xsd:element name="FAULT" type="FAULT">
+    <xsd:annotation>
+      <xsd:appinfo source="WMQI_APPINFO">
+        <MRMessage messageDefinition="/0/FAULT;XSDElementDeclaration=10$MRObject"/>
+      </xsd:appinfo>
+    </xsd:annotation>
+  </xsd:element>
+</xsd:schema>

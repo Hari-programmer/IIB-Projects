@@ -1,0 +1,154 @@
+CREATE COMPUTE MODULE "ComIbmDniCancelTimer_CheckMandatoryCancelFields"
+CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+SET OutputRoot = InputRoot;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node checks if the incoming DniCancelTimer request message inherits all mandatory fields 
+  with valid values. 
+  If fields are missing or does have invalid values, a DniCancelTimer response message will be created with
+  completion code 'Failed' and a reason code, witch describes the error.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+
+------------------------------------------------------------------------------------------------------------
+-- Creates the response section in the DniCancelTimer Function. If an mandatory parameter is wrong, 
+-- a negative response will be added to this section. Else, this section will be removed at end of 
+-- processing in this node.
+------------------------------------------------------------------------------------------------------------
+DECLARE refResp REFERENCE TO OutputRoot;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  CREATE FIELD OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response;
+  MOVE refResp TO OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response;
+ELSE
+  CREATE FIELD OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Response;
+  MOVE refResp TO OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Response;
+END IF;  
+
+
+-- flag for finding out, if response entries was made ------------------------------------------------------
+DECLARE boolRespSet BOOLEAN;
+SET boolRespSet = FALSE;
+
+
+
+-------------------------------------------------------------------------------------------------------------
+-- declaration and initialization for mandatory parameter checking 
+-------------------------------------------------------------------------------------------------------------
+DECLARE refTimReq REFERENCE TO InputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Request;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refTimReq TO InputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Request;
+END IF;
+
+DECLARE chOu CHARACTER;
+DECLARE blobTimerId BLOB;
+DECLARE chTimerId CHARACTER; 
+DECLARE chTimerSchemaTable CHARACTER;
+
+SET chOu = InputRoot.MQRFH2[<].ComIbmDni.OU;
+SET blobTimerId = refTimReq.TimerId;
+SET chTimerSchemaTable = refTimReq.TimerTable;
+
+
+------------------------------------------------------------------------------------------------------------
+-- Checking of all mandatory parameters and its values.
+------------------------------------------------------------------------------------------------------------
+
+-- check, if parameter TimerId is valid --------------------------------------------------------------------
+IF (blobTimerId IS NULL) THEN 
+  SET refResp.Completion.Code = 'Failed';
+  SET refResp.Completion.Reason = '1';
+  SET refResp.Completion.Parameter1 = 'TimerId';
+  SET boolRespSet = TRUE;
+ELSE
+  SET chTimerId = SUBSTRING(CAST(blobTimerId AS CHARACTER) FROM 3 FOR 68);
+  IF (LENGTH(chTimerId) = 0) THEN 
+    SET refResp.Completion.Code = 'Failed';
+    SET refResp.Completion.Reason = '2';
+    SET refResp.Completion.Parameter1 = 'TimerId';
+    SET boolRespSet = TRUE;
+  ELSE
+    IF (LENGTH(chTimerId) <> 68) THEN
+      SET refResp.Completion.Code = 'Failed';
+      SET refResp.Completion.Reason = '4';
+      SET refResp.Completion.Parameter1 = 'TimerId';
+      SET refResp.Completion.Parameter2 = chTimerId;
+      SET refResp.Completion.Parameter3 = 68;
+      SET refResp.Completion.Parameter3.(NameValue)dt = 'i2';
+      SET refResp.Completion.Parameter4 = LENGTH(chTimerId);
+      SET refResp.Completion.Parameter4.(NameValue)dt = 'i2';
+      SET boolRespSet = TRUE; 
+    END IF;
+  END IF;
+END IF; 
+
+
+-- check, if parameter TimerTable is valid -----------------------------------------------------------------
+IF (boolRespSet = FALSE) THEN
+  IF (chTimerSchemaTable IS NULL) THEN 
+    SET refResp.Completion.Code = 'Failed';
+    SET refResp.Completion.Reason = '1';
+    SET refResp.Completion.Parameter1 = 'TimerTable';
+    SET boolRespSet = TRUE;
+  ELSE
+    IF (LENGTH(chTimerSchemaTable) = 0) THEN
+      SET refResp.Completion.Code = 'Failed';
+      SET refResp.Completion.Reason = '2';
+      SET refResp.Completion.Parameter1 = 'TimerTable';
+      SET boolRespSet = TRUE;
+    END IF;
+  END IF;
+END IF;
+
+-- check, if parameter OU is valid -------------------------------------------------------------------------
+IF (boolRespSet = FALSE) THEN
+  IF (chOu IS NULL) THEN
+    SET refResp.Completion.Code = 'Failed';
+    SET refResp.Completion.Reason = '1';
+    SET refResp.Completion.Parameter1 = 'OU';
+    SET boolRespSet = TRUE;    
+  ELSE
+    IF (LENGTH(chOu) = 0) THEN
+      SET refResp.Completion.Code = 'Failed';
+      SET refResp.Completion.Reason = '2';
+      SET refResp.Completion.Parameter1 = 'OU';
+      SET boolRespSet = TRUE; 
+    ELSE
+      IF (LENGTH(chOu) > 8) THEN
+        SET refResp.Completion.Code = 'Failed';
+        SET refResp.Completion.Reason = '3';
+        SET refResp.Completion.Parameter1 = 'OU';
+        SET refResp.Completion.Parameter2 = chOu;
+        SET refResp.Completion.Parameter3 = 8;
+        SET refResp.Completion.Parameter3.(NameValue)dt = 'i2';
+        SET refResp.Completion.Parameter4 = LENGTH(chOu);
+	SET refResp.Completion.Parameter4.(NameValue)dt = 'i2';
+        SET boolRespSet = TRUE;
+      END IF;
+    END IF;
+  END IF;
+END IF;
+
+
+
+-------------------------------------------------------------------------------------------------------------
+-- If an mandatory parameter was wrong, a response has been created and the value boolRespSet has
+-- been set to TRUE.
+-- If all checked parameters were valid (boolRespSet = FALSE), the response section has to be removed 
+-- from the outgoing message.
+-------------------------------------------------------------------------------------------------------------
+IF (boolRespSet = FALSE) THEN
+  IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+  THEN
+    SET OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response = NULL;
+  ELSE
+    SET OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Response = NULL;
+  END IF;  
+END IF;
+
+RETURN true;
+END;
+
+END MODULE;

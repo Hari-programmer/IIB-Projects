@@ -1,0 +1,16 @@
+CREATE COMPUTE MODULE DnqErCommon_TplFillExplanation -- @P06A
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rOutputRoot            REFERENCE TO OutputRoot;
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+
+		CALL DnqErCommon_FillExplanation(rOutputRoot, rInputLocalEnvironment);
+
+		DELETE FIELD OutputLocalEnvironment.ComIbmDni.Function.DniUMG;
+
+		RETURN TRUE;
+	END;
+END MODULE;

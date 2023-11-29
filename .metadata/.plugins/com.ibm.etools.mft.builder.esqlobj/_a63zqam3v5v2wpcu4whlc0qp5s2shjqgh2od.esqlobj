@@ -1,0 +1,132 @@
+CREATE COMPUTE MODULE DnqErCommon_GenerateErrorResponse
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE rCompletion    REFERENCE TO Environment; -- Dummy for declaration only
+		DECLARE rDnqReasonList REFERENCE TO Environment; -- Dummy for declaration only
+		DECLARE rTplRequest    REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request;
+		DECLARE bTplRequest    BOOLEAN      LASTMOVE(rTplRequest); -- @P11A
+
+		IF (bTplRequest) THEN
+
+			/*-------------------------*\
+			|  Template import request  |
+			\*-------------------------*/
+
+			SET OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.Code = 'Failed';
+
+			-- Prepare invocation of ExceptionToCompletion()
+			MOVE rCompletion TO OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion;
+			MOVE rDnqReasonList TO Environment.Variables.ComIbmDni.DnqTplImport.Completion.ReasonList;
+			IF (NOT LASTMOVE(rDnqReasonList)) THEN
+				-- "Unset" rDnqReasonList because it is used when calling ComIbmDnqErFinInput_ExceptionToCompletion() below
+				CREATE FIELD Environment.Variables.ComIbmDni.DnqTplImport.Dummy.Completion AS rDnqReasonList;
+			END IF;
+			
+			-- Remove Dnq folder from response
+			DELETE FIELD OutputRoot.MQRFH2.ComIbmDni.Dnq;                                          -- @P02A
+
+			-- Create response                                                          -- @P11C: Moved code hither (begin)
+																						-- @P22D code moved from below
+			DECLARE rException REFERENCE TO InputExceptionList.*[1];
+			IF LASTMOVE(rException) THEN
+				-- Get last exception in list
+				WHILE (FIELDNAME(rException.*[<]) LIKE '%Exception') DO
+					MOVE rException LASTCHILD;
+				END WHILE;
+	
+				CALL DnqErCommon_ExceptionToCompletion(
+				  rException,
+				  rDnqReasonList,
+				  rCompletion,
+				  OutputRoot.MQMD.MsgId,                       -- @P10A
+				  bTplRequest,                                 -- @P11A
+				  Environment.Variables.ComIbmDni.Dnq.NodeType -- @P12A
+				);
+			END IF; -- LASTMOVE(rException) o.k. ?
+		ELSE                                                                                       -- @P01A end
+			/*----------------------------*\
+			|  NO template import request  |
+			\*----------------------------*/
+
+			-- Check if MQRFH2 exists                                                                 @P11A begin
+			DECLARE rMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+
+			IF NOT LASTMOVE(rMQRFH2) THEN
+				-- MQRFH2 does not yet exist, so create it
+				DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+				CREATE NEXTSIBLING OF rPrePayloadHeader AS rMQRFH2 DOMAIN 'MQRFH2' NAME 'MQRFH2';
+				DECLARE rPreMqrfh2Header REFERENCE TO OutputRoot.*[<3];
+				SET rMQRFH2.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+				SET rMQRFH2.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+				SET rMQRFH2.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+				SET rMQRFH2.(MQRFH2.Field)"NameValueCCSID" = 1208;
+			END IF;                                                                                -- @P11A end
+
+			-- IF (Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeMsif) THEN             -- @P12A begin @P22D
+			DECLARE chReason CHAR 'DNQK2099E';                                                     -- @P23A begin
+			IF (Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeMsif) THEN
+				SET chReason = 'DNQK3099E';
+			END IF;                                                                                -- @P23A end
+
+			DECLARE rReason REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion AS rReason;
+			SET rReason.Code = 'Failed';
+
+			-- Add generic reason if no other reason is available
+			IF CARDINALITY(rReason.ReasonList.Reason[]) = 0 THEN
+				CREATE FIELD rReason.ReasonList AS rReason;
+				CREATE LASTCHILD OF rReason AS rReason NAME 'Reason';
+				SET rReason.(NameValue)MPU = chReason;                                             -- @P23C
+				SET rReason.Code = 'Failed';
+				SET rReason.Value = chReason;                                                      -- @P23C
+			END IF;
+
+			-- END IF; -- Environment.Variables.ComIbmDni.Dnq.NodeType is Msif ?                         @P12A end @P22D
+
+			/* @P22D begin
+			SET rMQRFH2.ComIbmDni.Dnq.Completion.Code = 'Failed'; -- @P11C: OutputRoot.MQRFH2 replaced with rMQRFH2
+			MOVE rCompletion TO rMQRFH2.ComIbmDni.Dnq.Completion; -- @P11A: Prepare invocation of ExceptionToCompletion()
+			@P22D end */
+
+			-- Create message history record (must not be done for template import request)
+			DECLARE rHistoryEntry  REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.History AS rHistoryEntry;
+			CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+
+			SET rHistoryEntry."UserId"         = RTRIM(InputRoot.MQMD.UserIdentifier);
+			SET rHistoryEntry."TimeStamp"      = DnqUtil_GetCurrentWbifnTimestamp();
+			SET rHistoryEntry."QueueType"      = 'MQ';
+			SET rHistoryEntry."QueueName"      = COALESCE(InputRoot.MQMD.ReplyToQ, '');
+			SET rHistoryEntry."QueueManager"   = InputRoot.MQMD.ReplyToQMgr;
+			SET rHistoryEntry."Component"      = 'DNQ';
+			SET rHistoryEntry."Service"        = 'ER';
+			SET rHistoryEntry."Function"       = 'INPUT';
+			SET rHistoryEntry."FunctionResult" = 'Failed';
+
+		END IF; -- Template import request ?                                        -- @P01A
+
+		-- Create response                                                          -- @P11C: Moved code hither (begin)
+																					-- @P22D code moved to template import request
+
+		-- Create request to format the Reason elements in ReasonList                  @P06A begin
+		DECLARE rReasonList             REFERENCE TO rCompletion.ReasonList;
+		DECLARE rOutputLocalEnvironment REFERENCE TO OutputLocalEnvironment;
+
+		CALL DnqErCommon_CreateFormatRequest(rReasonList, rOutputLocalEnvironment); -- @P06A end  @P11C: Moved code hither (end)
+		
+		-- Set up SCPN request to retrieve audit configuration
+		-- (note that this is required to be able to audit the response message)
+		SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.Name = COALESCE(InputRoot.MQRFH2.ComIbmDni.OU,'DNFSYSOU');
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Type = 'DniMsgAudit'; -- @P01A (defect fix by the way)
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Name = 'DniMsgAudit'; -- @P01A (defect fix by the way)
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Type = 'DniOptionsMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Name = 'DnqER';
+
+		RETURN TRUE;
+	END;
+
+END MODULE;

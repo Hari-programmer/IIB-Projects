@@ -1,0 +1,15 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		DECLARE chrRef CHARACTER CAST(InputRoot.BLOB.BLOB AS CHARACTER CCSID 1208);
+		
+		--SET OutputRoot.JSON.Data.URLDATA = chrRef;
+		CREATE LASTCHILD OF EV.Ref DOMAIN 'JSON' PARSE(chrRef CCSID 1208);
+		SET EV.Data1 = EV.Ref.JSON.Data.(JSON.Array)word;
+        
+		
+		RETURN TRUE;
+	END;
+
+	

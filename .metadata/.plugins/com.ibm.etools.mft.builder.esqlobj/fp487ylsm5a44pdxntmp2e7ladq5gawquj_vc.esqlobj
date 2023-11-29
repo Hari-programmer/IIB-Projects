@@ -1,0 +1,8 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+                                                                 -- begin @P10A
+		DECLARE rEnv REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		DECLARE bScpnNeeded  BOOLEAN rEnv."bScpnNeeded";
+                                                                   -- end @P10A
+		RETURN bScpnNeeded; --@P10C
+	END;

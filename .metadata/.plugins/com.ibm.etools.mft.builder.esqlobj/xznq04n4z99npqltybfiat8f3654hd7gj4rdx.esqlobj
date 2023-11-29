@@ -1,0 +1,26 @@
+CREATE PROCEDURE ComIbmDnqErQueueOutput_CheckCopy(IN rInputRoot REFERENCE, IN cHistoryTS CHAR, OUT bIsCopy BOOLEAN, OUT bIsOriginal BOOLEAN, OUT bIsPureCopy BOOLEAN)
+BEGIN
+		DECLARE rHistoryEntry REFERENCE TO rInputRoot.MQRFH2.ComIbmDni.History.HistoryEntry[<];
+		SET bIsCopy = FALSE;
+		SET bIsOriginal = FALSE;
+		SET bIsPureCopy = FALSE;
+		
+		WHILE (LASTMOVE(rHistoryEntry) AND (cHistoryTS <> rHistoryEntry.TimeStamp)) DO
+			IF (rHistoryEntry.Function = 'COPY') THEN
+	   	    	IF rHistoryEntry.CopyIndicator = 'COPY' THEN
+	   	    		SET bIsCopy = TRUE;
+	   	    	ELSEIF (rHistoryEntry.CopyIndicator = 'ORIGINAL') THEN
+	   	    		SET bIsOriginal = TRUE;
+	   	    	END IF;
+			END IF;
+			MOVE rHistoryEntry PREVIOUSSIBLING NAME 'HistoryEntry';
+		END WHILE;
+		
+		-- can't be original and copy
+		-- only cosider as original there is no copy in the history path
+		IF (bIsOriginal AND bIsCopy) THEN
+			SET bIsOriginal = FALSE;
+		ELSEIF (bIsCopy) THEN
+			SET bIsPureCopy = TRUE;
+		END IF;
+END;

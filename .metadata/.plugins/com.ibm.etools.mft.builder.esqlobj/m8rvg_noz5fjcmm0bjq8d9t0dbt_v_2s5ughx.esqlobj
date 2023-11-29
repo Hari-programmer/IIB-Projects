@@ -1,0 +1,23 @@
+CREATE PROCEDURE DnqUtil_CopyScpnToEnv(IN rInputLocalEnvironment REFERENCE, INOUT rEnvironment REFERENCE)
+BEGIN
+	DECLARE chFieldName   CHAR '';
+	DECLARE chScpnOu      CHAR '';
+	DECLARE rScpnResponse REFERENCE TO rInputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration".
+		"Retrieve"."Response";
+	DECLARE rScpnOu       REFERENCE TO rScpnResponse.*[1];
+	DECLARE refScpnObject REFERENCE TO rInputLocalEnvironment;
+
+	WHILE LASTMOVE(rScpnOu) DO
+		SET chScpnOu = FIELDNAME(rScpnOu);
+		MOVE refScpnObject TO rScpnOu.*[1];
+
+		WHILE LASTMOVE(refScpnObject) DO
+			SET chFieldName = FIELDNAME(refScpnObject);
+			SET rEnvironment."ComIbmDni"."Properties".{chScpnOu}.{chFieldName} = refScpnObject;
+			MOVE refScpnObject NEXTSIBLING;
+		END WHILE;
+
+		MOVE rScpnOu NEXTSIBLING;
+
+	END WHILE;
+END;

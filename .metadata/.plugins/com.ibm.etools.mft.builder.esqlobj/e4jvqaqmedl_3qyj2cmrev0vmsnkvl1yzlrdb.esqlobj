@@ -1,0 +1,47 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+	
+SET OutputRoot = InputRoot;
+/* For case  IF Environment.ComIbmDni.ConfigDataLoc = 'env' */
+SET OutputLocalEnvironment = InputLocalEnvironment;
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node checks if the incoming message is an DniSetTimer request message. If no request was found,
+  a WFNI exception will be thrown.  
+  Further it checks, if the incoming DniSetTimer request message does already has an response section. 
+  If an response exists, this section will be removed from the message.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+DECLARE pOutFunction REFERENCE TO OutputRoot.MQRFH2[<].ComIbmDni.Function;
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN 
+  MOVE pOutFunction TO OutputLocalEnvironment.ComIbmDni.Function;
+END IF;
+-------------------------------------------------------------------------------------------------------------
+-- Find out, if message is a DniTimer/Set request message
+-------------------------------------------------------------------------------------------------------------
+
+-- Check, if message is a timer message ---------------------------------------------------------------------
+IF (CARDINALITY(pOutFunction.DniTimer[]) = 0) THEN 
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6001 VALUES('DNIT6001E'); 
+END IF;
+
+-- Check, if timer set request message is complete ----------------------------------------------------------
+IF (CARDINALITY(pOutFunction.DniTimer."Set".Request[]) = 0) THEN 
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6010 VALUES('DNIT6010E'); 
+END IF;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- Check for response section. 
+-- If it is found, this message section will be removed.
+-------------------------------------------------------------------------------------------------------------
+IF (CARDINALITY(pOutFunction.DniTimer."Set".Response[]) > 0) THEN
+  SET pOutFunction.DniTimer."Set".Response = NULL;
+END IF;
+
+
+
+RETURN true;
+END;
+

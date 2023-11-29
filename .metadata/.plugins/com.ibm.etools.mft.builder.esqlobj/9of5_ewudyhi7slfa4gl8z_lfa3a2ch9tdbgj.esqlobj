@@ -1,0 +1,7 @@
+CREATE FILTER MODULE ComIbmDnqFinApplicationOutput_Transform2Mtfin
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		RETURN Environment.Variables."ComIbmDni"."DnqFinApplicationOutput"."bTransform2Mtfin";
+	END;
+
+END MODULE;

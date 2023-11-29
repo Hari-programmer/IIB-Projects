@@ -1,0 +1,9 @@
+CREATE FILTER MODULE ComIbmDnqIdAwareOutput_SetIdentity
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE rSetIdentity REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinMsifServiceOutput"."bSetIdentity";
+
+		RETURN LASTMOVE(rSetIdentity) AND rSetIdentity;
+	END;
+
+END MODULE;

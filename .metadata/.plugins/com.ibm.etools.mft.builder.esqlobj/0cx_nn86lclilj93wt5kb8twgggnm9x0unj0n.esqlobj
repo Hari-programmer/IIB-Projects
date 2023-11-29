@@ -1,0 +1,16 @@
+CREATE COMPUTE MODULE ComIbmDnqMsifInput_CheckOu
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+				
+		IF (CARDINALITY(InputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"."Response".*.*[]) = 0) THEN
+			DECLARE chOu CHAR InputRoot.MQRFH2."ComIbmDni"."OU";
+			-- set indicator for OU reset in Environment roll-back save for DnqCatch node
+			SET Environment."ComIbmDni"."Function"."DnqCatch"."ChangeSettings"."Request"."ResetBOU" = TRUE;
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1252
+			VALUES (chOu, 'DNQO1252E');
+		END IF;
+
+		RETURN TRUE;
+	END;
+END MODULE;

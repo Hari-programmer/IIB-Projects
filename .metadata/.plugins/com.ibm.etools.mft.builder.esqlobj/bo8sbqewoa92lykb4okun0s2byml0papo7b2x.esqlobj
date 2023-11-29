@@ -1,0 +1,35 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE rReason REFERENCE TO OutputRoot.MQRFH2."ComIbmDni"."Dnq"."Completion"."ReasonList"; --@P02C
+
+		IF LASTMOVE(rReason) THEN --@P02A
+			
+			-- ensure all reasons have MPU attributes
+			MOVE rReason TO rReason."Reason"[>]; --@P02A
+			WHILE (LASTMOVE(rReason)) DO
+				IF (CARDINALITY(rReason.(NameValue)MPU[]) = 0) THEN
+					SET rReason.(NameValue)MPU = FIELDVALUE(rReason."Value");
+				END IF;
+				MOVE rReason NEXTSIBLING;
+			END WHILE;
+			
+			--  remove env mode, so message formatter works on MQRFH2
+			DECLARE refCdl REFERENCE TO Environment.ComIbmDni.ConfigDataLoc;
+			IF LASTMOVE(refCdl) THEN
+				SET Environment.Variables.ComIbmDni.DnqFillExplanation.ConfigDataLoc = refCdl;
+				DELETE FIELD refCdl;
+			END IF;
+			
+			-- remember existence of Function folder
+			SET Environment.Variables.ComIbmDni.DnqFillExplanation.bFunctionFolderPresent = (CARDINALITY(OutputRoot.MQRFH2.ComIbmDni.Function[]) > 0); --@P04A
+			
+			SET OutputRoot.MQRFH2.ComIbmDni.Function.DniUMG.Transform.Request.FieldReference =
+			    'ComIbmDni/Dnq/Completion/ReasonList'; -- @P01C @P02C
+
+		END IF; --@P02A
+		
+		RETURN TRUE;
+	END;

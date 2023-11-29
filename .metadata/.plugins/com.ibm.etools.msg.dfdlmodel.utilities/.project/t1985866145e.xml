@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?><MessageBroker name="FTM_STANDARD.APP">
+  <XSDCollection href="platform:/resource/FTM_STANDARD.APP/Data.xsd" prefix="" targetNamespace="">
+    <element href="platform:/resource/FTM_STANDARD.APP/Data.xsd#//Data;XSDElementDeclaration" name="Data"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/FTM_STANDARD.APP/IBMdefined/CommaSeparatedFormat.xsd" prefix="tns" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+  <XSDCollection href="platform:/resource/FTM_STANDARD.APP/Output_char.xsd" prefix="" targetNamespace="">
+    <element href="platform:/resource/FTM_STANDARD.APP/Output_char.xsd#//Output_char;XSDElementDeclaration" name="Output_char"/>
+  </XSDCollection>
+</MessageBroker>

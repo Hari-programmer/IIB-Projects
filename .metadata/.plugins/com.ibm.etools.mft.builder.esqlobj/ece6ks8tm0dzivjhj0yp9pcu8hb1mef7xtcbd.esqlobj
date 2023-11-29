@@ -1,0 +1,18 @@
+CREATE FUNCTION DnqUtil_EncapsulateCDATA(chData CHAR) RETURNS CHAR
+BEGIN
+	DECLARE chEncasulatedData CHAR '';
+	DECLARE chCdataBegin      CHAR '<![CDATA[';
+	DECLARE chCdataEnd        CHAR ']]>';
+	DECLARE iCdataEndPosition INT 0;
+	
+	SET iCdataEndPosition = POSITION(chCdataEnd IN chData);
+	IF (iCdataEndPosition > 0) THEN
+		DECLARE chFirstMsgPart  CHAR SUBSTRING(chData FROM 1 FOR iCdataEndPosition+2);
+		DECLARE chSecondMsgPart CHAR SUBSTRING(chData FROM iCdataEndPosition+3);
+		SET chEncasulatedData = chCdataBegin || chFirstMsgPart || chCdataEnd || DnqUtil_EncapsulateCDATA(chSecondMsgPart);
+	ELSE
+		SET chEncasulatedData = chCdataBegin || chData || chCdataEnd;
+	END IF;
+
+RETURN chEncasulatedData;
+END;

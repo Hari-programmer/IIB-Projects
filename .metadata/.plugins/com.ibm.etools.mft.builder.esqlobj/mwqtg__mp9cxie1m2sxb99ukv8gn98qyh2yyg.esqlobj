@@ -1,0 +1,32 @@
+CREATE COMPUTE MODULE ComIbmDniMessageAudit_ThrowFlowOrderFailed
+
+  CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+   
+    DECLARE exc REFERENCE TO InputExceptionList.*[1];
+    DECLARE fBreak BOOLEAN FALSE;
+
+    /* get last exception in the list */
+    WHILE (LASTMOVE(exc) = TRUE AND fBreak = FALSE) DO
+    	
+      /* check if exc still refers to an exception */
+      IF (exc.Number IS NOT NULL) THEN
+        MOVE exc LASTCHILD; /* jump to next exception in the list */
+      ELSE
+        MOVE exc PARENT;    /* jump to last exception */
+        SET fBreak = TRUE;   /* break the loop         */
+      END IF;
+      
+    END WHILE; /* end looping exception list */
+
+    /* ----- throw the exception now ----- */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2103
+    VALUES(exc.Number, exc."Insert"[1].Text, exc."Insert"[2].Text,
+           exc."Insert"[3].Text, exc."Insert"[4].Text, exc."Insert"[5].Text,
+           exc."Insert"[6].Text, exc."Insert"[7].Text, exc."Insert"[8].Text,
+           exc."Insert"[9].Text, 'DNIX2103E');
+
+    RETURN TRUE;
+
+  END; -- main()
+
+END MODULE;

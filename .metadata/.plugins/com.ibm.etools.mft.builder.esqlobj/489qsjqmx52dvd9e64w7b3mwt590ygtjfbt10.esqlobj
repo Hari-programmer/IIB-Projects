@@ -1,0 +1,5 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		RETURN CARDINALITY(LocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"."Request"[]) > 0;
+	END;
+

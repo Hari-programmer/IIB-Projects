@@ -1,0 +1,27 @@
+CREATE COMPUTE MODULE time_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+
+		//SET OutputRoot.XMLNSC.Time = 'HELLO Hari Its working' ;
+		SET OutputRoot.XMLNSC.EMP.Details = InputRoot.XMLNSC.EMPDetails.EMP;
+		
+				
+		/*	
+		INPUT MESSAGE 	
+			<TimeoutRequest>
+			  <Action>SET</Action>
+			  <Identifier>FiveTIMES</Identifier>
+			  <StartDate>TODAY</StartDate>
+			  <StartTime>NOW</StartTime>
+			  <Interval>2</Interval>
+			  <Count>4</Count>
+			  <IgnoreMissed>TRUE</IgnoreMissed>
+			  <AllowOverwrite>TRUE</AllowOverwrite>
+			</TimeoutRequest>
+
+				 
+		*/		 
+		RETURN TRUE;

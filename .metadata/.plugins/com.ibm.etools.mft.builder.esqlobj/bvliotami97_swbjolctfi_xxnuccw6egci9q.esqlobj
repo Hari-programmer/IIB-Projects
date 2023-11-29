@@ -1,0 +1,7 @@
+CREATE FILTER MODULE ComIbmDnqErQueueOutput_DeleteIt
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+	  RETURN Environment.Variables.ComIbmDni.Dnq.Properties.Delete = 'YES';
+	END;
+
+END MODULE;

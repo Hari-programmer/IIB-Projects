@@ -1,0 +1,67 @@
+
+
+CREATE COMPUTE MODULE CONSUMER_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		DECLARE EV REFERENCE TO Environment.Variable;
+      CREATE LASTCHILD OF EV.Req DOMAIN 'XMLNSC' PARSE (InputRoot.BLOB.BLOB);
+
+
+     IF EV.Req.XMLNSC.root.name='Gnaneshwar' Then
+      SET OutputRoot.XMLNSC.root.empid='001';
+      SET OutputRoot.XMLNSC.root.name='Gnaneshwar';
+
+     ELSEIF EV.Req.XMLNSC.root.name='hari' Then
+      SET OutputRoot.XMLNSC.root.empid='002';
+      SET OutputRoot.XMLNSC.root.name=EV.Req.XMLNSC.root.name;
+
+     ELSEIF EV.Req.XMLNSC.root.name='pavan' Then
+      SET OutputRoot.XMLNSC.root.empid='003';
+       SET OutputRoot.XMLNSC.root.name=EV.Req.XMLNSC.root.name;
+
+   ELSEIF EV.Req.XMLNSC.root.name='akshay' Then
+    SET OutputRoot.XMLNSC.root.empid='004';
+    SET OutputRoot.XMLNSC.root.name=EV.Req.XMLNSC.root.name;
+
+   ELSEIF EV.Req.XMLNSC.root.name='akash' Then
+    SET OutputRoot.XMLNSC.root.empid='005';
+    SET OutputRoot.XMLNSC.root.name=EV.Req.XMLNSC.root.name;
+
+
+ELSEIF EV.Req.XMLNSC.root.name='sudisna' Then
+SET OutputRoot.XMLNSC.root.empid='006';
+SET OutputRoot.XMLNSC.root.name=EV.Req.XMLNSC.root.name;
+
+ELSEIF EV.Req.XMLNSC.root.name='pravalika' Then
+SET OutputRoot.XMLNSC.root.empid='007';
+SET OutputRoot.XMLNSC.root.name=EV.Req.XMLNSC.root.name;
+
+ELSE
+SET OutputRoot.XMLNSC.MESSAGE='Invalid name';
+
+
+
+RETURN TRUE;
+END IF;
+		
+		
+		
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;

@@ -1,0 +1,18 @@
+
+
+CREATE FILTER MODULE Ftask14_Filter
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		IF Root.XMLNSC.Employee.name='Gnaneswar' Then
+			RETURN TRUE;
+		ELSEIF Root.XMLNSC.Employee.name='Hari' Then
+			RETURN FALSE;
+			
+			ELSE
+			RETURN UNKNOWN;
+		END IF;
+			
+	END;
+
+END MODULE;

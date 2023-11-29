@@ -1,0 +1,51 @@
+CREATE COMPUTE MODULE DnqErCommon_SetToUnparsable
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		CALL CopyMessageHeaders();
+
+		DECLARE xPayload BLOB ASBITSTREAM( InputRoot.*[<] OPTIONS FolderBitStream CCSID 1208 );
+
+		IF (CAST(SUBSTRING(xPayload FROM 1 FOR 15) AS CHAR CCSID 1208) <> '<DniUnparsable>') THEN
+			-- Create XML message from payload and convert it to CCSID 1208 if not already done
+			SET xPayload = CAST(
+				(
+					'<DniUnparsable>' ||
+						DnqUtil_EncapsulateCDATA(CAST( xPayload AS CHARACTER CCSID 1208)) ||
+					'</DniUnparsable>'
+				) AS BLOB CCSID 1208 );
+		END IF;
+
+		IF (Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeFin) THEN        -- @P12A
+			-- FIN
+			SET Environment.ComIbmDni.Dnq.Properties.LocalAddress = 'DNIUNPARSABLE';
+		ELSE                                                                          -- @P12A begin
+			-- MSIF
+			DECLARE rLocalDN REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.MsgReceived.Request.TransferOptions.LocalDN;
+
+			IF LASTMOVE(rLocalDN) THEN
+				SET Environment.ComIbmDni.Dnq.Properties.LocalAddress = rLocalDN;
+			ELSE
+				MOVE rLocalDN TO InputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.SendMsg.Request.TransferOptions.LocalDN;
+				IF LASTMOVE(rLocalDN) THEN
+					SET Environment.ComIbmDni.Dnq.Properties.LocalAddress = rLocalDN;
+				END IF;
+			END IF;
+		END IF; -- switch on node type (FIN or MSIG)                                     @P12A end
+
+		-- Set original CCSID
+		SET OutputRoot.MQRFH2.ComIbmDni.Dnq.Properties.OriginalCCSID = FIELDVALUE( InputRoot.MQRFH2.CodedCharSetId );
+		SET OutputRoot.MQRFH2.(MQRFH2.Field)CodedCharSetId = 1208;
+		SET OutputRoot.BLOB.BLOB = xPayload;
+
+	  RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+END MODULE;

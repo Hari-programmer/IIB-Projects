@@ -1,0 +1,6 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputRoot.MQRFH2.ComIbmDni.OU = COALESCE(Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.OU,'SYSOU');
+		RETURN TRUE;
+	END;

@@ -1,0 +1,5 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_CreateMwhRequestMx(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT rOutputLocalEnvironment REFERENCE, IN bUpdateMsg BOOLEAN)
+BEGIN
+	-- larger code parts moved to following procedure call
+	CALL ComIbmDnqMwhUpdateInsert_CreateInterActInitialRequest(rInputRoot, rEnvironment, rOutputLocalEnvironment, bUpdateMsg); --@P25A
+END;

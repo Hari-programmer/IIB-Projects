@@ -1,0 +1,14 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE rProcInfo  REFERENCE TO Environment.Variables.ComIbmDni.Dnq.ProcessingInformation;
+		DECLARE rDnqOutput REFERENCE TO rProcInfo.DnqOutput;
+		DECLARE rDBAction  REFERENCE TO rDnqOutput.DBAction[<];
+		
+		IF CARDINALITY( rDnqOutput.Completion[] ) = 0 THEN
+		  THROW	USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1007 VALUES( 'DNQK1007E' );
+		END IF;
+		IF NOT LASTMOVE(rDBAction) OR rDBAction <> 'Yes' THEN
+		  THROW	USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1008 VALUES( rProcInfo.DnqInput.NewId, 'DNQK1008E' );
+		END IF;
+		RETURN FALSE;
+	END;

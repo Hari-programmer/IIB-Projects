@@ -1,0 +1,23 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE bPropagate BOOLEAN TRUE;
+		DECLARE rReplyToQ REFERENCE TO InputRoot.MQMD.ReplyToQ;
+
+		IF (   rReplyToQ = REPLICATE(' ', MQ_Q_NAME_LENGTH)
+			OR LENGTH(rReplyToQ) = 0) THEN
+			SET bPropagate = FALSE; -- Stop propagation of message
+		ELSE
+			/** Generate response message
+			 **
+			 ** Note: Do not set element
+			 **         Root.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.Code
+			 **       here because of following:
+			 **       - It IS already set.
+			 **       - Auditing is already done when processing this compute module;
+			 **         so the response folder wouldn't be audited!
+			 **/
+			SET OutputRoot = InputRoot;
+		END IF;
+
+		RETURN bPropagate;
+	END;

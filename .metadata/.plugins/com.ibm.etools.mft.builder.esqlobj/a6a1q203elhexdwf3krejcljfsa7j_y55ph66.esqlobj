@@ -1,0 +1,11 @@
+CREATE FUNCTION DnqUtil_ErDecodeQueueType( Type CHARACTER ) RETURNS CHARACTER
+BEGIN
+  RETURN CASE SUBSTRING( Type FROM 1 FOR 1 )
+          WHEN 'M' THEN 'MAIN'
+          WHEN 'D' THEN 'DRAFT'
+          WHEN 'T' THEN 'TEMPLATE'
+          WHEN 'B' THEN 'BACKOUT'
+          WHEN 'R' THEN 'REDIRECT'
+          ELSE ''
+    	END;
+END;

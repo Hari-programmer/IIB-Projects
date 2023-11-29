@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?><MessageBroker name="Payload_To_Charecter">
+  <XSDCollection href="platform:/resource/Payload_To_Charecter/IBMdefined/CommaSeparatedFormat.xsd" prefix="tns" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+  <XSDCollection href="platform:/resource/Payload_To_Charecter/CSVOutput.xsd" prefix="" targetNamespace="">
+    <import name="IBMdefined/CommaSeparatedFormat.xsd" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+    <element href="platform:/resource/Payload_To_Charecter/CSVOutput.xsd#//CSVOutput;XSDElementDeclaration" name="CSVOutput"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/Payload_To_Charecter/CsvInput.xsd" prefix="" targetNamespace="">
+    <import name="IBMdefined/CommaSeparatedFormat.xsd" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+    <element href="platform:/resource/Payload_To_Charecter/CsvInput.xsd#//CsvInput;XSDElementDeclaration" name="CsvInput"/>
+  </XSDCollection>
+</MessageBroker>

@@ -1,0 +1,40 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		--InputRoot.MRM.String[];
+		DECLARE i INTEGER 1;  
+	    DECLARE ListCount INTEGER CARDINALITY(InputRoot.DFDL.Input.record.Data[]);
+	    	WHILE i<=ListCount DO
+	     		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' 
+                	                                                     ||InputRoot.DFDL.Input.record.Data[i];
+	   	 		SET OutputLocalEnvironment.Destination.HTTP.RequestLine.Method = 'GET';
+	     	PROPAGATE TO TERMINAL 'out';
+	    
+	     	SET i = i+1;
+	     	END WHILE;
+	    
+		
+		
+		
+		
+		
+		
+		
+		
+		
+--		DECLARE i INTEGER 1;
+--		FOR InRef AS InputRoot.DFDL.Input.record[] DO
+--			DECLARE List INTEGER CARDINALITY(InRef.Data[]);
+--		    	WHILE i<=List DO
+--                	IF CONTAINS(InRef.Data[i],'hello') THEN
+--                  		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' 
+--                  	                                                          || InRef.Data[i];
+--				    	SET OutputLocalEnvironment.Destination.HTTP.RequestLine.Method = 'GET';
+--		        	END IF;
+--		    	SET i=i+1;
+--		    	END WHILE;
+--			END FOR;
+		
+		RETURN FALSE;
+	END;
+

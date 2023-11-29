@@ -1,0 +1,15 @@
+CREATE FUNCTION ComIbmDnqFinExtractFromMT021_GetMsgType(chFinMessage CHAR) RETURNS CHAR
+/*
+ get the full message type (direction + number) (4 char) e.g. 'O021'
+*/
+BEGIN
+
+	DECLARE chMessageType CHAR '';
+
+	-- Prerequisite: length>37 and {1: and {2: must be at correct position
+	IF (LENGTH(chFinMessage) > 37) AND (SUBSTRING(chFinMessage FROM 1 FOR 3) = '{1:') AND (SUBSTRING(chFinMessage FROM 30 FOR 3) = '{2:') THEN
+		SET chMessageType = SUBSTRING(chFinMessage FROM 33 FOR 4);
+	END IF;
+
+RETURN chMessageType;
+END;

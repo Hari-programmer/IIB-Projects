@@ -1,0 +1,6 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET Environment."Variables"."ComIbmDni"."DnqMessageCopy" = NULL;
+		RETURN TRUE;
+	END;

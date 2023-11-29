@@ -1,0 +1,141 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+SET OutputRoot = InputRoot;
+/* For case  IF Environment.ComIbmDni.ConfigDataLoc = 'env' */
+SET OutputLocalEnvironment = InputLocalEnvironment;
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node extracts timer data from message and builds the timer record. Further is inserts this timer record 
+  in the timer table indicated in the incoming message.
+  If already an error occured in DniSetTimer flow (indicated throw appeared response section), no
+  processing will take place.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+-------------------------------------------------------------------------------------------------------------
+-- Find out if a DniSetTimer response message exists. 
+-- A response section in the incoming message indicates, that an error occured in one of the preceding nodes
+-- of the DniSetTimer flow. Than, no further processing should be done. The incoming message will be 
+-- forwarded to the next node in this flow.
+-------------------------------------------------------------------------------------------------------------
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN 
+  IF (CARDINALITY(OutputLocalEnvironment.ComIbmDni.Function.DniTimer."Set".Response[]) > 0) 
+  THEN
+    RETURN TRUE;  
+  END IF;  
+ELSE
+  IF (CARDINALITY(OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer."Set".Response[]) > 0) 
+  THEN
+    RETURN TRUE;  
+  END IF;  
+  
+END IF;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- declarations and initializations
+-------------------------------------------------------------------------------------------------------------
+DECLARE refDni REFERENCE TO InputRoot.MQRFH2[<].ComIbmDni;
+DECLARE refTimReq REFERENCE TO refDni.Function.DniTimer."Set".Request;
+DECLARE pOutFunction REFERENCE TO OutputRoot.MQRFH2[<].ComIbmDni.Function;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN 
+  MOVE pOutFunction TO OutputLocalEnvironment.ComIbmDni.Function;
+  MOVE refTimReq TO InputLocalEnvironment.ComIbmDni.Function.DniTimer."Set".Request;
+END IF;
+
+
+DECLARE refLocEnvIn REFERENCE TO InputLocalEnvironment.Variables.ComIbmDni.Function.DniTimer."Set";
+
+DECLARE chOu CHARACTER;
+DECLARE chTargetSvc CHARACTER; 
+DECLARE chWuTime CHARACTER;
+DECLARE chUserData CHARACTER;
+DECLARE blobTimerId BLOB;
+DECLARE chTimerSchemaTable CHARACTER;
+
+SET chOu = refDni.OU;
+SET chTargetSvc = refTimReq.TargetService;
+SET chWuTime = refLocEnvIn.WakeupDateTime;
+SET chUserData = refTimReq.UserData;
+SET blobTimerId = refLocEnvIn.TimerId;
+SET chTimerSchemaTable = refLocEnvIn.TimerTable;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- Set the positiv response including the TimerId and the TimerTable.
+-- This has to be done before end of processing, to be sure, that the database entry is the last process
+-- to do. (If afterwards, with the wrong, flow based error handling, an exception would occur, 
+-- the database entry could be still in the database [no rollback] .)
+-------------------------------------------------------------------------------------------------------------
+CREATE FIELD pOutFunction.DniTimer."Set".Response;
+DECLARE refResp REFERENCE TO pOutFunction.DniTimer."Set".Response;
+
+SET refResp.Completion.Code = 'Ok';
+SET refResp.TimerId = refLocEnvIn.TimerId;
+SET refResp.TimerId.(NameValue)dt = 'bin.hex';
+SET refResp.TimerTable = refLocEnvIn.TimerTable;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- Assemble the expiry timestamp for use in the database out of the DniSetTimer request expiry timestamp.
+-- This has to be done because of different dateTime formats.
+-------------------------------------------------------------------------------------------------------------
+DECLARE chExpiryTS CHARACTER;
+SET chExpiryTS = chWuTime;--SUBSTRING(chWuTime FROM 1 FOR 10) || ' ' || SUBSTRING(chWuTime FROM 12); 
+
+
+-------------------------------------------------------------------------------------------------------------
+-- Assemble database insert statement and execute it
+-------------------------------------------------------------------------------------------------------------
+DECLARE sqlState1 CHARACTER;
+DECLARE sqlErrorText1 CHARACTER;
+DECLARE sqlCode1 INTEGER;
+DECLARE sqlNativeError1 INTEGER;
+
+DECLARE chDBStmt CHARACTER;
+IF (chUserData IS NULL) THEN	
+  SET chDBStmt =   'INSERT INTO ' 
+		  || chTimerSchemaTable
+                  || ' '
+		  || '(T_TIMER_UID, T_SET_TIMER_GMT_TS, T_EXPIRY_GMT_TS, T_SERVICE_NAME, T_OU_NAME) '
+		  || 'VALUES (' 
+		  || '?' || ','
+		  || 'CURRENT TIMESTAMP - CURRENT TIMEZONE,'
+		  || 'CAST(' || '?' || ' AS TIMESTAMP)' || ','
+		  || '?' || ','
+		  || '?' 
+		  || ')';
+   PASSTHRU(chDBStmt, blobTimerId, chExpiryTS, chTargetSvc, chOu);
+ELSE
+  SET chDBStmt =   'INSERT INTO ' 
+		  || chTimerSchemaTable
+		  || ' '
+		  || '(T_TIMER_UID, T_SET_TIMER_GMT_TS, T_EXPIRY_GMT_TS, T_SERVICE_NAME, T_OU_NAME, T_USER_DATA) '
+		  || 'VALUES ('
+		  || '?' || ','
+		  || 'CURRENT TIMESTAMP - CURRENT TIMEZONE,'
+		  || 'CAST(' || '?' || ' AS TIMESTAMP)' || ','
+		  || '?' || ','
+		  || '?' || ','
+		  || '?'
+		  || ')';
+   PASSTHRU(chDBStmt, blobTimerId, chExpiryTS, chTargetSvc, chOu, chUserData);
+END IF; 
+	
+
+
+-- in case of an error, throw an WebSphere BI for FN exception -----------------------------------------------
+SET sqlCode1 = SQLCODE;
+IF (sqlCode1 < 0) THEN
+  SET sqlState1 = SQLSTATE;
+  SET sqlErrorText1 = SQLERRORTEXT;
+  SET sqlNativeError1 = SQLNATIVEERROR;
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6002
+	VALUES ('DniSetTimer', chTimerSchemaTable, sqlCode1, sqlState1, sqlNativeError1, sqlErrorText1, 'DNIT6002E'); 
+END IF;
+
+
+RETURN true;
+END;
+

@@ -1,0 +1,94 @@
+CREATE PROCEDURE DnqErCommon_CreateWorkfolder(
+	IN    rInputRoot   REFERENCE,
+	INOUT rOutputRoot  REFERENCE,
+	INOUT rEnvironment REFERENCE
+)
+/* ---------------------------------------------------------------------------------------
+ * DESCRIPTION
+ *   Creates the bit stream of a workfolder and stores it as field
+ *     Environment.Variables.ComIbmDni.Dnq.Trace.xComIbmDni
+ *   where:
+ *
+ *   - The workfolder has the following structure:
+ *       <Root>
+ *          <MQRFH2>
+ *             <ComIbmDni>
+ *             ...
+ *             </ComIbmDni>
+ *          </MQRFH2>
+ *          <Environment>
+ *             <ComIbmDni>
+ *                <Dnq>
+ *                ...
+ *                </Dnq>
+ *             </ComIbmDni>
+ *          </Environment>
+ *       </Root>
+ *
+ *     where:
+ *     o  Content of folder <ComIbmDni> is taken from
+ *           rOutputRoot.MQRFH2.ComIbmDni
+ *        except of element
+ *           rOutputRoot.MQRFH2.ComIbmDni.Properties.Common.LastUpdate
+ *        which can cause either of the following exceptions
+ *        (see APAR PI42938):
+ *        *  DNIP3402E with reason code 3375
+ *           (i.e., WBI FN error during CPN processing
+ *            due to different time stamp in field LastUpdate)
+ *        *  DNIP3406E with reason code 3335
+ *           (i.e., WBI FN error during SCPN processing
+ *            due to different time stamp in field LastUpdate)  
+ *     o  Content of folder <Dnq> is taken from
+ *           rEnvironment.ComIbmDni.Dnq
+ *
+ *   - rOutputRoot is used to setup the workfolder temporarily,
+ *     namely, as folder rOutputRoot.XMLNSC.Root
+ *     (wherefore rOutputRoot must be an INOUT parameter).
+ *
+ *   - Content of Environment.Variables.ComIbmDni.Dnq.Trace.xComIbmDni
+ *     is inserted into column COMIBMDNI of MER database table DNQE_MESSAGES
+ *     by the ComIbmDnqErQueueOutput node.
+ * --------------------------------------------------------------------------------------- */
+BEGIN
+	DECLARE rTrace     REFERENCE TO rEnvironment;
+	CREATE FIELD rEnvironment.Variables.ComIbmDni.Dnq.Trace AS rTrace;
+
+	DECLARE rComIbmDni REFERENCE TO rOutputRoot.MQRFH2.ComIbmDni;
+	DECLARE rTemp      REFERENCE TO rEnvironment; -- Dummy for declaration only
+	DECLARE xComIbmDni BLOB;
+
+	-- Prepare rOutputRoot to contain folder Root incl. subfolders MQRFH2 and Environment
+	DELETE FIELD rOutputRoot.XMLNSC;
+	SET rOutputRoot.MQRFH2.CodedCharSetId = 1208;
+	CREATE LASTCHILD OF rOutputRoot DOMAIN 'XMLNSC' NAME 'XMLNSC';
+	CREATE FIELD rOutputRoot.XMLNSC.Root;
+	CREATE FIRSTCHILD OF rOutputRoot.XMLNSC.Root NAME 'MQRFH2';
+	CREATE LASTCHILD  OF rOutputRoot.XMLNSC.Root AS rTemp NAME 'Environment';
+	CREATE LASTCHILD  OF rTemp AS rTemp NAME 'ComIbmDni';
+
+	-- Take over MQRFH2.ComIbmDni
+	IF LASTMOVE(rComIbmDni) THEN
+		-- Do NOT take over LastUpdate timestamp (see APAR PI42938)               @P24A begin
+		DECLARE rLastUpdate REFERENCE TO rComIbmDni.Properties.Common.LastUpdate;
+		IF (LASTMOVE(rLastUpdate)) THEN
+			DELETE FIELD rLastUpdate;
+		END IF;                                                                -- @P24A end
+		SET xComIbmDni = ASBITSTREAM( rOutputRoot.MQRFH2.ComIbmDni OPTIONS FolderBitStream CCSID 1208 );
+		CREATE LASTCHILD OF rOutputRoot.XMLNSC.Root.MQRFH2 DOMAIN('XMLNSC') PARSE( xComIbmDni CCSID 1208 OPTIONS FolderBitStream );
+	END IF;
+
+	-- Take over Environment.ComIbmDni.Dnq
+	MOVE rComIbmDni TO rEnvironment.ComIbmDni.Dnq;
+	IF LASTMOVE(rComIbmDni) THEN
+		CALL ComIbmDnqRouting.DnqUtil_CopyTree(rComIbmDni, rTemp);
+	END IF;
+	SET xComIbmDni = ASBITSTREAM( rOutputRoot.XMLNSC.Root OPTIONS FolderBitStream CCSID 1208 );
+
+	SET rTrace.xComIbmDni = xComIbmDni;
+
+	-- Restore payload
+	DELETE FIELD rOutputRoot.XMLNSC;
+    CREATE LASTCHILD OF rOutputRoot DOMAIN 'XMLNSC' NAME 'XMLNSC';
+	SET rOutputRoot.XMLNSC = rInputRoot.XMLNSC;
+	
+END;

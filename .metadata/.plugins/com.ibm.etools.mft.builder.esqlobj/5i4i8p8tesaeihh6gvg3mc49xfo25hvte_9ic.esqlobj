@@ -1,0 +1,5 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_CreateMwhRequestEni(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT rOutputLocalEnvironment REFERENCE, IN bUpdateMsg BOOLEAN)
+BEGIN
+	CALL ComIbmDnqMwhUpdateInsert_CreateInterActInitialRequest(rInputRoot, rEnvironment, rOutputLocalEnvironment, bUpdateMsg);
+	CALL ComIbmDnqMwhUpdateInsert_AddEniAdjunctRequest(rInputRoot, rEnvironment, rOutputLocalEnvironment, bUpdateMsg);
+END;

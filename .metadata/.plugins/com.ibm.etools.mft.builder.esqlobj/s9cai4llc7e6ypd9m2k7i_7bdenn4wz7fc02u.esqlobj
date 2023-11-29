@@ -1,0 +1,8 @@
+CREATE COMPUTE MODULE ComIbmDnqMwhUpdateInsert_SetUpdate
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert"."bDoUpdate" = TRUE;
+		RETURN TRUE;
+	END;
+END MODULE;

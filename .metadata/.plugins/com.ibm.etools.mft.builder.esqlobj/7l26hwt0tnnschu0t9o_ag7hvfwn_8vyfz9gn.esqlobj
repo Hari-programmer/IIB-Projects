@@ -1,0 +1,32 @@
+CREATE PROCEDURE DnqErCommon_CreateFormatRequest( -- @P06A
+	INOUT rReasonList             REFERENCE,
+	INOUT rOutputLocalEnvironment REFERENCE
+)
+/* ---------------------------------------------------------------------------------------
+ * DESCRIPTION
+ *   Creates a request for the DniMessageFormatter node to format the Reason elements
+ *   in input ReasonList.
+ *
+ * PARAMETERS
+ *   rReasonList              Reference to the reason list providing the Reason elements
+ *   rOutputLocalEnvironment  Reference to OutputLocalEnvironment which will
+ *                            contain the format request
+ * --------------------------------------------------------------------------------------- */
+BEGIN
+	DECLARE rReason REFERENCE TO rReasonList.Reason[>];
+
+	-- Ensure that all Reason elements have an MPU attribute
+	WHILE (LASTMOVE(rReason)) DO
+		IF (CARDINALITY(rReason.(NameValue)MPU[]) = 0) THEN
+			SET rReason.(NameValue)MPU = FIELDVALUE(rReason.Value);
+		END IF;
+		MOVE rReason NEXTSIBLING;
+	END WHILE;
+
+	-- Set up request for DniMessageFormatter node
+	SET rOutputLocalEnvironment.ComIbmDni.Function.DniUMG.Transform.Request.FieldReference =
+	    'ComIbmDni/Function/DNQ_K_TPL/Import/Response/Completion/ReasonList';
+	SET rOutputLocalEnvironment.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.ReasonList =
+	    rReasonList;
+
+END;

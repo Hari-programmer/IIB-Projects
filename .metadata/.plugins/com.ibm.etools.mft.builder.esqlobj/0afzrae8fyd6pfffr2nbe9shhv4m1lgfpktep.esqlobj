@@ -1,0 +1,36 @@
+CREATE FUNCTION ComIbmDnqFinExtractFromMT021_TrimBlock(chMsgDataIn CHAR) RETURNS CHAR
+/*
+ Truncate after closing of Block (including last '}')
+ 
+ chMsgDataIn must start after first '{' of Block
+  e.g. {4:{Block}{4}}{5:{Block}{5}}
+   TrimBlock('4:{Block}{4}}{5:{Block}{5}}{Block}{4}') -> '4:{Block}{4}'
+   TrimBlock('{Block}{4}}{5:{Block}{5}}{Block}{4}') -> '{Block}{4}'   
+*/
+BEGIN
+
+	DECLARE chMsgDataOut CHAR chMsgDataIn;
+	DECLARE iCounter     INT 1;
+	DECLARE iPos         INT 1;
+
+	-- Find matching Bracket (End of Block)
+	WHILE (iCounter > 0) AND (iPos <= LENGTH(chMsgDataIn)) DO
+		IF (SUBSTRING(chMsgDataIn FROM iPos FOR 1) = '{') THEN
+			SET iCounter = iCounter+1;
+		ELSE
+			IF (SUBSTRING(chMsgDataIn FROM iPos FOR 1) = '}') THEN
+				SET iCounter = iCounter-1;
+			END IF;
+		END IF;
+		
+		-- End of Block found
+		IF (iCounter = 0) THEN
+			-- Trim Block
+			SET chMsgDataOut = SUBSTRING(chMsgDataIn FROM 1 FOR (iPos-1));
+		END IF;
+		
+		SET iPos = iPos+1;
+	END WHILE;
+
+RETURN chMsgDataOut;
+END;

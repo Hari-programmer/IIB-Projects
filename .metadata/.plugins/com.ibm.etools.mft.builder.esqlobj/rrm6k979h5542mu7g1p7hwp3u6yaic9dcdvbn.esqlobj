@@ -1,0 +1,37 @@
+CREATE COMPUTE MODULE ComIbmDnqMwhUpdateInsert_PrepMwh
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rEnv                    REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		DECLARE rInputRoot              REFERENCE TO InputRoot;
+		DECLARE rInputLocalEnvironment  REFERENCE TO InputLocalEnvironment; --@P07A
+		DECLARE rOutputLocalEnvironment REFERENCE TO OutputLocalEnvironment;
+		DECLARE rEnvironment            REFERENCE TO Environment;
+		DECLARE bExtractMsgFields       BOOLEAN rEnv."bExtractMsgFields";
+		DECLARE bDoUpdate               BOOLEAN rEnv."bDoUpdate";
+		DECLARE chDomain                CHAR InputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain"; --@P05C
+		
+		CALL DnqUtil_CopyScpnToEnv(rInputLocalEnvironment, rEnvironment); --@P07A
+
+		IF bExtractMsgFields THEN
+			CASE chDomain
+			WHEN 'DNIFIN' THEN
+				CALL ComIbmDnqMwhUpdateInsert_CreateMwhRequestFin(rInputRoot, rEnvironment, rOutputLocalEnvironment, bDoUpdate);
+			WHEN 'DNIFUNDS' THEN
+				-- TODO: Mx request has to be replaced by an extended FUNDS request
+				CALL ComIbmDnqMwhUpdateInsert_CreateMwhRequestMx(rInputRoot, rEnvironment, rOutputLocalEnvironment, bDoUpdate);
+                                                                 -- begin @P25A
+			WHEN 'DNIENI' THEN
+				CALL ComIbmDnqMwhUpdateInsert_CreateMwhRequestEni(rInputRoot, rEnvironment, rOutputLocalEnvironment, bDoUpdate);
+			ELSE
+                                                                   -- end @P25A
+				CALL ComIbmDnqMwhUpdateInsert_CreateMwhRequestMx(rInputRoot, rEnvironment, rOutputLocalEnvironment, bDoUpdate); --@P02C @P14C @P25C
+			END CASE;
+		ELSE
+			CALL ComIbmDnqMwhUpdateInsert_CreateMwhRequestMinimum(rInputRoot, rEnvironment, rOutputLocalEnvironment, bDoUpdate); --@P02C @P14C
+		END IF;
+
+		RETURN TRUE;
+	END;
+END MODULE;

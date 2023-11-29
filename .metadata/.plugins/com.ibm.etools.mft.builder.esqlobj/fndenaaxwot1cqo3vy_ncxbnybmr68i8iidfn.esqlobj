@@ -1,0 +1,43 @@
+CREATE COMPUTE MODULE "ComIbmDnqCatch_PrepareRFH2"
+CREATE FUNCTION main() RETURNS BOOLEAN
+
+BEGIN
+	SET OutputRoot = InputRoot;
+
+	DECLARE rExistenceCheck REFERENCE TO OutputRoot.MQRFH2; --@P02C
+
+	-- create MQRFH2, if needed
+	IF NOT LASTMOVE(rExistenceCheck) THEN
+		DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+		DECLARE rPreMqrfh2Header  REFERENCE TO Environment;
+		CREATE NEXTSIBLING OF rPrePayloadHeader AS rExistenceCheck DOMAIN 'MQRFH2' NAME 'MQRFH2';
+		MOVE rPreMqrfh2Header TO OutputRoot.*[<3];
+		SET rExistenceCheck.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+		SET rExistenceCheck.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+		SET rExistenceCheck.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+		SET rExistenceCheck.(MQRFH2.Field)"NameValueCCSID" = 1208;
+                                                                 /* begin @P01D
+		SET OutputRoot.MQRFH2."ComIbmDni"."Version" = '1.0';
+		SET OutputRoot.MQRFH2."ComIbmDni"."OU" = 'DNFSYSOU';
+*/                                                                 -- end @P01D
+	END IF;
+                                                                 -- begin @P01A
+	MOVE rExistenceCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+	IF NOT LASTMOVE(rExistenceCheck) OR (LENGTH(rExistenceCheck) = 0) OR
+		Environment."ComIbmDni"."Function"."DnqCatch"."ChangeSettings"."Request"."ResetBOU" THEN --@P04C
+		SET OutputRoot.MQRFH2."ComIbmDni"."OU" = 'DNFSYSOU';
+	END IF;
+	MOVE rExistenceCheck TO OutputRoot.MQRFH2."ComIbmDni"."Version";
+	IF NOT LASTMOVE(rExistenceCheck) OR (LENGTH(rExistenceCheck) = 0) THEN
+		SET OutputRoot.MQRFH2."ComIbmDni"."Version" = '1.0';
+	END IF;
+                                                                   -- end @P01A
+	/**************************************************************************
+	* Prevent additional COAs and CODs                                        *
+	**************************************************************************/
+	SET OutputRoot.MQMD.Report = 0;
+	
+	RETURN TRUE;
+END;
+
+END MODULE;

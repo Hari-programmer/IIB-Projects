@@ -1,0 +1,133 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE bQueueExists  BOOLEAN FALSE;
+		DECLARE bQueueValid   BOOLEAN FALSE;
+		DECLARE bRetryRouting BOOLEAN FALSE;
+		DECLARE chOu CHAR InputRoot.MQRFH2.ComIbmDni.OU;
+		DECLARE chQueueName CHAR '';
+		DECLARE rTplRequest REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request; -- @P01A
+
+		IF ((CARDINALITY(InputLocalEnvironment.Destination.Dnq.DestinationData.QueueName[]) > 0) AND 
+			(LENGTH(InputLocalEnvironment.Destination.Dnq.DestinationData.QueueName) > 0) ) THEN
+			SET chQueueName = InputLocalEnvironment.Destination.Dnq.DestinationData.QueueName;
+		ELSE
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1117 VALUES( 'DNQK1117E' );
+		END IF;
+		DECLARE chQueueType CHAR InputLocalEnvironment.Destination.Dnq.DestinationData.QueueType;
+		DECLARE chSourceQueueName CHAR Environment.ComIbmDni.Dnq.ER.QueueName;
+		DECLARE chSourceQueueType CHAR Environment.ComIbmDni.Dnq.ER.QueueType;
+		DECLARE chSourceProcessType CHAR Environment.ComIbmDni.Dnq.ER.ProcessType;
+		DECLARE chNextProcesingType CHAR InputLocalEnvironment.Destination.Dnq.DestinationData.NextProcessingType;
+		DECLARE chUserAction CHAR COALESCE(Environment.ComIbmDni.Dnq.ER.CurrentAction.UserAction, '');
+		DECLARE iMsgId INT Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.NewId;
+		DECLARE rScpnResponse REFERENCE TO InputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Response;
+		DECLARE rCO REFERENCE TO rScpnResponse.{chOu}.DnqERQueue.{chQueueName};
+		DECLARE chPurpose CHAR '';
+		DECLARE iCount INT 0;
+		DECLARE iThreshold INT;
+		IF (CARDINALITY(Environment.Variables.ComIbmDni.Dnq.Properties.RecursionThreshold[]) > 0) THEN
+			SET iThreshold = CAST (Environment.Variables.ComIbmDni.Dnq.Properties.RecursionThreshold AS INT);
+		ELSE
+			-- disable recursion detection for input adapters
+			-- in DnqErQueueOutput RecursionThreshold is checked and set 
+			SET bRetryRouting = TRUE;
+		END IF;
+		IF (chUserAction = 'RETRYROUTING') THEN
+			SET bRetryRouting = TRUE;
+		END IF;
+		DECLARE rHistoryEntry REFERENCE TO InputRoot.MQRFH2.ComIbmDni.History.HistoryEntry[<];
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+		DECLARE rEnvironment           REFERENCE TO Environment;
+		
+		CALL DnqUtil_CopyScpnToEnv(rInputLocalEnvironment, rEnvironment);
+		DECLARE rProperties REFERENCE TO rEnvironment.ComIbmDni.Properties;
+		DECLARE rDnqTrigger REFERENCE TO Environment;
+		CREATE FIELD Environment.Variables.DnqTrigger AS rDnqTrigger;
+		CALL DnqUtil_CopyTree(rProperties,rDnqTrigger);
+
+		-- check if routing target queue is the same as source queue
+		IF (chQueueName = chSourceQueueName) AND 
+			(chQueueType = chSourceQueueType) AND
+			(chNextProcesingType = chSourceProcessType) THEN
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1107
+				VALUES( iMsgId, chQueueName, chQueueType, chNextProcesingType, 'DNQK1107E' );
+		END IF;
+		
+		-- check if queue is configured
+		IF LASTMOVE(rCO) THEN
+			SET bQueueExists = TRUE;
+			SET chPurpose = UPPER(TRIM(rCO.Purpose));
+			
+			-- in case of template import check if queue purpose is CREATE                             -- @P01A begin
+			IF LASTMOVE(rTplRequest) THEN
+				IF (chPurpose <> 'CREATE') THEN
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1124 VALUES( rTplRequest.TargetMerQueue, chPurpose, 'DNQK1124E' );
+				END IF; -- queue purpose is CREATE ?
+			END IF; -- template import request ?                                                       -- @P01A end
+
+			-- check if the target combination of queue purpose and type is valid
+			IF (chPurpose = 'CREATE') THEN
+				IF (chQueueType = 'MAIN') THEN
+					-- target must not be create main queue (except for retry routing)
+					IF (chUserAction = 'RETRYROUTING') AND (chNextProcesingType <> 'APPLICATION') THEN
+						SET bQueueValid = TRUE;
+					ELSE
+						THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1113 VALUES( chQueueName, 'DNQK1113E' );
+					END IF;
+				ELSEIF ((chQueueType = 'DRAFT') OR
+						(chQueueType = 'TEMPLATE') OR
+						(chQueueType = 'BACKOUT')) THEN
+					SET bQueueValid = TRUE;
+				END IF;
+			ELSEIF (chPurpose = 'EDIT') THEN
+				IF ((chQueueType = 'MAIN') OR
+					(chQueueType = 'DRAFT') OR
+					(chQueueType = 'REDIRECT') OR
+					(chQueueType = 'BACKOUT')) THEN
+					SET bQueueValid = TRUE;
+				END IF;
+			ELSEIF ((chPurpose = 'AUTHORIZE') OR
+					(chPurpose = 'DBLAUTHORIZE') OR
+					(chPurpose = 'RETYPE') OR
+					(chPurpose = 'DISPLAY') OR
+					(chPurpose = 'GENERAL')) THEN
+				IF ((chQueueType = 'MAIN') OR
+					(chQueueType = 'REDIRECT') OR
+					(chQueueType = 'BACKOUT')) THEN
+					SET bQueueValid = TRUE;
+				END IF;
+			END IF;
+		END IF;
+		
+		IF NOT bQueueExists THEN
+			IF LASTMOVE(rTplRequest) THEN                                                              -- @P01A begin
+				-- in case of template import throw more meaningful exception
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1123 VALUES( rTplRequest.TargetMerQueue, 'DNQK1123E' );
+			ELSE                                                                                       -- @P01A end
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1100 VALUES( chQueueName, 'DNQK1100E' );
+			END IF; -- template import request ?                                                       -- @P01A
+		END IF;
+		IF NOT bQueueValid THEN
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1115 VALUES( chQueueName, chPurpose, chQueueType, 'DNQK1115E' );
+		END IF;
+		
+		WHILE (LASTMOVE(rHistoryEntry) AND (NOT bRetryRouting)) DO
+			IF ((rHistoryEntry.QueueName = chQueueName) AND
+				(rHistoryEntry.QueueType = chQueueType)) THEN
+				SET iCount = iCount + 1;
+				IF (iCount > iThreshold) THEN
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1108
+						VALUES( chQueueName, chQueueType, chNextProcesingType, iMsgId, iThreshold, 'DNQK1108E' );
+				END IF;
+			END IF;
+			IF (rHistoryEntry.UserAction = 'RETRYROUTING') THEN
+				SET bRetryRouting = TRUE;
+			END IF;
+			MOVE rHistoryEntry PREVIOUSSIBLING;
+		END WHILE;
+		
+		RETURN TRUE;
+	END;

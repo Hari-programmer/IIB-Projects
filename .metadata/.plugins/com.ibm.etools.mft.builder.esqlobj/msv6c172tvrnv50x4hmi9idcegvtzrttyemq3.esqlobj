@@ -1,0 +1,10 @@
+CREATE COMPUTE MODULE ComIbmDniStandardsProcessing_RemoveResponse
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DELETE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Response";
+		
+		RETURN TRUE;
+	END;
+END MODULE;

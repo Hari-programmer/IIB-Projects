@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?><MessageBroker name="App_Access URL_Task">
+  <XSDCollection href="platform:/resource/App_Access URL_Task/Input.xsd" prefix="" targetNamespace="">
+    <import name="IBMdefined/CommaSeparatedFormat.xsd" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+    <element href="platform:/resource/App_Access URL_Task/Input.xsd#//Input;XSDElementDeclaration" name="Input"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/App_Access URL_Task/URLOutput.xsd" prefix="" targetNamespace="">
+    <import name="IBMdefined/CommaSeparatedFormat.xsd" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+    <element href="platform:/resource/App_Access URL_Task/URLOutput.xsd#//URLOutput;XSDElementDeclaration" name="URLOutput"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/App_Access URL_Task/IBMdefined/CommaSeparatedFormat.xsd" prefix="tns" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+</MessageBroker>

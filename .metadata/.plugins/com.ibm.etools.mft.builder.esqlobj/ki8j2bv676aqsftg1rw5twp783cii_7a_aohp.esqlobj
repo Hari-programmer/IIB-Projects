@@ -1,0 +1,20 @@
+CREATE PROCEDURE DnqUtil_CopyTree(IN rSourceTree REFERENCE, INOUT rTargetParentTree REFERENCE)
+BEGIN
+	IF (FIELDTYPE(rSourceTree) = Name) THEN
+		DECLARE rChild REFERENCE TO rSourceTree;
+		MOVE rChild FIRSTCHILD;
+		DECLARE rNewTree REFERENCE TO rSourceTree;
+		-- CREATE FIELD rTargetParentTree.{FIELDNAME(rSourceTree)} AS rNewTree TYPE Name;           @P05D
+		CREATE LASTCHILD OF rTargetParentTree AS rNewTree TYPE Name NAME FIELDNAME(rSourceTree); -- @P05A
+		WHILE LASTMOVE(rChild) DO
+			CALL DnqUtil_CopyTree(rChild, rNewTree);
+			MOVE rChild NEXTSIBLING;
+		END WHILE;
+	ELSE
+		IF (FIELDTYPE(rSourceTree) = NameValue) THEN
+			CREATE LASTCHILD OF rTargetParentTree TYPE NameValue NAME FIELDNAME(rSourceTree) VALUE FIELDVALUE(rSourceTree);
+		ELSE
+			CREATE LASTCHILD OF rTargetParentTree TYPE Value VALUE FIELDVALUE(rSourceTree);
+		END IF;
+	END IF;
+END;

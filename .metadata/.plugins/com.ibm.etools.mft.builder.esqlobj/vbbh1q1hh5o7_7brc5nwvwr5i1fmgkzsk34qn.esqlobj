@@ -1,0 +1,8 @@
+CREATE PROCEDURE DnqUtil_CreateDefaultElements(INOUT rMqrfh2 REFERENCE)
+BEGIN
+	CALL DnqUtil_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."Version"', '1.0');
+	CALL DnqUtil_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."ProtocolVersion"', '3');
+	CALL DnqUtil_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."AcknowledgmentMode"', 'Merged'); --@P14C
+	CALL DnqUtil_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."ResponseMode"', 'Final');
+	CALL DnqUtil_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."ErrorMode"', 'CopyBody'); --@PxxA
+END;

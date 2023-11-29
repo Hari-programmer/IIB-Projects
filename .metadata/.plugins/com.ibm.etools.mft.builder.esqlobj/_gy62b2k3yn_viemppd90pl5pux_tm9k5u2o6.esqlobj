@@ -1,0 +1,112 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE rElementCheck   REFERENCE TO InputRoot.MQMD.ReplyToQ;                                                -- @P09C
+		DECLARE rTplRequest     REFERENCE TO InputRoot.MQRFH2."ComIbmDni"."Function"."DNQ_K_TPL"."Import"."Request"; -- @P22A
+		DECLARE rTosConfigCheck REFERENCE TO Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig";  -- @P12A
+                                                                 -- begin @P02A
+		IF LASTMOVE(rElementCheck) THEN --@P09A
+			SET OutputRoot.MQRFH2."ComIbmDni"."Dnq"."OriginalMessageInformation"."ReplyToQueue"        = TRIM(rElementCheck); --@P09C
+			SET OutputRoot.MQRFH2."ComIbmDni"."Dnq"."OriginalMessageInformation"."ReplyToQueueManager" = TRIM(InputRoot.MQMD.ReplyToQMgr); --@P09C
+		END IF; --@P09A
+                                                                   -- end @P02A
+                                                                 -- begin @P18A
+		-- restore original InputLocalEnvironment
+		IF (CARDINALITY(Environment."Variables"."ComIbmDni"."DnqMsifInput"."OriginalLocalEnv"[]) > 0) THEN
+			SET OutputLocalEnvironment = Environment."Variables"."ComIbmDni"."DnqMsifInput"."OriginalLocalEnv";
+		END IF;
+                                                                   -- end @P18A
+                                                                 -- begin @P11A
+                                                                 /* begin @P14D
+		IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress"[]) = 0) THEN --@P12C
+			IF (CARDINALITY(rTosConfigCheck."ConfiguredLocalAddress"[]) > 0) THEN --@P12A
+				SET Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress" =
+					rTosConfigCheck."ConfiguredLocalAddress"; --@P12C
+                                                                 -- begin @P12A
+			ELSE
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1254
+				VALUES (rTosConfigCheck."chTransferOptionSetName", 'DNQO1254E');
+			END IF;
+                                                                   -- end @P12A
+		END IF;
+		DELETE FIELD Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig"; --@P12A
+*/                                                                 -- end @P14D
+                                                                   -- end @P11A
+--		SET Environment.Variables."ComIbmDni"."DnqMsifInput" = NULL;
+                                                                  -- begin @P13A
+
+		IF (LASTMOVE(rTplRequest)) THEN                           -- @P22A begin
+			/** For template import requests appropriate fields for
+			 ** local and remote DN must be set in
+			 **   Environment.ComIbmDni.Dnq.Properties
+			 ** because this path is used by the MER UI to display
+			 ** these DNs in the "Formatted" and "Context" tabs.
+			 **/
+			DECLARE rTplDn REFERENCE TO InputRoot.MQRFH2."ComIbmDni"."Function"."DNQ_K_TPL"."Import"."Request"."Msif"."LocalDN";
+			IF (LASTMOVE(rTplDn)) THEN
+				IF (LENGTH(TRIM(rTplDn)) > 0) THEN -- Ignore empty elements
+					SET Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress" = rTplDn;
+				END IF; -- Empty element ?
+			END IF;    -- LocalDN is specified in import request ?
+
+			MOVE rTplDn TO InputRoot.MQRFH2."ComIbmDni"."Function"."DNQ_K_TPL"."Import"."Request"."Msif"."RemoteDN";
+			IF (LASTMOVE(rTplDn)) THEN
+				IF (LENGTH(TRIM(rTplDn)) > 0) THEN -- Ignore empty elements
+					SET Environment."ComIbmDni"."Dnq"."Properties"."RemoteAddress" = rTplDn;
+				END IF; -- Empty element ?
+			END IF;    -- RemoteDN is specified in import request ?
+		END IF;       -- Template import?                         -- @P22A end
+
+		DECLARE rDniSpnCompletion REFERENCE TO InputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Response"."Completion";
+		IF (LASTMOVE(rDniSpnCompletion) AND
+			(CARDINALITY(rDniSpnCompletion."Code"[]) > 0) AND
+			(rDniSpnCompletion."Code" <> 'Ok')) THEN
+			DECLARE rDnq REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnq" AS rDnq;
+			CALL DnqUtil_CompletionFolder(rDniSpnCompletion, rDnq);
+                                                                 -- begin @P14A
+		ELSE
+			-- only check LocalAddress, if no DniSPN error occurred
+			IF ((LASTMOVE(rDniSpnCompletion) AND
+				(CARDINALITY(rDniSpnCompletion."Code"[]) > 0) AND
+				(rDniSpnCompletion."Code" = 'Ok'))) OR
+				(CARDINALITY(InputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Response"[]) = 0) THEN
+				IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress"[]) = 0) THEN
+					IF (CARDINALITY(rTosConfigCheck."ConfiguredLocalAddress"[]) = 0) THEN --@P16C
+						/* SET Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress" =  @P16D
+							rTosConfigCheck."ConfiguredLocalAddress";
+					ELSE */
+						THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1254
+						VALUES (rTosConfigCheck."chTransferOptionSetName", 'DNQO1254E');
+					END IF;
+				END IF;
+				-- DELETE FIELD Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig"; @P16D
+			END IF;
+                                                                   -- end @P14A
+		END IF;
+                                                                   -- end @P13A
+                                                                   -- begin @P16A
+		IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress"[]) = 0) THEN
+			IF (CARDINALITY(rTosConfigCheck."ConfiguredLocalAddress"[]) > 0) THEN
+
+				SET Environment."Variables"."ComIbmDni"."Dnq"."Properties"."LocalAddress" = --@P21C
+					rTosConfigCheck."ConfiguredLocalAddress";
+
+				IF (LASTMOVE(rTplRequest)) THEN                             -- @P22A begin
+					/** For template import requests the appropriate field
+					 ** for LocalDN must also be set in
+					 **   Environment.ComIbmDni.Dnq.Properties
+					 ** because this path is used by the MER UI to display
+					 ** the LocalDN in the "Formatted" and "Context" tabs.
+					 **/
+					SET Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress" = rTosConfigCheck."ConfiguredLocalAddress";
+				END IF; -- Template import?                               -- @P22A end
+
+			END IF;
+		END IF;
+
+		DELETE FIELD Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig";
+                                                                  -- end @P16A
+		RETURN TRUE;
+	END;

@@ -1,0 +1,15 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		-- select queue configuration via SCPN
+		SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU[1].Name = COALESCE(InputRoot.MQRFH2.ComIbmDni.OU,'DNFSYSOU');
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU[1].ConfigObjectList.ConfigObject[1].Type = 'DnqERQueue';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU[1].ConfigObjectList.ConfigObject[1].Name = 
+			InputLocalEnvironment.Destination.Dnq.DestinationData.QueueName;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU[2].Name = 'SYSOU';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU[2].ConfigObjectList.ConfigObject[1].Type = 'DniLevelsTrace';
+		
+		RETURN TRUE;
+	END;

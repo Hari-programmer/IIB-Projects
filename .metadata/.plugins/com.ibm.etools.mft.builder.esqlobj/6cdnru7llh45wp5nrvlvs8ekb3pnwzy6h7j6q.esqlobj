@@ -1,0 +1,102 @@
+CREATE COMPUTE MODULE ComIbmDniMwhInsert_HandleException
+
+  -- Compute module entry function.
+
+  CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+
+    SET OutputLocalEnvironment = InputLocalEnvironment;
+    SET OutputRoot = InputRoot;
+
+    DECLARE doSuppressConversionError BOOLEAN FALSE;
+
+    -- Get the innermost exception.
+
+    DECLARE exc REFERENCE TO InputExceptionList.*[1];
+    WHILE (FIELDNAME(exc.*[<]) LIKE '%Exception') DO
+      MOVE exc LASTCHILD;
+    END WHILE;
+
+    -- Check whether an conversion error is to be suppressed.
+
+    DECLARE var REFERENCE TO InputLocalEnvironment.Variables.ComIbmDni;
+    IF (LASTMOVE(var) AND UPPER(var.SuppressConversionError) = 'YES') THEN
+
+      DECLARE isMbException BOOLEAN FIELDNAME(exc) <> 'UserException';
+      IF (isMbException AND (exc.Number BETWEEN 2130 AND 2136)) THEN
+        SET Environment.ComIbmDni.ErrorIndicator = TRUE;
+        SET doSuppressConversionError = TRUE;
+      END IF;
+
+    END IF;
+
+    -- If a conversion error occurred and the conversion error is to be
+    -- suppressed, create an appropriate event.
+
+    IF (doSuppressConversionError) THEN
+
+      DECLARE dni  REFERENCE TO OutputRoot;
+      DECLARE prop REFERENCE TO OutputRoot;
+
+      IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+        MOVE dni  TO OutputLocalEnvironment.ComIbmDni;
+        MOVE prop TO Environment.ComIbmDni.Properties.Common;      
+      ELSE
+        MOVE dni  TO OutputRoot.MQRFH2.ComIbmDni;
+        MOVE prop TO dni.Properties.Common;
+      END IF;
+
+      DECLARE evt REFERENCE TO dni;
+      CREATE FIELD dni.Function.DniEvent.Store.Request AS evt;
+
+      DECLARE ts CHAR CAST(CURRENT_GMTTIMESTAMP AS CHAR);
+      SET ts = OVERLAY(SUBSTRING(ts FROM 15 FOR 19) PLACING 'T' FROM 11 FOR 1);
+
+      SET evt.TimeStamp = ts;
+      SET evt.TimeStamp.(NameValue)dnidt = 'dateTime';
+
+      SET evt.EventId        = 'DNIW7703E';
+      SET evt.OU             = OutputRoot.MQRFH2.ComIbmDni.OU;
+      SET evt.Service        = prop.Common.Service;
+      SET evt.SystemId       = 'CP_' || prop.Common.QueueManager;
+      SET evt.ComponentName  = 'UNKNOWN';
+      SET evt.MessageFlow    = prop.Common.MessageFlow;
+      SET evt.ExecutionGroup = prop.Common.ExecutionGroup;
+      SET evt.Broker         = prop.Common.Broker;
+      SET evt.MessageGroup   = OutputRoot.MQRFH2.ComIbmDni.MessageGroup;
+
+      DECLARE plist CHAR;
+      FOR p AS exc.Insert[] DO
+        DECLARE value CHAR RTRIM(p.Text);
+        IF (LENGTH(value) > 256) THEN
+          SET value = SUBSTRING(value FROM 1 FOR 256) || '...';
+        END IF;
+        SET plist = COALESCE(plist || ', ', '') || '''' || value || '''';
+      END FOR;
+
+      SET evt.Parameter1 = 'DniMwhInsert';
+      SET evt.Parameter2 = OutputRoot.MQMD.MsgId;
+      SET evt.Parameter3 = exc.Number;
+      SET evt.Parameter4 = plist;
+
+      -- Ensure, that the event does never expire
+      SET OutputRoot.MQMD.Expiry = MQEI_UNLIMITED;
+
+    -- Otherwise, wrap the broker exception into a user exception.
+
+    ELSE
+
+        DECLARE plist CHAR;
+        FOR p AS exc.Insert[] DO
+          SET plist = COALESCE(plist || ', ', '') || '''' || RTRIM(p.Text) || '''';
+        END FOR;
+
+        THROW USER EXCEPTION CATALOG 'dniccmsg' MESSAGE 7702
+        VALUES(exc.Source, exc.Number, plist, '$eventId', 'DNIW7702E');
+
+    END IF;
+
+    RETURN TRUE;
+
+  END; -- FUNCTION main() RETURNS BOOLEAN
+
+END MODULE;

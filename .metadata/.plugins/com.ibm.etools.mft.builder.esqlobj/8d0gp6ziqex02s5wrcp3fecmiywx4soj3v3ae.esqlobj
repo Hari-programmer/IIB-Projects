@@ -1,0 +1,77 @@
+CREATE COMPUTE MODULE ComIbmDnqMwhUpdateInsert_CheckConfig
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+--		DECLARE DNQ_MWH_TABLE_PREFIX CONSTANT CHAR 'DNI_MWH_'; @P25D
+
+		DECLARE rEnv                   REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+		DECLARE rEnvironment           REFERENCE TO Environment;
+		DECLARE rInputRoot             REFERENCE TO InputRoot;
+		DECLARE rDnqProps              REFERENCE TO Environment."ComIbmDni"."Dnq"."Properties";
+		DECLARE rFlagMwh               REFERENCE TO Environment;
+		DECLARE rElementCheck          REFERENCE TO Environment;
+--		DECLARE chSchemaMwh            CHAR TRIM(COALESCE(rEnv."chSchemaMwh", '')); @P07D
+		DECLARE chOptionsMwh           CHAR TRIM(COALESCE(rEnv."chOptionsMwh", ''));
+		DECLARE chFlagMwh              CHAR 'NO';
+		DECLARE chStatus               CHAR ''; --@P06 @P07C
+		DECLARE chDestination          CHAR ''; --@P14A
+		DECLARE chExtensionId          CHAR COALESCE(InputLocalEnvironment."ComIbmDni"."Function"."DnqMwhInsertUpdate"."UpdateInsert"."Request"."ExtensionId", 'ComIbmDnqMM'); --@P29A
+		DECLARE chOu                   CHAR InputRoot.MQRFH2."ComIbmDni"."OU";
+		DECLARE chAdjunctTablePrefix   CHAR '';
+		DECLARE chAdjunctTableCoName   CHAR '';
+		DECLARE bDoMwh                 BOOLEAN FALSE;
+		DECLARE bExtractDnqProps       BOOLEAN TRUE;
+		DECLARE bExtractMsgFields      BOOLEAN rEnv."bExtractMsgFields";
+		
+		CALL DnqUtil_CopyScpnToEnv(rInputLocalEnvironment, rEnvironment);
+
+		SET rEnv."chExtensionId" = chExtensionId; --@P29A
+
+		MOVE rFlagMwh TO Environment."ComIbmDni"."Properties".{chOu}."DnqOptionsMwh".{chOptionsMwh}."DnqFlagMwh"; --@P07C
+		
+		IF LASTMOVE(rFlagMwh) THEN
+			SET chFlagMwh = TRIM(UPPER(rFlagMwh));
+			IF chFlagMwh = 'YES' THEN
+
+				SET bDoMwh = TRUE;
+                                                                 -- begin @P07A
+				MOVE rElementCheck TO InputLocalEnvironment."ComIbmDni"."Function"."DnqMwhInsertUpdate"."UpdateInsert"."Request"."Status";
+				IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+					SET chStatus = TRIM(rElementCheck);
+				ELSE
+					IF (CARDINALITY(rEnv."chStatus"[]) > 0) AND (LENGTH(rEnv."chStatus") > 0) THEN
+						SET chStatus = TRIM(rEnv."chStatus");
+					END IF;
+				END IF;
+				SET rEnv."chStatus" = chStatus;
+                                                                   -- end @P07A
+                                                                 -- begin @P06A
+				IF chStatus = '' THEN
+					-- status: not specified
+					THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1003
+					VALUES ('Status', 'DNQC1003E'); --@P07C
+				END IF;
+                                                                   -- end @P06A
+				IF bExtractMsgFields and LASTMOVE(rDnqProps) AND (CARDINALITY(rDnqProps.*[]) > 0) THEN
+					SET bExtractDnqProps = FALSE;
+				END IF;
+				
+				SET rEnv."bExtractDnqProps" = bExtractDnqProps;
+                                                                 -- begin @P14A
+				MOVE rElementCheck TO InputLocalEnvironment."ComIbmDni"."Function"."DnqMwhInsertUpdate"."UpdateInsert"."Request"."Destination";
+				IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+					SET chDestination = TRIM(rElementCheck);
+				END IF;
+				SET rEnv."chDestination" = chDestination;
+                                                                   -- end @P14A
+			END IF;
+		END IF;
+		
+		SET rEnv."bDoMwh" = bDoMwh;
+
+		RETURN TRUE;
+	END;
+END MODULE;

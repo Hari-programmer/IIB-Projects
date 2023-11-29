@@ -1,0 +1,359 @@
+CREATE COMPUTE MODULE "ComIbmDniSetTimer_SetTimerData"
+CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+SET OutputRoot = InputRoot;
+/* For case  IF Environment.ComIbmDni.ConfigDataLoc = 'env' */
+SET OutputLocalEnvironment = InputLocalEnvironment;
+
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node verifies and sets the appropriate expiration time, selects the appropriate timer table and 
+  stores its name into the message.
+  If already an error occured in DniSetTimer flow (indicated throw appeared response section), no
+  processing will take place.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+-------------------------------------------------------------------------------------------------------------
+-- Find out if a DniSetTimer response message exists. 
+-- A response section in the incoming message indicates, that an error occured in one of the preceding nodes
+-- of the DniSetTimer flow. Than, no further processing should be done. The incoming message will be 
+-- forwarded to the next node in this flow.
+-------------------------------------------------------------------------------------------------------------
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN 
+  IF (CARDINALITY(OutputLocalEnvironment.ComIbmDni.Function.DniTimer."Set".Response[]) > 0) 
+  THEN
+    RETURN TRUE;  
+  END IF;  
+ELSE
+  IF (CARDINALITY(OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer."Set".Response[]) > 0) 
+  THEN
+    RETURN TRUE;  
+  END IF;  
+END IF;
+
+  
+
+-------------------------------------------------------------------------------------------------------------
+-- declaration (most of the declarations and initailizations will be done in the processing parts)
+-------------------------------------------------------------------------------------------------------------
+DECLARE refDni REFERENCE TO InputRoot.MQRFH2[<].ComIbmDni;
+DECLARE refTimReq REFERENCE TO refDni.Function.DniTimer."Set".Request;
+DECLARE pOutFunction REFERENCE TO OutputRoot.MQRFH2[<].ComIbmDni.Function;
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN 
+  MOVE pOutFunction TO OutputLocalEnvironment.ComIbmDni.Function;
+  MOVE refTimReq TO InputLocalEnvironment.ComIbmDni.Function.DniTimer."Set".Request;
+END IF;
+
+DECLARE refLocEnvIn REFERENCE TO InputLocalEnvironment.Variables.ComIbmDni.Function.DniTimer."Set";
+DECLARE refLocEnvOut REFERENCE TO OutputLocalEnvironment.Variables.ComIbmDni.Function.DniTimer."Set";
+
+DECLARE iTmpTime INTEGER;
+
+DECLARE chTimerCat CHARACTER;
+DECLARE chWuTime CHARACTER;
+DECLARE chWuIntvl CHARACTER;
+
+SET chTimerCat = refTimReq.Category;
+SET chWuTime = refTimReq.WakeupDateTime;
+SET chWuIntvl = refTimReq.WakeupInterval;
+
+DECLARE sqlState1 CHARACTER;
+DECLARE sqlErrorText1 CHARACTER;
+DECLARE sqlCode1 INTEGER;
+DECLARE sqlNativeError1 INTEGER;
+
+
+------------------------------------------------------------------------------------------------------------
+-- Creates the response section in the DniSetTimer Function. If an mandatory parameter is wrong, a negative
+-- response will be added to this section. Else, this section will be removed at end of processing in this
+-- node.
+------------------------------------------------------------------------------------------------------------
+CREATE FIELD pOutFunction.DniTimer."Set".Response;
+DECLARE refResp REFERENCE TO pOutFunction.DniTimer."Set".Response;
+
+-- flag for finding out, if response entries was made ------------------------------------------------------
+DECLARE boolRespSet BOOLEAN;
+SET boolRespSet = FALSE;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- Check, if optional parameter Category is given. 
+-- If not, set this field by inserting the first Name of ConfigObject of Type 'DniTimer'.
+-- Afterwards, check if this parameter is valid. 
+-------------------------------------------------------------------------------------------------------------
+IF (boolRespSet = FALSE) THEN
+  IF (chTimerCat IS NULL) THEN	
+    IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+    THEN 
+      SET chTimerCat = FIELDNAME( Environment.ComIbmDni.Properties.SYSOU.DniTimer.*[<] );
+    ELSE
+      DECLARE refConfigObject REFERENCE TO refDni."Properties".SYSOUList.SYSOU.ConfigObjectList.ConfigObject[1];
+      WHILE ((LASTMOVE(refConfigObject) = TRUE) AND (chTimerCat IS NULL)) DO
+        IF (refConfigObject.Type='DniTimer') THEN
+          SET chTimerCat = refConfigObject.Name;
+        END IF;
+        MOVE refConfigObject NEXTSIBLING;
+      END WHILE;
+    END IF;  
+  END IF;
+
+  IF (chTimerCat IS NULL) THEN
+    SET refResp.Completion.Code = 'Failed';
+    SET refResp.Completion.Reason = '1';
+    SET refResp.Completion.Parameter1 = 'Category';  
+    SET boolRespSet = TRUE;
+  ELSE
+    IF (LENGTH(chTimerCat) = 0) THEN
+      SET refResp.Completion.Code = 'Failed';
+      SET refResp.Completion.Reason = '2';
+      SET refResp.Completion.Parameter1 = 'Category';
+      SET boolRespSet = TRUE;
+    ELSE
+      IF (LENGTH(chTimerCat) > 30) THEN
+        SET refResp.Completion.Code = 'Failed';
+        SET refResp.Completion.Reason = '3';
+        SET refResp.Completion.Parameter1 = 'Category';
+        SET refResp.Completion.Parameter2 = chTimerCat;
+        SET refResp.Completion.Parameter3 = 30;
+        SET refResp.Completion.Parameter3.(NameValue)dt = 'i2';
+        SET refResp.Completion.Parameter4 = LENGTH(chTimerCat);
+        SET refResp.Completion.Parameter4.(NameValue)dt = 'i2';
+        SET boolRespSet = TRUE;
+      END IF;
+    END IF;
+  END IF;
+END IF;
+
+SET refLocEnvOut.Category = chTimerCat;
+
+
+
+------------------------------------------------------------------------------------------------------------
+-- Get all needed parameters for database access.
+-- If database table or schema name was not found, set response with apropriate reason code.
+------------------------------------------------------------------------------------------------------------
+DECLARE chTimerTable CHARACTER;
+DECLARE chTimerSchema CHARACTER;
+DECLARE chTimerSchemaTable CHARACTER;
+DECLARE boolCatFound BOOLEAN;
+
+IF (boolRespSet = FALSE) 
+THEN
+  SET boolCatFound = FALSE;
+  
+  IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+  THEN 
+    SET chTimerSchema = Environment.ComIbmDni.Properties.SYSOU.DniTimer.{chTimerCat}.DniSchemaTimer; 
+    SET chTimerTable = Environment.ComIbmDni.Properties.SYSOU.DniTimer.{chTimerCat}.DniTableTimer;
+    SET boolCatFound = TRUE;
+  ELSE  
+    DECLARE refConfigObject REFERENCE TO refDni."Properties".SYSOUList.SYSOU.ConfigObjectList.ConfigObject[1];
+    
+    WHILE LASTMOVE(refConfigObject) = TRUE
+    DO
+      IF ((refConfigObject.Type='DniTimer') AND (refConfigObject.Name = chTimerCat)) THEN
+        SET boolCatFound = TRUE;
+        DECLARE refAttribute REFERENCE TO refConfigObject.AttributeList.Attribute[1]; 
+        WHILE LASTMOVE(refAttribute) = TRUE
+        DO
+          IF (refAttribute.Name = 'DniSchemaTimer') THEN 
+            SET chTimerSchema = refAttribute.Value;
+          END IF;
+  
+          IF refAttribute.Name = 'DniTableTimer' THEN 
+            SET chTimerTable = refAttribute.Value;
+          END IF;
+  
+  	MOVE refAttribute NEXTSIBLING;
+        END WHILE;         
+      END IF;
+      MOVE refConfigObject NEXTSIBLING;
+    END WHILE;
+  END IF;
+  
+  -- if timer category not found, set DniSetTimer response with appropriate reason code --------------------
+  IF (boolCatFound = FALSE) THEN
+    SET refResp.Completion.Code = 'Failed';
+    SET refResp.Completion.Reason = '8';
+    SET refResp.Completion.Parameter1 = chTimerCat;
+    SET boolRespSet = TRUE;
+  END IF;
+
+  -- if timer table or schema not found, set DniSetTimer response with appropriate reason code -------------
+  IF ((chTimerTable IS NULL) AND (boolRespSet = FALSE)) THEN
+    SET refResp.Completion.Code = 'Failed';
+    SET refResp.Completion.Reason = '1';
+    SET refResp.Completion.Parameter1 = 'DniTableTimer';
+    SET boolRespSet = TRUE;
+  ELSE
+    IF (LENGTH(chTimerTable) = 0) THEN
+      SET refResp.Completion.Code = 'Failed';
+      SET refResp.Completion.Reason = '2';
+      SET refResp.Completion.Parameter1 = 'DniTableTimer';
+      SET boolRespSet = TRUE;
+    END IF;
+  END IF;
+
+  IF (boolRespSet = FALSE) THEN
+    IF (chTimerSchema IS NULL) THEN 
+      SET refResp.Completion.Code = 'Failed';
+      SET refResp.Completion.Reason = '1';
+      SET refResp.Completion.Parameter1 = 'DniSchemaTimer';
+      SET boolRespSet = TRUE;
+    ELSE
+      IF (LENGTH(chTimerSchema) = 0) THEN 
+        SET refResp.Completion.Code = 'Failed';
+        SET refResp.Completion.Reason = '2';
+        SET refResp.Completion.Parameter1 = 'DniSchemaTimer';
+        SET boolRespSet = TRUE;
+      END IF;
+    END IF;
+  END IF;
+END IF;
+
+IF (boolRespSet = FALSE) THEN
+  SET chTimerSchemaTable = chTimerSchema || '.' || chTimerTable;
+END IF;
+
+
+------------------------------------------------------------------------------------------------------------
+-- The current time has to be retrieved from the timer database.
+-- Used for creation of the TimerId and for getting the absolute WakeupDateTime, if WakeupInterval is given.
+------------------------------------------------------------------------------------------------------------
+DECLARE chDBStmt CHARACTER;
+DECLARE chWuTempStamp CHARACTER;
+
+if (boolRespSet = FALSE) THEN
+  SET chDBStmt = 'SELECT CAST((CURRENT TIMESTAMP - CURRENT TIMEZONE) AS CHARACTER(26)) FROM ' || chTimerSchema || '.DNI_OU FETCH FIRST ROW ONLY';
+  SET refLocEnvOut.dbReturn[] = PASSTHRU(chDBStmt);  
+
+  -- make TimeStamp WMB V6 compliant: only "YYYY-MM-DD hh:mm:ss.ffffff" is supported
+  SET chWuTempStamp = refLocEnvOut.dbReturn[1]."1";
+  IF SUBSTRING(chWuTempStamp FROM 11 FOR 1) = '-' THEN
+    SET chWuTempStamp = OVERLAY(chWuTempStamp PLACING ' ' FROM 11 FOR 1); --  replace '-' by ' ' for WMB V6
+    SET chWuTempStamp = OVERLAY(chWuTempStamp PLACING ':' FROM 14 FOR 1); --  replace 1st '.' by ':' for WMB V6
+    SET chWuTempStamp = OVERLAY(chWuTempStamp PLACING ':' FROM 17 FOR 1); --  replace 2nd '.' by ':' for WMB V6
+  END IF;	
+
+  -- in case of an error, throw a WFNI exception ----------------------------------------------------------
+  SET sqlCode1 = SQLCODE;
+  IF (sqlCode1 < 0) THEN
+    SET sqlState1 = SQLSTATE;
+    SET sqlErrorText1 = SQLERRORTEXT;
+    SET sqlNativeError1 = SQLNATIVEERROR;
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6002
+      VALUES ('DniSetTimer', chTimerSchemaTable, sqlCode1, sqlState1, sqlNativeError1, sqlErrorText1, 'DNIT6002E'); 
+  END IF;
+END IF;
+
+------------------------------------------------------------------------------------------------------------
+-- Find out and set the expiration time.
+-- If field WakeupDateTime is given, no processing occurs.
+------------------------------------------------------------------------------------------------------------
+IF ((chWuIntvl IS NOT NULL) AND (boolRespSet = FALSE)) THEN
+
+  -- get WMQI Interval value for Denali interval -----------------------------------------------------------
+  DECLARE intvlTmp INTERVAL;
+  DECLARE charIntvl CHARACTER;
+ 
+  SET charIntvl = SUBSTRING(CAST(chWuIntvl AS CHARACTER) FROM 1 FOR 3)
+          	  || ' ' || SUBSTRING(CAST(chWuIntvl AS CHARACTER) FROM 5);
+  SET intvlTmp = CAST(charIntvl AS INTERVAL DAY TO SECOND);       	
+  		
+  -- add the given interval value to current time and store it in WakeupDateTime ---------------------------
+  DECLARE wuTimestamp TIMESTAMP;
+  DECLARE resultTimestamp CHARACTER;
+
+  SET wuTimestamp = CAST(chWuTempStamp AS TIMESTAMP);
+  SET wuTimestamp = wuTimestamp + intvlTmp;
+
+  SET resultTimestamp = CAST(wuTimestamp AS CHAR);
+  SET resultTimestamp = SUBSTRING(resultTimestamp FROM (POSITION('''' IN resultTimestamp) + 1));
+  SET resultTimestamp = SUBSTRING(resultTimestamp FROM 1 FOR (POSITION('''' IN resultTimestamp) - 1));  
+
+  SET resultTimestamp = OVERLAY(resultTimestamp PLACING '-' FROM 11 FOR 1); --  replace 'T' by '-' 
+  SET resultTimestamp = OVERLAY(resultTimestamp PLACING '.' FROM 14 FOR 1); --  replace 1st ':' by '.'
+  SET resultTimestamp = OVERLAY(resultTimestamp PLACING '.' FROM 17 FOR 1); --  replace 2nd ':' by '.' 
+
+  -- set six millisecond values ---------------------------------------------------------------------------
+  IF (LENGTH(resultTimestamp) = 19) THEN
+    SET resultTimestamp = resultTimestamp || '.000000';
+  ELSE 
+    DECLARE iTmpLength INTEGER;
+    SET iTmpLength = LENGTH(resultTimestamp);
+    WHILE (iTmpLength < 26) DO
+      SET resultTimestamp = resultTimestamp || '0';
+      SET iTmpLength = iTmpLength + 1;
+    END WHILE;
+  END IF; 
+
+  SET refLocEnvOut.WakeupDateTime = resultTimestamp;
+ELSE
+  -- remove the 'T' from the WakeupDateTime and store the resulting value in the LocalEnvironment
+  -- make timestamp DB2 compliant
+
+  SET refLocEnvOut.WakeupDateTime = OVERLAY(chWuTime PLACING '-' FROM 11 FOR 1); --  replace 'T' by '-' 
+  --  replace 1st ':' by '.'
+  SET refLocEnvOut.WakeupDateTime = OVERLAY(refLocEnvOut.WakeupDateTime PLACING '.' FROM 14 FOR 1); 
+  --  replace 2nd ':' by '.' 
+  SET refLocEnvOut.WakeupDateTime = OVERLAY(refLocEnvOut.WakeupDateTime PLACING '.' FROM 17 FOR 1); 
+END IF;
+
+------------------------------------------------------------------------------------------------------------
+-- Assemble the TimerId and insert it in the request message.	
+------------------------------------------------------------------------------------------------------------
+IF (boolRespSet = FALSE) THEN
+  DECLARE chCurrentTimestamp CHARACTER;
+  SET chCurrentTimestamp = refLocEnvOut.dbReturn[1]."1";
+
+  -- set six millisecond values ------------------------------------------------------------------------------
+  IF (LENGTH(chCurrentTimestamp) = 19) THEN
+    SET chCurrentTimestamp = chCurrentTimestamp || '.000000';
+  ELSE 
+    DECLARE iTSLength INTEGER;
+    SET iTSLength = LENGTH(chCurrentTimestamp);
+    WHILE (iTSLength < 26) DO
+      SET chCurrentTimestamp = chCurrentTimestamp || '0';
+      SET iTSLength = iTSLength + 1;
+    END WHILE;
+  END IF; 
+
+  DECLARE chIdTimestamp CHARACTER;
+  SET chIdTimestamp = 	   SUBSTRING(chCurrentTimestamp FROM 1 FOR 4)   -- YEAR 
+			|| SUBSTRING(chCurrentTimestamp FROM 6 FOR 2)	-- MONTH
+			|| SUBSTRING(chCurrentTimestamp FROM 9 FOR 2)	-- DAY
+			|| SUBSTRING(chCurrentTimestamp FROM 12 FOR 2)	-- HOUR
+			|| SUBSTRING(chCurrentTimestamp FROM 15 FOR 2)	-- MINUTE
+			|| SUBSTRING(chCurrentTimestamp FROM 18 FOR 2)	-- SECOND
+			|| SUBSTRING(chCurrentTimestamp FROM 21 FOR 6);	-- MILLISECOND
+
+
+  -- insert timer ID in timer set request --------------------------------------------------------------------
+  DECLARE blobTimerId BLOB;
+  DECLARE blobMsgId BLOB;
+  
+  SET blobMsgId = InputRoot.MQMD.MsgId;
+  SET blobTimerId = blobMsgId || CAST(chIdTimestamp AS BLOB); 
+
+  SET refLocEnvOut.TimerId = blobTimerId;
+END IF;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- If an mandatory parameter was wrong, a response has been created and the value boolRespSet has
+-- been set to TRUE.
+-- If all checked parameters were valid (boolRespSet = FALSE), the response section has to be removed 
+-- from the outgoing message. And the TimerTable parameter has to be set in the request section.
+-------------------------------------------------------------------------------------------------------------
+IF (boolRespSet = FALSE) THEN
+  SET refLocEnvOut.TimerTable = chTimerSchemaTable;
+  SET pOutFunction.DniTimer."Set".Response = NULL;
+END IF;
+
+
+RETURN true;
+END;
+
+END MODULE;

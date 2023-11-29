@@ -1,0 +1,5 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		RETURN (CARDINALITY(Root.MQRFH2.ComIbmDni.Function.DniUMG.Transform.Request.FieldReference[]) > 0);
+	END;
+

@@ -1,0 +1,8 @@
+CREATE PROCEDURE DnqUtil_CreateDefaultElement(INOUT rMqrfh2 REFERENCE, IN chElementPath CHAR, IN chDefaultValue CHAR)
+BEGIN
+	DECLARE rElementCheck REFERENCE TO rMqrfh2;
+	EVAL('MOVE rElementCheck TO rMqrfh2.' || chElementPath);
+	IF NOT LASTMOVE(rElementCheck) THEN
+		EVAL('SET rMqrfh2.'  || chElementPath || ' = ''' || chDefaultValue || '''');
+	END IF;
+END;

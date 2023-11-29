@@ -1,0 +1,7 @@
+CREATE FILTER MODULE ComIbmDnqFinServiceOutput_Transformation
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		RETURN Environment.Variables."ComIbmDni"."DnqFinServiceOutput"."bTransformation";
+	END;
+
+END MODULE;

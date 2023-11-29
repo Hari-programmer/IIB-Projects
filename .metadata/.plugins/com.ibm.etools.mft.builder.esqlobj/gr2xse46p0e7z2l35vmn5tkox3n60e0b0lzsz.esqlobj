@@ -1,0 +1,200 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+
+    DECLARE chUnknown CONSTANT CHAR 'DNI_UNKNOWN';
+
+    SET OutputRoot = InputRoot;
+    SET OutputLocalEnvironment = InputLocalEnvironment;
+
+    DECLARE dni  REFERENCE TO OutputRoot;
+    DECLARE prop REFERENCE TO OutputRoot;
+
+    IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+      MOVE dni  TO OutputLocalEnvironment.ComIbmDni;
+      MOVE prop TO Environment.ComIbmDni.Properties.Common;      
+    ELSE
+      MOVE dni  TO OutputRoot.MQRFH2.ComIbmDni;
+      MOVE prop TO dni.Properties.Common;
+    END IF;
+
+    DECLARE evt REFERENCE TO dni.Function.DniEvent.Store.Request;
+
+    -- Check the event and the required configuration data.
+
+    IF (CARDINALITY(prop.SchemaEvent[]) <> 1) THEN
+    	    	
+      THROW USER EXCEPTION CATALOG 'dniccmsg' MESSAGE 4002
+      VALUES ( evt.TimeStamp, evt.EventId, evt.OU, evt.Service,
+               evt.SystemId || ' / ' || evt.ComponentName,
+               COALESCE(evt.MessageFlow   , 'na'),
+               COALESCE(evt.ExecutionGroup, 'na'),
+               COALESCE(evt.Broker        , 'na'),
+               COALESCE(evt.MessageGroup  , 'na'),
+               COALESCE(evt.BusinessGroup , 'na'),
+               COALESCE(evt.SearchKey     , 'na'),
+              'DNIE4002E');
+
+    END IF; -- CARDINALITY(prop.SchemaEvent[]) <> 1
+
+    IF (    (LASTMOVE(evt) = FALSE)
+    	 OR (evt.TimeStamp IS NULL)
+    	 OR (evt.EventId   IS NULL)
+    	 OR (evt.OU        IS NULL)
+    	 OR (LENGTH(evt.TimeStamp) NOT BETWEEN 19 AND 26)
+    	 OR (LENGTH(evt.EventId) <> 9)
+    	 OR (LENGTH(evt.OU) NOT BETWEEN 1 AND 8))
+    THEN
+
+      /* Invalid event message due to missing or invalid fields.
+       */
+
+      -- If required, create the Request group.
+
+      IF (LASTMOVE(evt) = FALSE) THEN
+        CREATE FIELD dni.Function.DniEvent.Store.Request AS evt;
+      END IF;
+
+      -- Keep information of event message as parameter of new event message.
+
+      SET evt.Parameter1  = COALESCE(evt.TimeStamp     , 'na');
+      SET evt.Parameter2  = COALESCE(evt.EventId       , 'na');
+      SET evt.Parameter3  = COALESCE(evt.OU            , 'na');
+      SET evt.Parameter4  = COALESCE(evt.Service       , 'na');
+      SET evt.Parameter5  = COALESCE(evt.SystemId      , 'na') || '/' ||
+                            COALESCE(evt.ComponentName , 'na');
+      SET evt.Parameter6  = COALESCE(evt.MessageFlow   , 'na');
+      SET evt.Parameter7  = COALESCE(evt.ExecutionGroup, 'na');
+      SET evt.Parameter8  = COALESCE(evt.Broker        , 'na');
+      SET evt.Parameter9  = COALESCE(evt.MessageGroup  , 'na');
+      SET evt.Parameter10 = COALESCE(evt.BusinessGroup , 'na');
+
+      -- Get current date and time and create a WBI-FN dateTime value.
+
+      DECLARE chEvtTS CHAR CAST(CURRENT_GMTTIMESTAMP AS CHAR);
+      DECLARE iPos    INT  POSITION('''' in chEvtTS) + 1;
+
+      SET chEvtTS = SUBSTRING(chEvtTS FROM iPos FOR LENGTH(chEvtTS) - iPos);
+      SET chEvtTS = OVERLAY  (chEvtTS PLACING 'T' FROM 11);
+
+      -- Set the non-parameter fields of the new event message.
+
+      SET evt.TimeStamp = chEvtTS;
+      SET evt.TimeStamp.(NameValue)dnidt = 'dateTime';      
+      
+      SET evt.EventId = 'DNIE4001E';
+      SET evt.OU = COALESCE(evt.OU, OutputRoot.MQRFH2.ComIbmDni.OU, 'SYSOU');
+      SET evt.Service = COALESCE(evt.Service, 'DNI_UNKNOWN');
+      SET evt.SystemId = COALESCE('CP_' || prop.QueueManager, 'DNI_UNKNOWN');
+
+      SET evt.ComponentName  = 'DniEventStore';
+      SET evt.Broker         =  prop.Broker;
+      SET evt.ExecutionGroup =  prop.ExecutionGroup;
+      SET evt.MessageFlow    =  prop.MessageFlow;
+      SET evt.SearchKey      =  COALESCE(evt.SearchKey, '');
+
+      DELETE FIELD evt.MessageGroup;
+      DELETE FIELD evt.BusinessGroup;
+
+    END IF;
+
+    -- Prepare to store the event in table DNI_EVENT.
+
+    DECLARE chStmt      CHAR;
+    DECLARE chTimeStamp CHAR;
+
+    SET chStmt =    'INSERT INTO ' || prop.SchemaEvent || '.DNI_EVENT('
+                 || ' EV_GMT_TSTMP,EV_ID,EV_OU_NAME,EV_SERVICE_NAME,EV_SYSTEM_ID,EV_COMP_NAME,EV_MSG_FLOW_NAME,EV_EXECUTION_GRP,EV_BROKER_NAME,EV_BUS_GRP_ID,EV_MSG_GRP_ID,EV_SEARCHKEY,EV_PRM_DTCAT_01,EV_PRM_DTYPE_01,EV_PRM_DTCAT_02,EV_PRM_DTYPE_02,EV_PRM_DTCAT_03,EV_PRM_DTYPE_03,EV_PRM_DTCAT_04,EV_PRM_DTYPE_04,EV_PRM_DTCAT_05,EV_PRM_DTYPE_05,EV_PRM_DTCAT_06,EV_PRM_DTYPE_06,EV_PRM_DTCAT_07,EV_PRM_DTYPE_07,EV_PRM_DTCAT_08,EV_PRM_DTYPE_08,EV_PRM_DTCAT_09,EV_PRM_DTYPE_09,EV_PRM_DTCAT_10,EV_PRM_DTYPE_10,EV_PRM_VALUE_01,EV_PRM_VALUE_02,EV_PRM_VALUE_03,EV_PRM_VALUE_04,EV_PRM_VALUE_05,EV_PRM_VALUE_06,EV_PRM_VALUE_07,EV_PRM_VALUE_08,EV_PRM_VALUE_09,EV_PRM_VALUE_10'                          
+                 || ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+
+    SET chTimeStamp =     SUBSTRING(evt.TimeStamp FROM  1 FOR 10) || '-'
+                       || SUBSTRING(evt.TimeStamp FROM 12 FOR  2) || '.'
+                       || SUBSTRING(evt.TimeStamp FROM 15 FOR  2) || '.'
+                       || SUBSTRING(evt.TimeStamp FROM 18);
+
+    -- Store the event in table DNI_EVENT.
+
+    PASSTHRU(chStmt,
+             chTimeStamp,
+             evt.EventId,
+             evt.OU,
+             COALESCE(VALUE(evt.Service      , 1, 30), chUnknown),
+             COALESCE(VALUE(evt.SystemId     , 1, 30), chUnknown),
+             COALESCE(VALUE(evt.ComponentName, 1, 50), chUnknown),
+             VALUE(evt.MessageFlow   , 1, 50),
+             VALUE(evt.ExecutionGroup, 1, 50),
+             VALUE(evt.Broker        , 1, 50),
+             VALUE(evt.BusinessGroup , 1, 50),
+             VALUE(evt.MessageGroup  , 1, 50),
+             VALUE(evt.SearchKey     , 1, 50),
+             FIELDNAME(evt.Parameter1.(NameValue)*[1]),
+             evt.Parameter1.(NameValue)*[1],
+             FIELDNAME(evt.Parameter2.(NameValue)*[1]),
+             evt.Parameter2.(NameValue)*[1],
+             FIELDNAME(evt.Parameter3.(NameValue)*[1]),
+             evt.Parameter3.(NameValue)*[1],
+             FIELDNAME(evt.Parameter4.(NameValue)*[1]),
+             evt.Parameter4.(NameValue)*[1],
+             FIELDNAME(evt.Parameter5.(NameValue)*[1]),
+             evt.Parameter5.(NameValue)*[1],
+             FIELDNAME(evt.Parameter6.(NameValue)*[1]),
+             evt.Parameter6.(NameValue)*[1],
+             FIELDNAME(evt.Parameter7.(NameValue)*[1]),
+             evt.Parameter7.(NameValue)*[1],
+             FIELDNAME(evt.Parameter8.(NameValue)*[1]),
+             evt.Parameter8.(NameValue)*[1],
+             FIELDNAME(evt.Parameter9.(NameValue)*[1]),
+             evt.Parameter9.(NameValue)*[1],
+             FIELDNAME(evt.Parameter10.(NameValue)*[1]),
+             evt.Parameter10.(NameValue)*[1],
+             VALUE(evt.Parameter1 , 0, 1000),
+             VALUE(evt.Parameter2 , 0, 1000),
+             VALUE(evt.Parameter3 , 0, 1000),
+             VALUE(evt.Parameter4 , 0, 1000),
+             VALUE(evt.Parameter5 , 0, 1000),
+             VALUE(evt.Parameter6 , 0, 1000),
+             VALUE(evt.Parameter7 , 0, 1000),
+             VALUE(evt.Parameter8 , 0, 1000),
+             VALUE(evt.Parameter9 , 0, 1000),
+             VALUE(evt.Parameter10, 0, 1000));
+
+    -- Set routing target for publication.
+
+    DECLARE rl REFERENCE TO OutputLocalEnvironment;
+
+    CREATE FIELD OutputLocalEnvironment.Destination.RouterList AS rl;
+    SET rl.DestinationData.labelname = 'Publish';
+
+    RETURN TRUE;
+
+  END; -- main()
+
+  /*
+   * DESCRIPTION
+   *
+   *  Returns the value for a given element.
+   *
+   * PARAMETER
+   *
+   *  ref   the element.
+   *  iMin  the minimum value length.
+   *  iMax  the maximum value length.
+   *
+   * RETURNS
+   *
+   *  the value for the specified element, if any, or the default value.
+   */
+
+  CREATE FUNCTION value(ref REFERENCE, iMin INT, iMax INT) RETURNS CHAR BEGIN
+
+    DECLARE chValue CHAR;
+
+    IF (LASTMOVE(ref) IS TRUE) THEN
+
+      SET chValue =    LEFT(CAST(ref AS CHAR), iMax)
+                    || REPLICATE(' ', iMin - LENGTH(CAST(ref AS CHAR)));
+
+    END IF; -- LASTMOVE(ref) IS TRUE
+
+    RETURN chValue;
+
+  END; -- value()
+

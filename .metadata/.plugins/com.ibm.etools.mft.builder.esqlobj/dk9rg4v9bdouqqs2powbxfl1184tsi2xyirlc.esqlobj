@@ -1,0 +1,14 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		DECLARE chrRef CHARACTER CAST(InputRoot.BLOB.BLOB AS CHARACTER CCSID 1208);
+		
+		SET OutputRoot.JSON.Data.URLDATA = chrRef;
+		SET EV.Data = OutputRoot.JSON.Data.URLDATA.word;
+        
+		
+		RETURN TRUE;
+	END;
+
+	

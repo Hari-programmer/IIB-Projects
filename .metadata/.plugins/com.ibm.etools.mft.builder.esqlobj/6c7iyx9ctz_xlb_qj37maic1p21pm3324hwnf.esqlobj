@@ -1,0 +1,33 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+                                                                 -- begin @P12A
+		-- traverse to last Exception in ExceptionList
+		DECLARE rEnv              REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		DECLARE rException        REFERENCE TO InputExceptionList.*[1];
+		DECLARE bRethrowException BOOLEAN TRUE;
+		
+		WHILE LASTMOVE(rException) DO
+			MOVE rException LASTCHILD;
+		END WHILE;
+		IF rException."Number" IS NULL THEN
+			MOVE rException PARENT;
+		END IF;
+		WHILE rException."Number" IS NULL AND LASTMOVE(rException) DO
+			MOVE rException PARENT;
+		END WHILE;
+		
+		-- check Mwh update exception (SQLCODE=100), otherwise rethrow exception
+		IF ((rException."Catalog" = 'dniccmsg') AND
+			(rException."Number" = 7704) AND --@P19C
+			(rException."Insert"[3]."Text" = 100)) THEN --@P13C @P20C
+
+			SET bRethrowException = FALSE;
+			
+		END IF;
+		
+		SET rEnv."bRethrowException" = bRethrowException;
+                                                                   -- end @P12A
+		SET Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert"."bDoUpdate" = FALSE;
+		RETURN TRUE;
+	END;

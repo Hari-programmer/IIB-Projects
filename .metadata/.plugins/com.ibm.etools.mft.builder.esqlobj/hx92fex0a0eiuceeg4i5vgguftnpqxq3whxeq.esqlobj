@@ -1,0 +1,131 @@
+CREATE COMPUTE MODULE Mappping_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		
+--		
+--		DECLARE x INTEGER ;
+--		 
+--		   DECLARE y INTEGER 1;
+--		DECLARE EV REFERENCE TO Environment.Variables;
+--		CREATE LASTCHILD OF EV.Req DOMAIN 'XMLNSC' PARSE (InputRoot.BLOB.BLOB);
+--		 
+--		 --DECLARE XMLREQ REFERENCE TO EV.Req.XMLNSC.root.entities;
+--        
+--         -- 1st way to declere array
+--		CREATE FIELD OutputRoot.JSON.Data.root.entities IDENTITY (JSON.Array)entities;
+--          
+--          
+--        --SET OutputRoot.JSON.Data.root.entities TYPE =JSON.Array;
+--        
+--		DECLARE JSONRES REFERENCE TO OutputRoot.JSON.Data.root.entities;
+--		SET x = CARDINALITY(EV.Req.XMLNSC.root.entities[]);
+--		
+--		WHILE y <= x DO
+--			
+--		
+--		SET JSONRES.entities[y].entityId                = CAST(EV.Req.XMLNSC.root.entities[y].entityId AS  INTEGER);
+--		SET JSONRES.entities[y].systemId                = EV.Req.XMLNSC.root.entities[y].systemId;
+--		SET JSONRES.entities[y].segmentType             = EV.Req.XMLNSC.root.entities[y].segmentType;
+--		SET JSONRES.entities[y].customerName            = CAST(EV.Req.XMLNSC.root.entities[y].customerName AS INTEGER);
+--		SET JSONRES.entities[y].countryCode             = EV.Req.XMLNSC.root.entities[y].countryCode ;
+--		SET JSONRES.entities[y].modelId                 = EV.Req.XMLNSC.root.entities[y].modelId;
+--		SET JSONRES.entities[y].sourceCurrency          = EV.Req.XMLNSC.root.entities[y].sourceCurrency ;
+--		SET JSONRES.entities[y].accountingMethod        = EV.Req.XMLNSC.root.entities[y].accountingMethod ;
+--		SET JSONRES.entities[y].consolidated            = EV.Req.XMLNSC.root.entitiesentities[y].consolidated;
+--		
+--		SET JSONRES.entities[y].addresses.entityId      = CAST(EV.Req.XMLNSC.root.entities[y].addresses.entityId AS INTEGER);
+--		SET JSONRES.entities[y].addresses.addressType   = EV.Req.XMLNSC.root.entities[y].addresses.addressType;
+--		SET JSONRES.entities[y].addresses.address1      = CAST(EV.Req.XMLNSC.root.entities[y].addresses.address1 AS INTEGER);
+--		SET JSONRES.entities[y].addresses.address2      = CAST(EV.Req.XMLNSC.root.entities[y].addresses.address2 AS INTEGER);
+--		SET JSONRES.entities[y].addresses.country       = EV.Req.XMLNSC.root.entities[y].addresses.country;
+--		SET JSONRES.entities[y].addresses.state         = EV.Req.XMLNSC.root.entities[y].addresses.state;
+--		SET JSONRES.entities[y].addresses.city          = CAST(EV.Req.XMLNSC.root.entities[y].addresses.city AS INTEGER);
+--		SET JSONRES.entities[y].addresses.postCode      = CAST(EV.Req.XMLNSC.root.entities[y].addresses.postCode AS INTEGER);
+--		
+--		SET y = y+1;
+--		END WHILE;
+		
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		CREATE LASTCHILD OF EV.Req DOMAIN 'XMLNSC' PARSE (InputRoot.BLOB.BLOB);	
+		CREATE FIELD OutputRoot.JSON.Data.root.entities IDENTITY (JSON.Array) entities;
+		DECLARE JSONRES REFERENCE TO OutputRoot.JSON.Data.root.entities;
+		
+		DECLARE i INTEGER 1;
+	
+		FOR Req AS EV.Req.XMLNSC.root.entities[] DO
+			--CREATE LASTCHILD OF JSONRES Identity (JSON.Array) entities  ;
+			--TYPE JSON.Array;
+         --SET JSONRES TYPE =JSON.Array;
+
+        SET JSONRES.entities[i].entityId                = CAST(EV.Req.XMLNSC.root.entities[i].entityId AS  INTEGER);
+		SET JSONRES.entities[i].systemId                = EV.Req.XMLNSC.root.entities[i].systemId;
+		SET JSONRES.entities[i].segmentType             = EV.Req.XMLNSC.root.entities[i].segmentType;
+		SET JSONRES.entities[i].customerName            = CAST(EV.Req.XMLNSC.root.entities[i].customerName AS INTEGER);
+		SET JSONRES.entities[i].countryCode             = EV.Req.XMLNSC.root.entities[i].countryCode ;
+		SET JSONRES.entities[i].modelId                 = EV.Req.XMLNSC.root.entities[i].modelId;
+		SET JSONRES.entities[i].sourceCurrency          = EV.Req.XMLNSC.root.entities[i].sourceCurrency ;
+		SET JSONRES.entities[i].accountingMethod        = EV.Req.XMLNSC.root.entities[i].accountingMethod ;
+		SET JSONRES.entities[i].consolidated            = EV.Req.XMLNSC.root.entitiesentities[i].consolidated;
+		
+		SET JSONRES.entities[i].addresses.entityId      = CAST(EV.Req.XMLNSC.root.entities[i].addresses.entityId AS INTEGER);
+		SET JSONRES.entities[i].addresses.addressType   = EV.Req.XMLNSC.root.entities[i].addresses.addressType;
+		SET JSONRES.entities[i].addresses.address1      = CAST(EV.Req.XMLNSC.root.entities[i].addresses.address1 AS INTEGER);
+		SET JSONRES.entities[i].addresses.address2      = CAST(EV.Req.XMLNSC.root.entities[i].addresses.address2 AS INTEGER);
+		SET JSONRES.entities[i].addresses.country       = EV.Req.XMLNSC.root.entities[i].addresses.country;
+		SET JSONRES.entities[i].addresses.state         = EV.Req.XMLNSC.root.entities[i].addresses.state;
+		SET JSONRES.entities[i].addresses.city          = CAST(EV.Req.XMLNSC.root.entities[i].addresses.city AS INTEGER);
+		SET JSONRES.entities[i].addresses.postCode      = CAST(EV.Req.XMLNSC.root.entities[i].addresses.postCode AS INTEGER);
+			
+	    SET i=i+1;
+			
+		END FOR;
+--		
+		
+		
+--		
+--		
+--		
+--		SET JSONRES.Item[2].entityId                = CAST(EV.Req.XMLNSC.root.entities[2].entityId AS INTEGER);
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].segmentType             = EV.Req.XMLNSC.root.entities[2].segmentType;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].customerName            = CAST(EV.Req.XMLNSC.root.entities[2].customerName AS INTEGER) ;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].countryCode             = EV.Req.XMLNSC.root.entities[2].countryCode ;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].modelId                 = EV.Req.XMLNSC.root.entities[2].modelId;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].sourceCurrency          = EV.Req.XMLNSC.root.entities[2].sourceCurrency ;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].accountingMethod        = EV.Req.XMLNSC.root.entities[2].accountingMethod ;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].consolidated            = EV.Req.XMLNSC.root.entities[2].consolidated;
+--		
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.entityId      = CAST( EV.Req.XMLNSC.root.entities[2].addresses.entityId AS INTEGER);
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.addressType   = EV.Req.XMLNSC.root.entities[2].addresses.addressType;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.address1      = CAST(EV.Req.XMLNSC.root.entities[2].addresses.address1 AS INTEGER);
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.address2      = CAST(EV.Req.XMLNSC.root.entities[2].addresses.address2 AS INTEGER);
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.country       = EV.Req.XMLNSC.root.entities[2].addresses.country;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.state         = EV.Req.XMLNSC.root.entities[2].entities.addresses.state;
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.city          = CAST(EV.Req.XMLNSC.root.entities[2].entities.addresses.city AS INTEGER);
+--		SET OutputRoot.JSON.Data.root.entities.Item[2].addresses.postCode      = CAST(EV.Req.XMLNSC.root.entities[2].entities.addresses.postCode AS INTEGER);
+--		
+--	
+--		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+	
+	
+	
+END MODULE;

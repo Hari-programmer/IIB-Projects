@@ -1,0 +1,19 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE rEnv            REFERENCE TO Environment;
+		DECLARE rInputPayload   REFERENCE TO InputRoot.*[<];
+		DECLARE chPayloadDomain CHAR FIELDNAME(InputRoot.*[<]);
+		DECLARE iCcsid          INT  InputRoot.*[<2].CodedCharSetId;
+
+		CREATE FIELD Environment.Variables.ComIbmDni.DnqTplImport AS rEnv;
+		-- Store payload in Environment to restore it when generating response message
+		IF (chPayloadDomain = 'BLOB') THEN
+			DECLARE	xPayload BLOB BITSTREAM(rInputPayload);
+			SET rEnv.xBlob = xPayload;
+			SET rEnv.chCcsid = iCcsid;
+		END IF;
+
+		RETURN TRUE;
+	END;

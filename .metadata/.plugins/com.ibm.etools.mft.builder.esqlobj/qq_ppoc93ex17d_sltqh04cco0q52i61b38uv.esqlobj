@@ -1,0 +1,566 @@
+CREATE DATABASE MODULE "ComIbmDniSaveUserAuditData_WriteToDatabase"
+CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+/* =============================================================================
+ * Following processing is done:
+ * 1. Get the required resources (i.e., schema name and table name)
+ * 2. Check the data in the audit request message for validity
+ * 3. Build up the resulting INSERT statement(s)
+ * 4. Pass through the INSERT statement(s) (including the required parameters)
+ * 5. Check the SQL code. In case of a database error:
+ *    a. "Roll back" the INSERT(s) by invoking an appropriate DELETE statement
+ *    b. Throw WBI FN exception DNIX2001E
+ * =============================================================================
+ * FLAG REASON  RLSE DATE   ORIGIN COMMENT                                    
+ * ---- ------- ---- ------ ------ ---------------------------------------------
+ * @A01 PQ67462 110  021021 D wga  d2600: Use parameter markers in DELETE statement
+ * @A02 PQ67462 110  021122 D wga  d3218: Provide additional info in case of DB error
+ * @A03 PQnnnnn 110  030925 D wga  d4768: Throw exception if no object in list.
+ *                                        In addition, some corrections/improvements.
+ * @A04 PQnnnnn 110  031020 D wga  d1969: Findings of code inspection. Especially:
+ *                                        Don't accept object type ACP.
+ * @A05         210  051223 D ne   d8968: Make code platform independent
+ * ============================================================================= */
+DECLARE fContinue           BOOLEAN; SET fContinue = TRUE;
+DECLARE chFct               CHAR;    SET chFct='DniAuditUser';
+DECLARE chSchema            CHAR;
+DECLARE chHexDigit          CHAR;
+DECLARE chTable             CHAR;
+DECLARE chStmt              CHAR;
+DECLARE iLength             INTEGER;
+DECLARE iCountRecords       INTEGER;
+DECLARE iCountAttributes    INTEGER;
+DECLARE iLoop               INTEGER;
+DECLARE iLoopAttributes     INTEGER;
+
+/* ----- elements of the request message ----- */
+DECLARE chEltTimestamp      CHAR;
+DECLARE chEltAgentMessageId CHAR;
+DECLARE chEltCT             CHAR;
+DECLARE chEltCO             CHAR;
+DECLARE chEltAttrVal        CHAR;
+
+/* ----- variables to check DB response ----- */
+DECLARE chSQLState          CHAR;
+DECLARE chSQLErrorText      CHAR;
+DECLARE iSQLCode            INTEGER;
+DECLARE iSQLNativeError     INTEGER;
+
+/*----------------------------*\
+|  get the required resources  |
+\*----------------------------*/
+
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  SET chSchema = Environment.ComIbmDni.Properties.{Root.MQRFH2.ComIbmDni.OU}.DniUserAudit.*[1].DniSchemaAudit;
+  SET chTable  = Environment.ComIbmDni.Properties.{Root.MQRFH2.ComIbmDni.OU}.DniUserAudit.*[1].DniTableUserAudit;
+ELSE
+  DECLARE pConfigObject REFERENCE TO Root.MQRFH2.ComIbmDni.Properties.OU.ConfigObjectList.ConfigObject[1];
+  
+  WHILE (LASTMOVE(pConfigObject) AND fContinue) DO
+    IF (pConfigObject.Type = 'DniUserAudit') THEN
+      /** Note: In WMQI 2.0.2 and WMQI 2.1 without CSD2 the next 2 statements do not work.
+       **       They result in following WMQI error:
+       **       BIP2110E: Message broker internal program error.
+       **/
+      SET chSchema = THE (SELECT ITEM A.Value FROM pConfigObject.AttributeList.Attribute[] AS A WHERE A.Name = 'DniSchemaAudit');
+      SET chTable  = THE (SELECT ITEM A.Value FROM pConfigObject.AttributeList.Attribute[] AS A WHERE A.Name = 'DniTableUserAudit');
+      SET fContinue = FALSE;           /* exit while loop */
+    ELSE
+      MOVE pConfigObject NEXTSIBLING;  /* next ConfigObject */
+    END IF;                            /* is ConfigObject of type 'DniUserAudit'? */
+  END WHILE;
+END IF;
+
+/* ----- check if required resources are available ----- */
+IF (chSchema IS NULL) THEN
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2301
+  VALUES(chFct, 'DniSchemaAudit', 'DniUserAudit', 'DNIX2301E');
+END IF;
+IF (chTable IS NULL) THEN
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2301
+  VALUES(chFct, 'DniTableUserAudit', 'DniUserAudit', 'DNIX2301E');
+END IF;
+
+/*======================================================================================*\
+|                       Check data in audit request message                              |
+\*======================================================================================*/
+DECLARE pReq REFERENCE TO Root.MQRFH2.ComIbmDni.Function.DniAuditUser.Store.Request;
+DECLARE chEltPath CHAR;
+SET     chEltPath = 'MQRFH2.ComIbmDni.Function.DniAuditUser.Store.Request.';
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN 
+  MOVE pReq TO LocalEnvironment.ComIbmDni.Function.DniAuditUser.Store.Request;
+  SET chEltPath = 'ComIbmDni.Function.DniAuditUser.Store.Request.'; 
+END IF;
+
+/*----------------*\
+|  mandatory data  |
+\*----------------*/
+IF (pReq."TimeStamp" IS NULL) THEN /* element is missing */
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+  VALUES(chFct, chEltPath || 'TimeStamp', 'DNIX2302E');
+ELSE
+  SET iLength = LENGTH(pReq."TimeStamp");
+  IF (iLength = 0) THEN /* value is missing */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2303
+    VALUES(chFct, chEltPath || 'TimeStamp', 'DNIX2303E');
+  END IF;
+  IF (   iLength < 19       /* format is neither YYYY-MM-DDTHH:MM:SS        */
+      OR iLength > 26) THEN /*           nor     YYYY-MM-DDTHH:MM:SS.NNNNNN */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2305
+    VALUES(chFct, pReq."TimeStamp", chEltPath || 'TimeStamp', 'DNIX2305E');
+  ELSE
+    /* ----- make timestamp DB2-compliant (required for USS) ----- */
+    SET chEltTimestamp = OVERLAY(pReq."TimeStamp" PLACING '-' FROM 11 FOR 1); /*  replace 'T' by '-'      */
+    SET chEltTimestamp = OVERLAY(chEltTimestamp   PLACING '.' FROM 14 FOR 1); /*  replace 1st ':' by '.'  */
+    SET chEltTimestamp = OVERLAY(chEltTimestamp   PLACING '.' FROM 17 FOR 1); /*  replace 2nd ':' by '.'  */
+--  SET chEltTimestamp = '''' || chEltTimestamp || '''';                      /*  @A05D                   */
+  END IF;
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+IF (pReq.ActionType IS NULL) THEN /* element is missing */
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+  VALUES(chFct, chEltPath || 'ActionType', 'DNIX2302E');
+ELSE
+  SET iLength = LENGTH(pReq.ActionType);
+  IF (iLength = 0) THEN /* value is missing */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2303
+    VALUES(chFct, chEltPath || 'ActionType', 'DNIX2303E');
+  END IF;
+  IF (    pReq.ActionType <> 'AccessFailed'
+      AND pReq.ActionType <> 'Approve'
+      AND pReq.ActionType <> 'Authorize'
+      AND pReq.ActionType <> 'Commit'
+      AND pReq.ActionType <> 'Deploy'
+      AND pReq.ActionType <> 'Revoke') THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2307
+    VALUES(chFct, pReq.ActionType, chEltPath || 'ActionType', 'DNIX2307E');
+  END IF; /* is ActionType valid? */
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+                                                                 -- begin @P01A
+/*------------------------*\
+|  check for long user ID  |
+\*------------------------*/
+DECLARE chUserId    CHAR pReq.AgentUserId;
+
+DECLARE rLongUserId REFERENCE TO Root.MQRFH2.ComIbmDni.UserIdentifier;
+
+IF LASTMOVE(rLongUserId) AND (LENGTH(rLongUserId) > 0) THEN
+	SET chUserId = DecryptSecVal(rLongUserId);
+END IF;
+                                                                   -- end @P01A
+IF (chUserId IS NULL) THEN /* element is missing */ --@P01C
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+  VALUES(chFct, chEltPath || 'AgentUserId', 'DNIX2302E');
+ELSE
+  SET iLength = LENGTH(chUserId); --@P01C
+  IF (iLength = 0) THEN /* value is missing */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2303
+    VALUES(chFct, chEltPath || 'AgentUserId', 'DNIX2303E');
+  END IF;
+                                                                 /* begin @P01D
+  IF (iLength > 12) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, pReq.AgentUserId, chEltPath || 'AgentUserId', 12, iLength, 'DNIX2304E');
+  END IF;
+*/                                                                 -- end @P01D
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+IF (pReq.AgentMessageId) IS NULL THEN
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+  VALUES(chFct, chEltPath || 'AgentMessageId', 'DNIX2302E');
+ELSE
+  SET iLength = LENGTH(pReq.AgentMessageId);
+  IF (iLength = 0) THEN /* value is missing */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2303
+    VALUES(chFct, chEltPath || 'AgentMessageId', 'DNIX2303E');
+  END IF;
+  IF (iLength > 48) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, pReq.AgentMessageId, chEltPath || 'AgentMessageId', 48, iLength, 'DNIX2304E');
+  END IF;
+  IF (MOD(iLength, 2) <> 0) THEN /* odd number of characters */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2306
+    VALUES(chFct, pReq.AgentMessageId, chEltPath || 'AgentMessageId', 'DNIX2306E');
+  END IF;
+  SET chEltAgentMessageId = UPPER(pReq.AgentMessageId);
+  SET iLoop = iLength;
+  WHILE (iLoop > 0) DO /* check for valid characters (only hex digits are allowed) */
+    SET chHexDigit = SUBSTRING(chEltAgentMessageId FROM iLoop FOR 1); /* @A03C begin */
+    IF (    (chHexDigit < '0' OR chHexDigit > '9')
+        AND (chHexDigit < 'A' OR chHexDigit > 'F') )                  /* @A03C end   */
+    THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2305
+      VALUES(chFct, pReq.AgentMessageId, chEltPath || 'AgentMessageId', 'DNIX2305E');
+    END IF;
+    SET iLoop = iLoop - 1;
+  END WHILE;
+END IF; /* pReq.AgentMessageId is NULL? */
+
+/*------------------------------*\
+|  data depending on ActionType  |
+\*------------------------------*/
+IF (pReq.ActionType = 'AccessFailed') THEN
+  /*==============*\
+  |  AccessFailed  |
+  \*==============*/
+  SET iCountRecords = CARDINALITY(pReq.ConfigObjectList.ConfigObject[]);
+  IF (iCountRecords < 1) THEN                                                     /* @A03A begin */
+    IF (pReq.ConfigObjectList IS NULL) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+        VALUES(chFct, chEltPath || 'ConfigObjectList', 'DNIX2302E');
+    END IF;
+    IF (pReq.ConfigObjectList.ConfigObject[1] IS NULL) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+        VALUES(chFct, chEltPath || 'ConfigObjectList.ConfigObject', 'DNIX2302E');
+    END IF;
+  ELSE                                                                            /* @A03A end   */
+    SET iLoop = 1;
+    WHILE (iLoop <= iCountRecords) DO
+      /*-------------------------*\
+      |  check ConfigObject.Type  |
+      \*-------------------------*/
+      IF (pReq.ConfigObjectList.ConfigObject[iLoop].Type IS NULL) THEN
+        THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+              VALUES(chFct,
+                     chEltPath || 'ConfigObjectList.ConfigObject['
+                               || CAST(iLoop AS CHAR)
+                               || '].Type',
+                     'DNIX2302E');
+      ELSE
+        SET iLength = LENGTH(pReq.ConfigObjectList.ConfigObject[iLoop].Type);
+        IF (iLength > 254) THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+          VALUES(chFct, pReq.ConfigObjectList.ConfigObject[iLoop].Type,
+                 chEltPath || 'ConfigObjectList.ConfigObject[' || CAST(iLoop AS CHAR) || '].Type',
+                 254, iLength, 'DNIX2304E');
+        END IF; /* is value valid?                       */
+      END IF;  /* does element ConfigObject.Type exist? */
+      /*-------------------------*\
+      |  check ConfigObject.Name  |
+      \*-------------------------*/
+      IF (pReq.ConfigObjectList.ConfigObject[iLoop].Name IS NOT NULL) THEN
+        SET iLength = LENGTH(pReq.ConfigObjectList.ConfigObject[iLoop].Name);
+        IF (iLength > 30) THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+          VALUES(chFct, pReq.ConfigObjectList.ConfigObject[iLoop].Name,
+                 chEltPath || 'ConfigObjectList.ConfigObject[' || CAST(iLoop AS CHAR) || '].Name',
+                 30, iLength, 'DNIX2304E');
+        END IF; /* is value valid?                       */
+      END IF;  /* does element ConfigObject.Name exist? */
+
+      SET iCountAttributes = CARDINALITY(pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[]);
+      IF (iCountAttributes > 0) THEN
+        /*----------------------*\
+        |  check all attributes  |
+        \*----------------------*/
+        SET iLoopAttributes = 1;
+        WHILE (iLoopAttributes <= iCountAttributes) DO
+          /*----------------------*\
+          |  check attribute name  |
+          \*----------------------*/
+          IF (pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Name IS NULL) THEN
+            THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+            VALUES(chFct,
+                   chEltPath || 'ConfigObjectList.ConfigObject['
+                             ||  CAST(iLoop AS CHAR)
+                             || '].AttributeList.Attribute['
+                             ||  CAST(iLoopAttributes AS CHAR)
+                             || '].Name',
+                   'DNIX2302E');
+          ELSE
+            SET iLength = LENGTH(pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Name);
+            IF (iLength = 0) THEN
+              THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+              VALUES(chFct,
+                     chEltPath || 'ConfigObjectList.ConfigObject['
+                               ||  CAST(iLoop AS CHAR)
+                               || '].AttributeList.Attribute['
+                               ||  CAST(iLoopAttributes AS CHAR)
+                               || '].Name',
+                     'DNIX2302E');
+            ELSE
+              IF (iLength > 30) THEN
+                THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+                VALUES(chFct,
+                       pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Name,
+                       chEltPath || 'ConfigObjectList.ConfigObject['
+                                 ||  CAST(iLoop AS CHAR)
+                                 || '].AttributeList.Attribute['
+                                 ||  CAST(iLoopAttributes AS CHAR)
+                                 || '].Name',
+                       30,
+                       iLength,
+                       'DNIX2304E');
+              END IF; /* is value valid?                    */
+            END IF;  /* does value exist?                  */
+          END IF;   /* does element Attribute.Name exist? */
+
+          /*-----------------------*\
+          |  check attribute value  |
+          \*-----------------------*/
+          IF (pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Value IS NOT NULL) THEN
+            SET iLength = LENGTH(pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Value);
+            IF (iLength = 0) THEN
+              THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+              VALUES(chFct,
+                     chEltPath || 'ConfigObjectList.ConfigObject['
+                               ||  CAST(iLoop AS CHAR)
+                               || '].AttributeList.Attribute['
+                               ||  CAST(iLoopAttributes AS CHAR)
+                               || '].Value',
+                     'DNIX2302E');
+            ELSE
+              IF (iLength > 254) THEN
+                THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+                VALUES(chFct,
+                       pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Name,
+                       chEltPath || 'ConfigObjectList.ConfigObject['
+                                 ||  CAST(iLoop AS CHAR)
+                                 || '].AttributeList.Attribute['
+                                 ||  CAST(iLoopAttributes AS CHAR)
+                                 || '].Value',
+                       254,
+                       iLength,
+                       'DNIX2304E');
+              END IF; /* is value valid?                     */
+            END IF;  /* does value exist?                   */
+          END IF;   /* does element Attribute.Value exist? */
+          SET iLoopAttributes = iLoopAttributes + 1;
+        END WHILE;            /* end looping AttributeList          */
+      END IF;                 /* does any element Attribute exist?  */
+      SET iLoop = iLoop + 1;
+    END WHILE;                /* end looping ConfigObjectList       */
+  END IF; /* any ConfigObject available in ConfigObjectList?  @A03A */
+ELSE
+  /*===================*\
+  |  other ActionTypes  |
+  \*===================*/
+  SET iCountRecords = CARDINALITY(pReq.ObjectList.Object[]);
+  IF (iCountRecords < 1) THEN                                            /* @A03A begin */
+    IF (pReq.ObjectList IS NULL) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+        VALUES(chFct, chEltPath || 'ObjectList', 'DNIX2302E');
+    END IF;
+    IF (pReq.ObjectList.Object[1] IS NULL) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+        VALUES(chFct, chEltPath || 'ObjectList.Object', 'DNIX2302E');
+    END IF;
+  ELSE                                                                   /* @A03A end   */
+    SET iLoop = 1;
+    WHILE (iLoop <= iCountRecords) DO
+      /*-------------------*\
+      |  check object type  |
+      \*-------------------*/
+      IF (pReq.ObjectList.Object[iLoop].Type IS NULL) THEN
+        THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+        VALUES(chFct, chEltPath || 'ObjectList.Object[' || CAST(iLoop AS CHAR) || '].Type', 'DNIX2302E');
+      ELSE
+        SET iLength = LENGTH(pReq.ObjectList.Object[iLoop].Type);
+        IF (iLength = 0) THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+          VALUES(chFct, chEltPath || 'ObjectList.Object[' || CAST(iLoop AS CHAR) || '].Type', 'DNIX2302E');
+        ELSE
+          IF /***pReq.ObjectList.Object.Type[iLoop] <> 'ACP' AND *** @A04D ***/
+              pReq.ObjectList.Object.Type[iLoop] NOT IN ('COS', 'CT', 'OU', 'RG', 'RO', 'USR') --@P03C:Add RG
+          THEN
+            THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2307
+            VALUES(chFct, pReq.ObjectList.Object.Type[iLoop],
+                   chEltPath || 'ObjectList.Object[' || CAST(iLoop AS CHAR) || '].Type', 'DNIX2307E');
+          END IF; /* is value valid?     */
+        END IF;  /* does value exist?   */
+      END IF;   /* does element exist? */
+      /*-------------------*\
+      |  check object name  |
+      \*-------------------*/
+      IF (pReq.ObjectList.Object[iLoop].Name IS NULL) THEN
+        THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+        VALUES(chFct, chEltPath || 'ObjectList.Object[' || CAST(iLoop AS CHAR) || '].Name', 'DNIX2302E');
+      ELSE
+        SET iLength = LENGTH(pReq.ObjectList.Object[iLoop].Name);
+        IF (iLength = 0) THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+          VALUES(chFct, chEltPath || 'ObjectList.Object[' || CAST(iLoop AS CHAR) || '].Name', 'DNIX2302E');
+        ELSE
+          IF (iLength > 254) THEN
+            THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+            VALUES(chFct, pReq.ObjectList.Object[iLoop].Name,
+                   chEltPath || 'ObjectList.Object[' || CAST(iLoop AS CHAR) || '].Name',
+                   254, iLength, 'DNIX2304E');
+          END IF; /* is value valid?     */
+        END IF;  /* does value exist?   */
+      END IF;   /* does element exist? */
+      SET iLoop = iLoop + 1;
+    END WHILE; /* end looping ObjectList                     */
+  END IF;     /* any Object available in ObjectList?  @A03A */
+END IF;      /* ActionType = AccessFailed?                 */
+
+/*======================================================================================*\
+|                       Insert records into database table                               |
+\*======================================================================================*/
+/*----------------------------*\
+|  build up the SQL statement  |
+\*----------------------------*/
+
+SET iLoop = 1;
+SET iLoopAttributes = 1;
+
+/* ----- Number of attributes of first config object ------- */
+SET iCountAttributes = CARDINALITY(pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[]);
+
+WHILE (iLoop <= iCountRecords) DO
+  
+  -- @P02C Updated SQL statment
+  SET chStmt =   'INSERT INTO ' || chSchema || '.' || chTable || '('
+              || ' AU_LOG_GMT_TS, AU_AUDIT_GMT_TS, AU_ACTION_TYPE, AU_AGENT_USR_ID, AU_AGENT_MSG_ID, AU_OU_NAME,'
+			  || ' AU_DNI_OBJ_TYPE, AU_DNI_OBJ_NAME, AU_CT_NAME, AU_CO_NAME, AU_ATTR_NAME, AU_ATTR_VALUE'
+              || ') VALUES (CURRENT TIMESTAMP - CURRENT TIMEZONE, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+  IF (pReq.ActionType = 'AccessFailed') THEN
+    /*==============*\
+    |  AccessFailed  |
+    \*==============*/
+    /* prepare value for DB field AU_CT_NAME (name of configuration type) */
+    IF (LENGTH(pReq.ConfigObjectList.ConfigObject[iLoop].Type) > 0) THEN
+      SET chEltCT = pReq.ConfigObjectList.ConfigObject[iLoop].Type;
+    ELSE
+      SET chEltCT = NULL;
+    END IF;
+
+    /* prepare value for DB field AU_CO_NAME (name of configuration object) */
+    IF (LENGTH(pReq.ConfigObjectList.ConfigObject[iLoop].Name) > 0) THEN
+      SET chEltCO = pReq.ConfigObjectList.ConfigObject[iLoop].Name;
+    ELSE
+      SET chEltCO = NULL;
+    END IF;
+    
+    IF (NOT (iCountAttributes > 0)) THEN
+      /*-------------------------*\
+      |  no attributes specified  |
+      \*-------------------------*/
+      PASSTHRU(chStmt,
+      /* AU_AUDIT_GMT_TS */  chEltTimestamp                    ,
+      /* AU_ACTION_TYPE  */  pReq.ActionType                   ,
+      /* AU_AGENT_USR_ID */  chUserId                          , --@P01C
+      /* AU_AGENT_MSG_ID */  CAST (pReq.AgentMessageId AS BLOB),
+      /* AU_OU_NAME      */  Root.MQRFH2.ComIbmDni.OU          ,
+      /* AU_DNI_OBJ_TYPE */  NULL                              ,
+      /* AU_DNI_OBJ_NAME */  NULL                              ,
+      /* AU_CT_NAME      */  chEltCT                           ,
+      /* AU_CO_NAME      */  chEltCO                           ,
+      /* AU_ATTR_NAME    */  NULL                              ,
+      /* AU_ATTR_VALUE   */  NULL);
+    ELSE
+      /*----------------------*\
+      |  attributes specified  |
+      \*----------------------*/
+      IF (pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Value IS NOT NULL) THEN
+        SET chEltAttrVal = pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Value;
+      ELSE
+        SET chEltAttrVal = NULL;
+      END IF;
+
+      PASSTHRU(chStmt,
+      /* AU_AUDIT_GMT_TS */  chEltTimestamp                    ,
+      /* AU_ACTION_TYPE  */  pReq.ActionType                   ,
+      /* AU_AGENT_USR_ID */  chUserId                          , --@P01C
+      /* AU_AGENT_MSG_ID */  CAST (pReq.AgentMessageId AS BLOB),
+      /* AU_OU_NAME      */  Root.MQRFH2.ComIbmDni.OU          ,
+      /* AU_DNI_OBJ_TYPE */  NULL                              ,
+      /* AU_DNI_OBJ_NAME */  NULL                              ,
+      /* AU_CT_NAME      */  chEltCT                           ,
+      /* AU_CO_NAME      */  chEltCO                           ,
+      /* AU_ATTR_NAME    */  pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[iLoopAttributes].Name,
+      /* AU_ATTR_VALUE   */  chEltAttrVal);
+
+    END IF; /* does any element ASO exist? */
+
+  ELSE
+    /*===================*\
+    |  other ActionTypes  |
+    \*===================*/
+    PASSTHRU(chStmt,
+    /* AU_AUDIT_GMT_TS */  chEltTimestamp                    ,
+    /* AU_ACTION_TYPE  */  pReq.ActionType                   ,
+    /* AU_AGENT_USR_ID */  chUserId                          , --@P01C
+    /* AU_AGENT_MSG_ID */  CAST (pReq.AgentMessageId AS BLOB),
+    /* AU_OU_NAME      */  Root.MQRFH2.ComIbmDni.OU          ,
+    /* AU_DNI_OBJ_TYPE */  pReq.ObjectList.Object[iLoop].Type,
+    /* AU_DNI_OBJ_NAME */  pReq.ObjectList.Object[iLoop].Name,
+    /* AU_CT_NAME      */  NULL                              ,
+    /* AU_CO_NAME      */  NULL                              ,
+    /* AU_ATTR_NAME    */  NULL                              ,
+    /* AU_ATTR_VALUE   */  NULL);
+  END IF;
+
+  /*-----------------------*\
+  |  check SQL return code  |
+  \*-----------------------*/
+  SET iSQLCode        = SQLCODE;
+  SET iSQLNativeError = SQLNATIVEERROR;
+  SET chSQLState      = SQLSTATE;
+  SET chSQLErrorText  = SQLERRORTEXT;
+
+  /* @A01C begin */
+  /***** Test roll back  IF (iLoop > 2 OR iLoopAttributes > 3) THEN SET iSQLCode = 4711; END IF; *****/
+
+  IF (iSQLCode <> 0) THEN
+    /* Check if previous INSERT statements must be "rolled back" */
+    IF (   iLoop > 1
+        OR iLoopAttributes > 1 ) THEN
+      /* Create DELETE statement to "roll back" previous INSERT statements */
+      SET chStmt = 'DELETE FROM ' || chSchema || '.' || chTable ||
+                   ' WHERE AU_AGENT_MSG_ID = ?' ||
+                   '   AND AU_ACTION_TYPE  = ?' ||
+                   '   AND AU_AGENT_USR_ID = ?' ||
+                   '   AND AU_OU_NAME      = ?';
+
+      PASSTHRU(chStmt,
+      /* AU_AGENT_MSG_ID */  CAST (pReq.AgentMessageId AS BLOB),
+      /* AU_ACTION_TYPE  */        pReq.ActionType,
+      /* AU_AGENT_USR_ID */        chUserId, --@P01C
+      /* AU_OU_NAME      */        Root.MQRFH2.ComIbmDni.OU);  /* @A01C end */
+    END IF;
+
+    /* Throw exception now */
+    SET chStmt = chStmt || ' [Parameters: <'                       /* @A01A */
+                        || chEltTimestamp           || '>, <'      /* @A03A */
+                        || pReq.ActionType          || '>, <'      /* @A03A */
+                        || chUserId                 || '>, ..., <' /* @A03A */ --@P01C
+                        || Root.MQRFH2.ComIbmDni.OU || '>, '       /* @A03A */
+                        || '... ]';
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2001
+    VALUES('DniSaveUserAuditData',
+            chSchema, chTable, iSQLCode, chSQLState,
+            iSQLNativeError, chSQLErrorText, chStmt, 'DNIX2001E');
+  END IF;
+
+  /* ----- Next attribute -----  */
+  SET iLoopAttributes = iLoopAttributes + 1;
+
+  /* ----- Max. attribute reached? -----  */
+  IF (iLoopAttributes > iCountAttributes) THEN
+
+    /* ----- Next config object ----- */
+    SET iLoop = iLoop + 1;
+
+    /* ----- First attribute of config object ----- */
+    SET iLoopAttributes = 1;
+
+    /* ----- Number of attributes of config object ----- */
+    SET iCountAttributes = CARDINALITY(pReq.ConfigObjectList.ConfigObject[iLoop].AttributeList.Attribute[]);
+
+  END IF;
+END WHILE;
+/* ----- This line is only required to force the ESQL editor to display the last line of code ----- */
+RETURN true;
+END;
+                                                                 -- begin @P04A
+CREATE FUNCTION DecryptSecVal(IN encsecval CHAR)
+	RETURNS CHAR
+	LANGUAGE JAVA
+	EXTERNAL NAME "com.ibm.dni.sec.SecurityImplementation.decryptSecVal";
+                                                                   -- end @P04A
+END MODULE;

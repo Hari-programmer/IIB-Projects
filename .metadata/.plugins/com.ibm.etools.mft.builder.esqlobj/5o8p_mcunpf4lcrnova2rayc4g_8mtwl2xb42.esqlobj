@@ -1,0 +1,94 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE DNQ_EMPTY_MSGID CONSTANT BLOB X'000000000000000000000000000000000000000000000000';
+		DECLARE rEnv            REFERENCE TO Environment;
+		CREATE FIELD Environment."Variables"."ComIbmDni"."DnqMessageCopy" AS rEnv;
+		DECLARE rElementCheck   REFERENCE TO OutputRoot.MQMD;
+
+		-- check existence of MQMD
+		IF NOT LASTMOVE(rElementCheck) THEN
+			-- MQMD not present
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1370
+			VALUES ('Root.MQMD', 'DNQO1370E'); --@P01C
+		END IF;
+
+		-- prepare original message with History
+		SET rEnv."bIsCopy" = FALSE;
+		CALL DnqMessageCopy_CreateMqrfh2();
+		CALL DnqMessageCopy_CreateHistoryRecord(FALSE);
+		PROPAGATE;
+
+		-- prepare copy with History
+		SET OutputRoot = InputRoot;
+		CREATE FIELD Environment."Variables"."ComIbmDni"."DnqMessageCopy" AS rEnv;
+		SET rEnv."bIsCopy" = TRUE;
+		SET OutputRoot.MQMD.MsgId = OVERLAY(DNQ_EMPTY_MSGID PLACING UUIDASBLOB FROM 1);
+		CALL DnqMessageCopy_CreateMqrfh2();
+		SET OutputRoot.MQRFH2."ComIbmDni"."ParentMessageId" = InputRoot.MQMD.MsgId;
+		CALL DnqMessageCopy_CreateHistoryRecord(TRUE);
+
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE DnqMessageCopy_CreateMqrfh2()
+	BEGIN
+		DECLARE rElementCheck REFERENCE TO OutputRoot.MQRFH2;
+
+		-- create MQRFH2, if it does not exist
+		IF NOT LASTMOVE(rElementCheck) THEN
+			DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+			DECLARE rPreMqrfh2Header  REFERENCE To Environment;
+			CREATE NEXTSIBLING OF rPrePayloadHeader AS rElementCheck DOMAIN 'MQRFH2' NAME 'MQRFH2';
+			MOVE rPreMqrfh2Header TO OutputRoot.*[<3];
+			SET rElementCheck.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+			SET rElementCheck.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+			SET rElementCheck.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+			SET rElementCheck.(MQRFH2.Field)"NameValueCCSID" = 1208;
+			SET OutputRoot.MQRFH2."ComIbmDni"."Version" = '1.0';
+		END IF;
+	END;
+
+	CREATE PROCEDURE DnqMessageCopy_CreateHistoryRecord(IN bIsCopy BOOLEAN)
+	BEGIN
+		DECLARE DNQ_COPY_INDICATOR_ORIGINAL CONSTANT CHAR 'ORIGINAL';
+		DECLARE DNQ_COPY_INDICATOR_COPY     CONSTANT CHAR 'COPY';
+		DECLARE rHistoryEntry REFERENCE TO Environment;
+                                                                 -- begin @P02A
+		DECLARE rEnv          REFERENCE TO Environment."Variables"."ComIbmDni"."DnqMessageCopy";
+		DECLARE chUserId      CHAR '';
+		DECLARE chService   CHAR '';
+
+		IF (CARDINALITY(rEnv."HistoryData"[]) > 0) THEN
+			SET chUserId = rEnv."HistoryData"."chUserId";
+			SET chService = rEnv."HistoryData"."chService";
+		ELSE
+			IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."ER"."CurrentAction"[]) > 0) THEN
+				SET chUserId = Environment."ComIbmDni"."Dnq"."ER"."CurrentAction"."UserId";
+				SET chService = 'ER';
+			ELSE
+				SET chUserId = TRIM(InputRoot.MQMD.UserIdentifier);
+				SET chService = 'ROUTING';
+			END IF;
+			SET rEnv."HistoryData"."chUserId" = chUserId;
+			SET rEnv."HistoryData"."chService" = chService;
+		END IF;
+                                                                   -- end @P02A
+		-- create History record
+		CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."History" AS rHistoryEntry;
+		CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+		DECLARE chCopyIndicator CHAR CASE
+			WHEN bIsCopy THEN DNQ_COPY_INDICATOR_COPY
+			ELSE DNQ_COPY_INDICATOR_ORIGINAL
+			END;
+
+		SET rHistoryEntry."UserId"         = chUserId; --@P02C @P03C
+		SET rHistoryEntry."TimeStamp"      = DnqUtil_GetCurrentWbifnTimestamp();
+		SET rHistoryEntry."Component"      = 'DNQ';
+		SET rHistoryEntry."Service"        = chService; --@P02C
+		SET rHistoryEntry."CopyIndicator"  = chCopyIndicator;
+		SET rHistoryEntry."Function"       = 'COPY';
+		SET rHistoryEntry."FunctionResult" = 'Ok';
+	END;
+

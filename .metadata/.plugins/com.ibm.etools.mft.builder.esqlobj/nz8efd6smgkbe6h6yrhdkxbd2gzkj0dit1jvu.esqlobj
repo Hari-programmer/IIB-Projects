@@ -1,0 +1,123 @@
+CREATE FUNCTION checkQueueName                                 -- @P11A begin
+(
+	chQName         CONSTANT CHARACTER,
+	bAllowWildcards CONSTANT BOOLEAN,
+	bCliMode        CONSTANT BOOLEAN
+)
+RETURNS INTEGER
+
+BEGIN
+	DECLARE iRC          INT 0;
+	DECLARE iQNameLen    INT LENGTH(chQName);
+	DECLARE iCurLen      INT 0; -- current queue name length (excluding special characters)
+	DECLARE iCurPos      INT 1;
+	DECLARE chCurChar    CHAR '';
+
+	WHILE (    iRC = 0
+	       AND iCurPos <= iQNameLen)
+	DO
+		/*-----------------------*\
+		|  Check for max. length  |
+		\*-----------------------*/
+		IF (iCurLen = MAX_QUEUE_NAME_LEN) THEN
+			SET iRC = -1;
+		ELSE
+			SET chCurChar = SUBSTRING(chQName FROM iCurPos FOR 1);
+			IF (POSITION(   chCurChar
+			             IN CHARS_QUEUE_NAME) = 0)
+			THEN
+				/*-------------------------*\
+				|  Invalid character found  |
+				\*-------------------------*/
+				IF (chCurChar = CHAR_WILDCARD_ZERO_OR_MORE) THEN
+
+					/*--------------------------------------*\
+					|  Wildcard character                    |
+					|  (that does not contribute to length)  |
+					\*--------------------------------------*/
+					IF (bAllowWildcards = FALSE) THEN
+						SET iRC = iCurPos;
+					END IF; -- Wildcards allowed ?
+
+				ELSEIF (chCurChar = CHAR_WILDCARD_ESCAPE_WBIFN) THEN
+
+					/*------------------*\
+					|  Escape character  |
+					\*------------------*/
+					IF (bCliMode = FALSE) THEN
+						SET iRC = iCurPos;
+					ELSE
+						-- Check for succeeding wildcard character
+						IF (iCurPos < iQNameLen) THEN
+							-- Succeeding character exists
+							IF (   SUBSTRING(chQName
+							                 FROM (iCurPos + 1) FOR 1)
+							    <> CHAR_WILDCARD_ONE)
+							THEN
+								-- Escape character is
+								-- NOT succeeded by appropriate wildcard
+								SET iRC = iCurPos;
+							END IF; -- Succeeding character is a wildcard ?
+						ELSE
+							SET iRC = iCurPos;
+						END IF; -- Succeeding character exists ?
+					END IF;    -- CLI mode ?
+				ELSE
+					/*-----------------*\
+					|  Other character  |
+					\*-----------------*/
+					SET iRC = iCurPos;
+
+				END IF; -- Switch on invalid character
+			ELSE
+				/*-----------------*\
+				|  Valid character  |
+				\*-----------------*/
+				IF (chCurChar = CHAR_WILDCARD_ONE) THEN
+
+					/** This wildcard requires special processing, namely,
+					 ** checking for preceding escape character
+					 ** (see note 1 in function description above)
+					 **/
+					DECLARE bEscape BOOLEAN FALSE;
+					IF (iCurPos > 1) THEN
+						-- Preceding character exists
+						IF (  SUBSTRING(chQName
+						                FROM (iCurPos - 1) FOR 1)
+						    = CHAR_WILDCARD_ESCAPE_WBIFN)
+						THEN
+							SET bEscape = TRUE;
+						END IF; -- Preceding character is escape character ?
+					END IF; -- Preceding character exists ?
+
+					IF (   (    bAllowWildcards = TRUE   -- Case 3
+					        AND bCliMode        = FALSE	 -- (see note 1 in function
+					        AND bEscape         = TRUE)  --  description above)
+					    OR
+					       (    bAllowWildcards = FALSE  -- Case 6
+					        AND bCliMode        = TRUE
+					        AND bEscape         = FALSE)
+					    OR
+					       (    bAllowWildcards = FALSE  -- Case 7
+					        AND bCliMode        = FALSE
+					        AND bEscape         = TRUE)
+					   )	
+					THEN
+						SET iRC = iCurPos; -- Don't accept the underscore
+					END IF; -- Accept the underscore ?
+				END IF;    -- Current character is an underscore ?
+
+				IF (iRC = 0) THEN
+					SET iCurLen = iCurLen + 1; -- Character is contributes to length
+				END IF;
+			END IF;    -- Current character is valid ?
+		END IF;       -- Queue name exceeds max. length ?
+
+		-- Process next character in queue name
+		SET iCurPos = iCurPos + 1;
+
+	END WHILE; -- End looping queue name
+
+	RETURN iRC;
+
+END;

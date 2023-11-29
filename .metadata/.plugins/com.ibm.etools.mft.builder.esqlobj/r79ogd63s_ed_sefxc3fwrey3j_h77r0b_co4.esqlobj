@@ -1,0 +1,20 @@
+CREATE FUNCTION DnqUtil_GetMsgType(chFinMessage CHAR, bDeepSearch BOOLEAN) RETURNS CHAR
+/*
+	params: bDeepSearch, specify, if a deep search within MT021 should be performed
+*/
+BEGIN
+
+	DECLARE chMessageType CHAR '';
+	DECLARE iMtPosition   INT POSITION( '{1:' IN chFinMessage FROM 3);
+
+	SET chMessageType = SUBSTRING(chFinMessage FROM 34 FOR 3);
+
+	IF (chMessageType = '021') AND bDeepSearch AND (iMtPosition > 0) THEN
+		-- get message type from nested message starting with block one {1:
+		-- work recursive since nested message might be MT021
+		-- stop, if there is no nested message
+		SET chMessageType = DnqUtil_GetMsgType(SUBSTRING(chFinMessage FROM iMtPosition), bDeepSearch);
+	END IF;
+
+RETURN chMessageType;
+END;

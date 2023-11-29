@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:csv="http://www.ibm.com/dfdl/CommaSeparatedFormat" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:fn="http://www.w3.org/2005/xpath-functions" xmlns:ibmDfdlExtn="http://www.ibm.com/dfdl/extensions" xmlns:ibmSchExtn="http://www.ibm.com/schema/extensions">
+
+
+    <xsd:import namespace="http://www.ibm.com/dfdl/CommaSeparatedFormat" schemaLocation="IBMdefined/CommaSeparatedFormat.xsd"/>
+    <xsd:annotation>
+		<xsd:appinfo source="http://www.ogf.org/dfdl/">
+			<dfdl:format documentFinalTerminatorCanBeMissing="yes" encoding="{$dfdl:encoding}" escapeSchemeRef="csv:CSVEscapeScheme" ref="csv:CommaSeparatedFormat"/>
+		</xsd:appinfo>
+	</xsd:annotation>
+
+	<xsd:element ibmSchExtn:docRoot="true" name="Inutcsv">
+		<xsd:complexType>
+			<xsd:sequence dfdl:separator="">
+				<xsd:element dfdl:terminator="%CR;%LF;%WSP*;" name="header">
+					<xsd:complexType>
+						<xsd:sequence>
+							<xsd:element ibmDfdlExtn:sampleValue="head_value1" name="ID" type="xsd:string"/>
+							<xsd:element ibmDfdlExtn:sampleValue="head_value2" name="ROW_ID" type="xsd:string"/>							
+							<xsd:element ibmDfdlExtn:sampleValue="head_value3" name="EXTERNALID" type="xsd:string"/>							
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value4" name="STORETIME" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value5" name="OU" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value6" name="ROUTINGREQ" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value7" name="MQHEADERENC" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value8" name="MSGTYPE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value9" name="DIRECTION" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value10" name="QUEUETYPE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value11" name="LOCKTIME" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value12" name="POSSIBLEDUPLICATE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value13" name="MQHEADER" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value14" name="COMIBMDNI" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value15" name="PAYLOAD" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value16" name="MSGDOMAIN" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value17" name="QUEUE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value18" name="LOCALADDRESS" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value19" name="REMOTEADDRESS" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value20" name="LOCKUSER" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="head_value21" name="LASTCHGUSER" type="xsd:string"/>
+                        </xsd:sequence>
+					</xsd:complexType>
+				</xsd:element>			
+				<xsd:element dfdl:occursCountKind="implicit" dfdl:terminator="%CR;%LF;%WSP*;" maxOccurs="unbounded" name="record">
+					<xsd:complexType>
+						<xsd:sequence> 
+							<xsd:element ibmDfdlExtn:sampleValue="value1" name="ID" type="xsd:string"/>
+							<xsd:element ibmDfdlExtn:sampleValue="value2" name="ROW_ID" type="xsd:string"/>
+							<xsd:element ibmDfdlExtn:sampleValue="value3" name="EXTERNALID" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value4" name="STORETIME" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value5" name="OU" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value6" name="ROUTINGREQ" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value7" name="MQHEADERENC" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value8" name="MSGTYPE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value9" name="DIRECTION" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value10" name="QUEUETYPE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value11" name="LOCKTIME" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value12" name="POSSIBLEDUPLICATE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value13" name="MQHEADER" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value14" name="COMIBMDNI" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value15" name="PAYLOAD" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value16" name="MSGDOMAIN" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value17" name="QUEUE" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value18" name="LOCALADDRESS" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value19" name="REMOTEADDRESS" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value20" name="LOCKUSER" type="xsd:string"/>
+                            <xsd:element ibmDfdlExtn:sampleValue="value21" name="LASTCHGUSER" type="xsd:string"/>
+                        </xsd:sequence>
+					</xsd:complexType>
+				</xsd:element>				
+			</xsd:sequence>
+		</xsd:complexType>
+	</xsd:element>
+
+
+
+</xsd:schema>

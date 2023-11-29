@@ -1,0 +1,107 @@
+CREATE COMPUTE MODULE "ComIbmDniCancelTimer_DelTimerRec"
+CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+SET OutputRoot = InputRoot;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node deletes the timer record specified by the TimerId in the DniCancelTimer request from the 
+  timer database.
+  If already an error occured in DniCancelTimer flow (indicated throw appeared response section), no
+  processing will take place.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+SET OutputLocalEnvironment = InputLocalEnvironment;
+-------------------------------------------------------------------------------------------------------------
+-- Find out if a DniCancelTimer response message exists. 
+-- A response section in the incoming message indicates, that an error occured in one of the preceding nodes
+-- of the DniCancelTimer flow. Than, no further processing should be done. The incoming message will be 
+-- forwarded to the next node in this flow.
+-------------------------------------------------------------------------------------------------------------
+DECLARE pFunction REFERENCE TO OutputRoot.MQRFH2[<].ComIbmDni.Function;
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE pFunction TO OutputLocalEnvironment.ComIbmDni.Function;
+END IF;
+  
+IF (CARDINALITY(pFunction.DniTimer.Cancel.Response[]) > 0) THEN
+  RETURN TRUE;  
+END IF;
+
+
+------------------------------------------------------------------------------------------------------------
+-- Creates the response section in the DniCancelTimer Function. If an mandatory parameter is wrong, 
+-- a negative response will be added to this section. Else, this section will be removed at end of 
+-- processing in this node.
+------------------------------------------------------------------------------------------------------------
+CREATE FIELD pFunction.DniTimer.Cancel.Response;
+DECLARE refResp REFERENCE TO pFunction.DniTimer.Cancel.Response;
+
+-- flag for finding out, if response entries was made ------------------------------------------------------
+DECLARE boolRespSet BOOLEAN;
+SET boolRespSet = FALSE;
+
+
+------------------------------------------------------------------------------------------------------------
+-- Declariations and Initializations
+------------------------------------------------------------------------------------------------------------
+DECLARE refTimReq REFERENCE TO InputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Request;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refTimReq TO InputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Request;
+END IF;
+
+DECLARE sqlState1 CHARACTER;
+DECLARE sqlErrorText1 CHARACTER;
+DECLARE sqlCode1 INTEGER;
+DECLARE sqlNativeError1 INTEGER;
+
+DECLARE chDBStmt CHARACTER;
+DECLARE blobTimerId BLOB;
+
+SET blobTimerId = refTimReq.TimerId;
+
+-------------------------------------------------------------------------------------------------------------
+-- Set DniCancelTimer response with completion code 'Ok'
+-- This has to be done before end of processing, to be sure, that the database record deletion is the 
+-- last process to do. (If afterwards, with the wrong, flow based error handling, an exception would occur, 
+-- the database entry could be still in the database [no rollback] .)
+-------------------------------------------------------------------------------------------------------------
+SET refResp.Completion.Code = 'Ok';
+
+
+------------------------------------------------------------------------------------------------------------
+-- Delete the timer record from timer table
+------------------------------------------------------------------------------------------------------------
+SET chDBStmt = 'DELETE FROM ' || refTimReq.TimerTable || ' T '
+		|| 'WHERE T.T_TIMER_UID = ' || '?';
+
+PASSTHRU(chDBStmt, blobTimerId);
+SET sqlCode1 = SQLCODE;
+
+------------------------------------------------------------------------------------------------------------
+-- Find out, if deletion was successful.
+-- If not, do a appropriate processing (throw Denali exception or generate DniCancelTimer response)
+------------------------------------------------------------------------------------------------------------
+
+-- if no entry was found, set bad response -----------------------------------------------------------------
+IF (sqlCode1 = 100) THEN
+  SET refResp.Completion.Code = 'Failed';
+  SET refResp.Completion.Reason = '5';
+  SET boolRespSet = TRUE;
+ELSE
+  IF (sqlCode1 < 0) THEN
+    -- if database error, throw a WebSphere BI for FN exception --------------------------------------------
+    SET sqlState1 = SQLSTATE;
+    SET sqlErrorText1 = SQLERRORTEXT;
+    SET sqlNativeError1 = SQLNATIVEERROR;
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6002 
+	VALUES ('DniCancelTimer', refTimReq.TimerTable, sqlCode1, sqlState1, sqlNativeError1, sqlErrorText1, 'DNIT6002E'); 
+  END IF;
+END IF;
+
+
+RETURN true;
+END;
+
+END MODULE;

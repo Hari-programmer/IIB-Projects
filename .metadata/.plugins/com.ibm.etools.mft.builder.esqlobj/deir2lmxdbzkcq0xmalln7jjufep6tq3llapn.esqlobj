@@ -1,0 +1,80 @@
+CREATE COMPUTE MODULE ComIbmDnqFinInput_SCPNRequest_DNFSYSOU
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE DNQO_MSG_STANDARD_INFO_STATE_PARSE_ERROR CONSTANT CHAR 'ParseError'; --@P29A
+		DECLARE DNQO_MSG_STANDARD_INFO_STATE_VALID       CONSTANT CHAR 'Valid'; --@P09A
+		DECLARE rEnv          REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinInput";
+		DECLARE rElementCheck REFERENCE TO OutputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."State"; --@P03C
+                                                                 -- begin @P04A
+		DECLARE rMqrfh2       REFERENCE TO OutputRoot.MQRFH2;
+
+		IF LASTMOVE(rElementCheck) AND (rElementCheck = DNQO_MSG_STANDARD_INFO_STATE_VALID) THEN --@P09C
+			SET OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MessageValid" = 'Yes'; --@P07C
+		END IF;
+                                                                   -- end @P04A
+		-- extract LT from message
+--		DECLARE chLtName CHAR SUBSTRING(InputRoot.*[<].*:Message.*:Envelope.*:Sender FROM 1 FOR 9); --@P03C @P12D @P13A @P15D
+		DECLARE chLtName CHAR SUBSTRING(Environment."ComIbmDni"."Dnq"."Properties"."LocalAddress" FROM 1 FOR 9); --@P12A @P13D @P15A
+                                                                 -- begin @P03A
+		-- LT name not present or not valid
+		IF (chLtName IS NULL) OR (LENGTH(chLtName) < 9) THEN
+--			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1001
+--			VALUES (chLtName, 'DNQO1001E');
+                                                                 -- begin @P29A
+			IF LASTMOVE(rElementCheck) AND (rElementCheck = DNQO_MSG_STANDARD_INFO_STATE_PARSE_ERROR) THEN
+				-- try to extract LT name from line format
+				DECLARE chFinMessage CHAR COALESCE(rEnv."chMTFIN", CAST(InputRoot.BLOB.BLOB AS CHAR CCSID 1208));
+				SET chLtName = SUBSTRING(chFinMessage FROM 7 FOR 9);
+			END IF;
+                                                                   -- end @P29A
+		END IF;
+                                                                   -- end @P03A
+		-- check OU
+		MOVE rElementCheck TO OutputRoot.MQRFH2; --@P09A
+		IF LASTMOVE(rElementCheck) THEN --@P03C
+                                                                 /* begin @P03D
+			DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+			DECLARE rPreMqrfh2Header  REFERENCE To Environment;
+			CREATE NEXTSIBLING OF rPrePayloadHeader AS rElementCheck DOMAIN 'MQRFH2' NAME 'MQRFH2';
+			MOVE rPreMqrfh2Header TO OutputRoot.*[<3];
+			SET rElementCheck.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+			SET rElementCheck.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+			SET rElementCheck.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+			SET rElementCheck.(MQRFH2.Field)"NameValueCCSID" = 1208;
+			SET OutputRoot.MQRFH2."ComIbmDni"."OU" = 'DNFSYSOU';
+		ELSE
+*/                                                                 -- end @P03D
+			MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rEnv."chRequestOu" = rElementCheck;
+                                                                 -- begin @P03A
+			ELSE
+				SET OutputRoot.MQRFH2."ComIbmDni"."OU" = 'DNFSYSOU';
+                                                                   -- end @P03A
+			END IF;
+		END IF;
+                                                                 -- begin @P01A
+		-- copy MTFIN to MQRFH2, if present
+		MOVE rElementCheck TO rEnv."chMTFIN";
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0)  THEN
+			SET OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN" = rElementCheck;
+		END IF;
+                                                                   -- end @P01A
+		-- prepare SCPN request for LT specific config of DNFSYSOU
+		DECLARE rScpnRequest REFERENCE TO Environment;
+		CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request"."OU" AS rScpnRequest;
+		SET rScpnRequest."Name" = 'DNFSYSOU';
+		SET rScpnRequest.ConfigObjectList.ConfigObject[1]."Type" = 'DnfLTMap';
+
+		SET rScpnRequest.ConfigObjectList.ConfigObject[2]."Type" = 'DnfSynonymLT';
+		SET rScpnRequest.ConfigObjectList.ConfigObject[2]."Name" = chLtName;
+
+		SET rEnv."chLtName" = chLtName; --@P12C
+
+		RETURN TRUE;
+	END;
+END MODULE;

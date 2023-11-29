@@ -1,0 +1,7 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE rSetIdentity REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinMsifServiceOutput"."bSetIdentity";
+
+		RETURN LASTMOVE(rSetIdentity) AND rSetIdentity;
+	END;
+

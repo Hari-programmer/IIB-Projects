@@ -1,0 +1,15 @@
+CREATE FILTER MODULE DnqErCommon_TplRequest
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- Next statement is for test purposes only
+		-- DECLARE i INT 10 / 0; -- Produce WMB exception BIP2450 (Divide by zero evaluating expression)
+
+		DECLARE bTplRequest BOOLEAN FALSE;
+		DECLARE rTplRequest REFERENCE TO Root.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request;
+
+		IF LASTMOVE(rTplRequest) THEN
+			SET bTplRequest = TRUE;
+		END IF;
+		RETURN bTplRequest;
+	END;
+END MODULE;

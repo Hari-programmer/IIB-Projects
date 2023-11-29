@@ -1,0 +1,152 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+	   -- EXTRACT(DAY FROM CURRENT_TIME);
+		--SET OutputRoot.XMLNSC.Extra1 = EXTRACT(DAY FROM '14-07-2022');
+	   SET  EXTRACT(DAY FROM LOCAL_TIMEZONE);
+	    EXTRACT(DAY FROM CURRENT_TIMESTAMP);
+		
+		
+		
+		--DECLARE EV REFERENCE TO Environment.Variable;
+		--CREATE LASTCHILD OF EV.req DOMAIN 'XMLNSC'  PARSE(InputRoot.BLOB.BLOB);
+		
+		
+		DECLARE EV REFERENCE TO Environment.Variable;
+		CREATE LASTCHILD OF EV.req DOMAIN 'JSON'  PARSE(InputRoot.BLOB.BLOB);
+		
+		SET OutputRoot.JSON.Data.Overlay= OVERLAY(EV.req.JSON.Data.company.name PLACING 'TECHZERT' FROM 1 FOR 5 ); 
+		SET OutputRoot.JSON.Data.Overlay1= OVERLAY(EV.req.JSON.Data.company.name PLACING 'TECHZERT' FROM 3);
+		
+		SET OutputRoot.JSON.Data.Replica= REPLICATE(EV.req.JSON.Data.company.name ,3);  
+		
+		
+		SET OutputRoot.JSON.Data.Asbitstrem = ASBITSTREAM(EV.req.JSON, EV.req.Properties.Encoding, EV.req.Properties.CodedCharSetId);
+		--SET OutputRoot.XMLNSC.Asbitstream1 = ASBITSTREAM(EV.req.XMLNSC OPTIONS FolderBitStream  CCSID EV.req.Properties.CodedCharSetId ENCODING EV.req.properties.Encoding);
+		
+	    CREATE FIELD EV.req.JSON.Data.company IDENTITY (JSON.Array) company ; 
+		DECLARE Sam INTEGER 1; 
+		DECLARE Car INTEGER CARDINALITY(EV.req.JSON.Data.company[]);
+		   
+		WHILE Sam <= Car DO
+			
+			SET OutputRoot.JSON.Data.cardinalty[Sam].card = EV.req.JSON.Data.company[Sam].name ;
+			SET OutputRoot.JSON.Data.cardinalty[Sam].card1 = EV.req.JSON.Data.company[Sam].name ;
+			 SET Sam =Sam+1;
+			 
+		END WHILE;
+		
+		
+		SET OutputRoot.JSON.Data.Name = FIELDNAME(EV.req.JSON.Data.company.name);
+		SET OutputRoot.JSON.Data.Name1 = FIELDNAMESPACE(EV.req.JSON.Data.company.name);
+		SET OutputRoot.JSON.Data.Name2 = FIELDVALUE(EV.req.JSON.Data.company.name);
+		SET OutputRoot.JSON.Data.Name3 = FIELDTYPE(EV.req.JSON.Data.company.name);
+		
+		
+		SET OutputRoot.JSON.Data.EX = EXTRACT(DAY FROM CURRENT_TIMESTAMP);
+		SET OutputRoot.JSON.Data.EX1 = EXTRACT(QUARTEROFYEAR FROM CURRENT_TIMESTAMP);
+		SET OutputRoot.JSON.Data.EX2 = EXTRACT(HOUR FROM CURRENT_TIME);
+		SET OutputRoot.JSON.Data.EX3 = EXTRACT(ISLEAPYEAR FROM CURRENT_DATE);
+	
+		
+		DECLARE EXIST BOOLEAN;
+		SET EXIST = EXISTS(EV.req.[]);
+		
+		IF  EXIST THEN
+			SET OutputRoot.JSON.Data.exist = 'TRUE'; 
+		ELSE
+			SET OutputRoot.JSON.Data.exist = 'FALSE'; 
+			
+		END IF;
+		
+		
+		
+		
+		
+		--SET OutputRoot.XMLNSC.Root.Document = FIELDNAMESPACE(InputRoot.XMLNSC.Document) ;
+		--SET OutputRoot.XMLNSC.Document = FIELDNAMESPACE(InputRoot.XMLNSC.Document.(XMLNSC.D)xmlns);
+		
+		
+	 --   SET OutputRoot.XMLNSC.*:Document.(XMLNSC.NamespaceDecl)Document = InputRoot.XMLNSC.*:Document.(XMLNSC.NamespaceDecl)xmlns;
+         
+       --  SET OutputRoot.XMLNSC.Document.BkToCstmrDbtCdtNtfctn.Ntfctn.Ntry.AMT.(XMLNSC.Attribute)Ccy = 'INR';
+      
+		--  DECLARE space NAMESPACE 'urn:iso:std:iso:20022:tech:xsd:camt.054.001.09';
+		--  SET OutputRoot.XMLNSC.space:Document.(XMLNSC.NamespaceDecl)xmlns =space;
+	   
+	   
+	   
+	   /*
+	   
+		DECLARE value CHARACTER;
+		
+		SET value = FIELDNAMESPACE(InputRoot.XMLNSC.*:Document);
+		
+		SET OutputRoot.XMLNSC.xmlns= value;
+		*/
+		
+		--DECLARE ns NAMESPACE value;
+--		
+--	   SET OutputRoot.XMLNSC.*:Document.(XMLNSC.NamespaceDecl)xmls =InputRoot.XMLNSC.*:Document.(XMLNSC.NamespaceDecl)xmlns;
+--
+--       SET OutputRoot.XMLNSC.Document.BkToCstmrDbtCdtNtfctn.GrpHdr.MsgId  = InputRoot.XMLNSC.*:Document.*:BkToCstmrDbtCdtNtfctn.*:GrpHdr.*:MsgId;
+--       
+--       SET OutputRoot.XMLNSC.Document.BkToCstmrDbtCdtNtfctn.Ntfctn.Ntry.NtryDtls.TxDtls.Amt.(XMLNSC.Attribute)Ccy  =  REPLACE(InputRoot.XMLNSC.*:Document.*:BkToCstmrDbtCdtNtfctn.*:Ntfctn.*:Ntry.*:NtryDtls.*:TxDtls.*:Amt.(XMLNSC.Attribute)Ccy,'USD','INR');
+--       
+--       SET OutputRoot.XMLNSC.Document.BkToCstmrDbtCdtNtfctn.Ntfctn.Ntry.NtryDtls.TxDtls.Amt = FIELDVALUE(InputRoot.XMLNSC.*:Document.*:BkToCstmrDbtCdtNtfctn.*:Ntfctn.*:Ntry.*:NtryDtls.*:TxDtls.*:Amt);
+--		
+	
+	--here chescking for field refrences
+	
+	    -- SET OutputRoot.XMLNSC.Fields = InputRoot.XMLNSC.*:Document.*:BkToCstmrDbtCdtNtfctn.*:GrpHdr.*;
+	     --SET OutputRoot.XMLNSC.Fields1 = InputRoot.XMLNSC.*:Document.*:BkToCstmrDbtCdtNtfctn.*:GrpHdr.*[>];
+	     --SET OutputRoot.XMLNSC.Fields2 = InputRoot.XMLNSC.*:Document.*:BkToCstmrDbtCdtNtfctn.*:GrpHdr.*[<];
+	      
+	      
+	    SET OutputRoot.XMLNSC.root.out1 = InputRoot.XMLNSC.root.details.*;
+		SET OutputRoot.XMLNSC.root.out2 = InputRoot.XMLNSC.root.details.*[< 2];
+		SET OutputRoot.XMLNSC.root.out3 = InputRoot.XMLNSC.root.details.*[>];
+		SET OutputRoot.XMLNSC.root.out4 = InputRoot.XMLNSC.root.details.*[<];
+		
+	    
+	
+	
+	   
+	   
+	   
+	   
+		
+		-- DECLARE ns REFERENCE TO InputRoot.XMLNSC.*:Document;
+		
+		--SET OutputRoot.XMLNSC.msg=  .ns.*:BkToCstmrDbtCdtNtfctn.GrpHdr.MsgId;
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	
+	
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;

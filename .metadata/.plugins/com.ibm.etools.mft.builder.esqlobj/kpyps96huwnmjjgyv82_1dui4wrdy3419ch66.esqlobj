@@ -1,0 +1,292 @@
+CREATE COMPUTE MODULE "ComIbmDniEnhancedExceptionToEvent_MapExceptionToEvent"
+CREATE FUNCTION main() RETURNS BOOLEAN
+BEGIN
+
+	DECLARE refException       REFERENCE TO InputExceptionList.*[1];
+	DECLARE refParam           REFERENCE TO InputExceptionList;   -- dummy initialization, we only need to declare the var.
+	DECLARE bDniCatalogFound   BOOLEAN;
+	DECLARE bDniMessageIdFound BOOLEAN;
+	DECLARE iLoop              INTEGER;
+	DECLARE i                  INTEGER;
+	DECLARE cCatalogPrefix     CHARACTER;
+	DECLARE cMessageIdPrefix   CHARACTER;
+	DECLARE refProperties      REFERENCE TO InputRoot;
+	DECLARE bIsJavaException   BOOLEAN FALSE;
+	DECLARE chCatalogPrefixes  CHAR UPPER(COALESCE(Environment."ComIbmDni"."DniEnhancedExceptionToEvent"."chCatalogPrefixes", 'DNI,DNF,DNQ'));
+	DECLARE bConfigDataLocEnv  BOOLEAN FALSE; --@P05A
+	
+	-- detect ConfigDataLoc
+	IF Environment."ComIbmDni"."ConfigDataLoc" = 'env' THEN
+		MOVE refProperties TO Environment."ComIbmDni"."Properties"."Common";
+		SET bConfigDataLocEnv = TRUE; --@P05A
+	ELSE
+		MOVE refProperties TO InputRoot.MQRFH2."ComIbmDni"."Properties"."Common";
+	END IF;
+	
+	-- Currently no Denali related message is found. --------------------------------------------------------------
+	SET bDniCatalogFound = FALSE;
+	
+	---------------------------------------------------------------------------------------------------------------
+	-- Follow the exception list and look for Denali related exceptions until the last child is reached.
+	---------------------------------------------------------------------------------------------------------------
+	WHILE LASTMOVE(refException) = TRUE DO
+	
+		SET bDniMessageIdFound = FALSE;
+
+		SET cCatalogPrefix = UPPER(SUBSTRING(refException."Catalog" FROM 1 FOR 3));
+	
+                                                                 -- begin @P04D
+--		IF (chCatalogPrefixes IS NOT NULL) AND (chCatalogPrefixes <> '') THEN
+                                                                 -- begin @P02A
+--			IF chCatalogPrefixes LIKE '%' || cCatalogPrefix || '%' THEN
+--				SET bDniCatalogFound = TRUE;
+--			END IF;
+                                                                   -- end @P02A
+--		END IF;
+                                                                   -- end @P04D
+		
+		IF chCatalogPrefixes LIKE '%' || cCatalogPrefix || '%' THEN    -- @P04C
+	
+			---------------------------------------------------------------------------------------------------------
+			-- A Denali related exception is found. Create the Event Store Request in the Denali folder.
+			---------------------------------------------------------------------------------------------------------
+			SET bDniCatalogFound = TRUE;  -- @P04A
+			SET OutputRoot = InputRoot;   -- needed so that PROPAGATE will work
+			SET OutputLocalEnvironment = InputLocalEnvironment; --@P05A
+			SET OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent = NULL;
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request;
+			DECLARE refRequest REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request;
+	
+			-- Set the mandatory fields. ----------------------------------------------------------------------------
+			SET refRequest."TimeStamp" = OVERLAY(SUBSTRING(TRIM(TRAILING '''' FROM CAST(CURRENT_GMTTIMESTAMP AS CHARACTER)) FROM 15) PLACING 'T' FROM 11 FOR 1);
+			SET refRequest.(Name)"TimeStamp".(NameValue)dnidt='dateTime';
+			SET cMessageIdPrefix = UPPER(SUBSTRING(refException."Insert"[<].Text FROM 1 FOR 3));
+			IF cMessageIdPrefix = cCatalogPrefix THEN
+				SET refRequest.EventId = refException."Insert"[<].Text;
+				SET bDniMessageIdFound = TRUE;
+			ELSE
+				-- An exception with no or invalid Denali message id was thrown. -------------------------------------
+				SET refRequest.EventId = 'DNIE4497E';
+			END IF;
+			SET refRequest.OU = InputRoot.MQRFH2.ComIbmDni.OU;
+			IF refProperties."Service" IS NOT NULL THEN
+				SET refRequest."Service" = refProperties."Service";
+			ELSE
+				SET refRequest."Service" = 'DNF_UNKNOWN';
+			END IF;
+	
+			-- Set the optional fields. -----------------------------------------------------------------------------
+			IF refProperties."QueueManager" IS NOT NULL THEN
+				SET refRequest.SystemId = 'CP_' || refProperties."QueueManager";
+			ELSE
+				SET refRequest.SystemId = 'DNF_UNKNOWN';
+			END IF;
+			SET refRequest.ComponentName  = COALESCE(Environment."ComIbmDni"."DniEnhancedExceptionToEvent"."chComponentName", 'DniEnhancedExceptionToEvent');
+			SET refRequest.MessageFlow    = refProperties."MessageFlow";
+			SET refRequest.ExecutionGroup = refProperties."ExecutionGroup";
+			SET refRequest.Broker         = refProperties."Broker";
+			SET refRequest.BusinessGroup  = InputRoot.MQRFH2."ComIbmDni"."BusinessGroup";
+			SET refRequest.MessageGroup   = InputRoot.MQRFH2."ComIbmDni"."MessageGroup";
+			SET refRequest.SearchKey      = COALESCE(Environment."ComIbmDni"."DniEnhancedExceptionToEvent"."chSearchKey", 'Exception');
+	
+			---------------------------------------------------------------------------------------------------------
+			-- Iterate through the given parameters of the exception and map them to the corresponding fields of
+			-- the Event Store Request.
+			---------------------------------------------------------------------------------------------------------
+			CALL DniEnhancedExceptionToEvent_MapInserts(refException, refRequest, bDniMessageIdFound, bIsJavaException);
+                                                                 -- begin @P05A
+			IF bConfigDataLocEnv THEN
+				-- duplicate the event store request to LocalEnvironment, but do not remove it in MQRFH2 for backward compatability
+				DECLARE refEnvRequest REFERENCE TO Environment;
+				SET OutputLocalEnvironment.ComIbmDni.Function.DniEvent.Store = NULL;
+		        CREATE FIELD OutputLocalEnvironment.ComIbmDni.Function.DniEvent.Store AS refEnvRequest;
+		        CALL ComIbmDniEnhancedExceptionToEvent_CopyRfh2TreeToEnv(refRequest, refEnvRequest); --@P06C
+			END IF;
+                                                                   -- end @P05A
+			PROPAGATE;
+		END IF;
+	
+		MOVE refException LASTCHILD;
+	END WHILE;
+	
+	
+	IF bDniCatalogFound = TRUE THEN
+		-- At least one Denali related exception was found and propagated to the output terminal. ------------------
+		RETURN FALSE;
+	ELSE
+		-- No Denali related exception was found, thus create the generic Event Store Request. ---------------------
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment; --@P05A
+		SET OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent = NULL;
+		CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request;
+		DECLARE refRequest REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request;
+	
+		-- Set the mandatory fields. -------------------------------------------------------------------------------
+		SET refRequest."TimeStamp" = OVERLAY(SUBSTRING(TRIM(TRAILING '''' FROM CAST(CURRENT_GMTTIMESTAMP AS CHARACTER)) FROM 15) PLACING 'T' FROM 11 FOR 1);
+		SET refRequest.(Name)"TimeStamp".(NameValue)dnidt='dateTime';
+	
+		-- special handling for Java user exception
+		DECLARE chEventId       CHAR 'DNIE4497E'; -- default for unknown MPUs
+		DECLARE chEventIdPrefix CHAR '';
+		
+		SET bDniMessageIdFound = FALSE;
+	
+		-- Step back to the last exception list entry containing the message number. -------------------------------
+		IF refException.Number IS NULL THEN
+			MOVE refException PARENT;
+		END IF;
+		WHILE refException.Number IS NULL AND LASTMOVE(refException) = TRUE DO
+			MOVE refException PARENT;
+		END WHILE;
+	
+		IF (SUBSTRING(refException."Catalog" FROM 1 FOR 3) = 'BIP') AND
+			(refException."Number" = 4394) THEN
+			SET chEventId = refException."Insert"[<]."Text"; -- last Insert
+			SET cCatalogPrefix = UPPER(SUBSTRING(refException."Insert"[7]."Text" FROM 1 FOR 3)); -- resource bundle
+			SET chEventIdPrefix = UPPER(SUBSTRING(chEventId FROM 1 FOR 3));
+			IF chCatalogPrefixes LIKE '%' || chEventIdPrefix || '%' AND --@P02C
+				(cCatalogPrefix = chEventIdPrefix) THEN
+				SET bIsJavaException = TRUE;
+				SET bDniMessageIdFound = TRUE;
+			END IF;
+		END IF;
+	
+		SET refRequest.EventId = chEventId;
+		SET refRequest.OU = InputRoot.MQRFH2.ComIbmDni.OU;
+		IF refProperties."Service" IS NOT NULL THEN
+			SET refRequest.Service = refProperties."Service";
+		ELSE
+			SET refRequest.Service = 'DNF_UNKNOWN';
+		END IF;
+	
+		-- Set the optional fields. --------------------------------------------------------------------------------
+		IF refProperties."QueueManager" IS NOT NULL THEN
+			SET refRequest.SystemId = 'CP_' || refProperties."QueueManager";
+		ELSE
+			SET refRequest.SystemId = 'DNF_UNKNOWN';
+		END IF;
+		SET refRequest.ComponentName  = COALESCE(Environment."ComIbmDni"."DniEnhancedExceptionToEvent"."chComponentName", 'DniEnhancedExceptionToEvent');
+		SET refRequest.MessageFlow    = refProperties."MessageFlow";
+		SET refRequest.ExecutionGroup = refProperties."ExecutionGroup";
+		SET refRequest.Broker         = refProperties."Common"."Broker";
+		SET refRequest.BusinessGroup  = InputRoot.MQRFH2."ComIbmDni"."BusinessGroup";
+		SET refRequest.MessageGroup   = InputRoot.MQRFH2."ComIbmDni"."MessageGroup";
+		SET refRequest.SearchKey      = COALESCE(Environment."ComIbmDni"."DniEnhancedExceptionToEvent"."chSearchKey", 'Exception');
+	
+		IF bIsJavaException THEN
+			CALL DniEnhancedExceptionToEvent_MapInserts(refException, refRequest, bDniMessageIdFound, bIsJavaException);
+		ELSE
+			-- Store the catalog of the exception in the field Parameter1 of the Event Store Request. ------------------
+			SET refRequest.Parameter1 = refException."Catalog";
+			SET refRequest.Parameter1.(NameValue)dt = 'string';
+		
+			-- Store the message number of the exception in the field Parameter2 of the Event Store Request. -----------
+			SET refRequest.Parameter2 = refException.Number;
+			SET refRequest.Parameter2.(NameValue)dt = 'int';
+		
+			---------------------------------------------------------------------------------------------------------
+			-- Iterate through the given parameters of the exception and map them to Parameter3 of the Event Store
+			-- Request.
+			---------------------------------------------------------------------------------------------------------
+			SET i = 1;
+			SET refRequest.Parameter3 = '(';
+			WHILE i <= CARDINALITY(refException."Insert"[]) DO
+				SET refRequest.Parameter3 = refRequest.Parameter3 || '(' ||
+													 CAST(refException."Insert"[i].Text AS CHARACTER) || ')';
+				SET i = i + 1;
+			END WHILE;
+			SET refRequest.Parameter3 = refRequest.Parameter3 || ')';
+			SET refRequest.Parameter3.(NameValue)dt = 'string';
+		
+			-- Step back to the last exception list entry containing a label. -------------------------------
+			IF refException.Label IS NULL THEN
+				MOVE refException PARENT;
+			END IF;
+			WHILE refException.Label IS NULL AND LASTMOVE(refException) OR LENGTH(refException.Label)=0 DO
+				MOVE refException PARENT;
+			END WHILE;
+		
+			-- Store the lable of the exception in the field Parameter4 of the Event Store Request. ------------------
+			IF refException.Label IS NOT NULL AND LENGTH(refException.Label)>0 THEN
+				SET refRequest.Parameter4 = refException."Label";
+				SET refRequest.Parameter4.(NameValue)dt = 'string';
+			END IF;
+		END IF; --@P03A
+                                                                 -- begin @P05A
+		IF bConfigDataLocEnv THEN
+			-- duplicate the event store request to LocalEnvironment, but do not remove it in MQRFH2 for backward compatability
+			DECLARE refEnvRequest REFERENCE TO Environment;
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniEvent.Store = NULL;
+	        CREATE FIELD OutputLocalEnvironment.ComIbmDni.Function.DniEvent.Store AS refEnvRequest;
+	        CALL ComIbmDniEnhancedExceptionToEvent_CopyRfh2TreeToEnv(refRequest, refEnvRequest); --@P06C
+		END IF;
+                                                                   -- end @P05A
+	RETURN TRUE;
+END IF;
+
+RETURN true;
+END;
+																					  -- begin @P03A
+CREATE PROCEDURE DniEnhancedExceptionToEvent_MapInserts(IN refException REFERENCE, INOUT refRequest REFERENCE, IN bDniMessageIdFound BOOLEAN, IN bIsJavaException BOOLEAN)
+BEGIN
+	---------------------------------------------------------------------------------------------------------
+	-- Iterate through the given parameters of the exception and map them to the corresponding fields of
+	-- the Event Store Request.
+	---------------------------------------------------------------------------------------------------------
+	DECLARE iInsertCounter   INT 1;
+	DECLARE iInsertTotal     INT CARDINALITY(refException."Insert"[]);
+	DECLARE iInsertOffset    INT 0;
+	DECLARE iInsertMax       INT 10; -- Event Store Request allows only 10 parameters
+	DECLARE iInsertPos       INT 0;
+	DECLARE iInsertThreshold INT 0;
+	DECLARE refParam         REFERENCE TO Environment;
+
+	-- for Java exceptions, use Inserts [9,LAST]
+	IF bIsJavaException THEN
+		SET iInsertOffset = 8;
+	END IF;
+
+	IF (iInsertTotal - iInsertOffset) <= iInsertMax THEN
+		IF bDniMessageIdFound THEN
+			SET iInsertTotal = iInsertTotal-1; -- ignore the last Insert if it is the message ID
+		END IF;
+	ELSE
+		SET iInsertTotal = iInsertMax;
+	END IF;
+
+	SET iInsertThreshold = iInsertTotal - iInsertOffset;
+	
+	WHILE iInsertCounter <= iInsertThreshold DO
+
+		EVAL ( 'CREATE FIELD refRequest.Parameter' || CAST(iInsertCounter AS CHARACTER) || ' AS refParam;' );
+		SET iInsertPos = iInsertCounter + iInsertOffset;
+		IF refException."Insert"[iInsertPos].Type IN ( 6, 7, 8, 9, 10 ) THEN
+			-- WBI-FN data types.
+			SET refParam = refException."Insert"[iInsertPos].Text;
+			SET refParam.(NameValue)dnidt = CASE refException."Insert"[iInsertPos].Type
+				WHEN  6 THEN 'time' --@P03A
+				WHEN  7 THEN 'time' -- GMT time
+				WHEN  8 THEN 'date'
+				WHEN  9 THEN 'dateTime' --@P03A
+				WHEN 10 THEN 'dateTime' -- GMT timestamp
+			END;
+		ELSE
+			-- WBIMB data types.
+			SET refParam = refException."Insert"[iInsertPos].Text;
+			SET refParam.(NameValue)dt = CASE refException."Insert"[iInsertPos].Type
+				WHEN  1 THEN 'boolean'
+				WHEN  2 THEN 'int'
+				WHEN  3 THEN 'r8'
+				WHEN  5 THEN 'string'
+				WHEN 12 THEN 'bin.hex'
+				WHEN 13 THEN 'bin.hex'
+				WHEN 14 THEN 'bin.hex'
+				ELSE 'string'
+			END;
+		END IF;
+	
+		SET iInsertCounter = iInsertCounter + 1;
+	END WHILE;
+END;
+
+END MODULE;

@@ -1,0 +1,34 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		DECLARE chFunction CHARACTER; SET chFunction = 'DniAccountingPreparation';
+		
+		/* Check OU */
+		DECLARE refComIbmDni REFERENCE TO Root.MQRFH2.ComIbmDni;
+		IF refComIbmDni.OU IS NULL  OR  LENGTH(TRIM(refComIbmDni.OU)) = 0 THEN
+		   THROW USER EXCEPTION CATALOG 'dniccmsg'  MESSAGE 4701 
+                        VALUES( 'MQRFH2.ComIbmDni.OU' );
+                        
+		END IF;
+		
+		/* Check ServiceType */		                        
+        DECLARE refAccPreparation REFERENCE TO Environment.Variables.ComIbmDni.Function.AccountingPreparation;                
+		IF refAccPreparation.ServiceType                IS NULL  OR  
+			LENGTH(TRIM(refAccPreparation.ServiceType)) = 0      OR
+			LENGTH(TRIM(refAccPreparation.ServiceType)) > 8      THEN
+		   THROW USER EXCEPTION CATALOG 'dniccmsg'  MESSAGE 4702 VALUES( 'Environment.Variables.ComIbmDni.Function.AccountingPreparation.ServiceType' );
+                        
+		END IF;
+		
+		
+		/* Set Accounting Origin on Form: DNI"OU=BANKA,ST=ESN" for further parsing in DataGatherer */
+		SET Environment.Broker.Accounting.Origin = 'Dni"' || 
+													'OU=' || refComIbmDni.OU || ',' || 
+													'ST=' || Environment.Variables.ComIbmDni.Function.AccountingPreparation.ServiceType || '"';
+		
+		/* Remove not more used variable from the Environment */											
+		SET Environment.Variables.ComIbmDni.Function.AccountingPreparation.ServiceType = NULL;
+		
+		RETURN TRUE;
+	END;
+

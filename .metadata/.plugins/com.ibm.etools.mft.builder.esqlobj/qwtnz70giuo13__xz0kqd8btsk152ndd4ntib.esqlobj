@@ -1,0 +1,119 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE rFIN             REFERENCE TO OutputRoot;
+		DECLARE rRFH2ComIbmDni   REFERENCE TO OutputRoot.MQRFH2."ComIbmDni";
+		DECLARE rHistoryEntry    REFERENCE TO OutputRoot;
+		DECLARE rCompletion      REFERENCE TO OutputLocalEnvironment;
+		DECLARE rReason          REFERENCE TO OutputLocalEnvironment;
+		DECLARE iCcsid           INT  InputRoot.*[<2].CodedCharSetId;
+		DECLARE chNestedMsg      CHAR '';
+		DECLARE chFunctionResult CHAR '';
+		DECLARE chExtractError   CHAR '';
+		DECLARE chExtractErrVal  CHAR '';
+		DECLARE chFinMessage     CHAR CAST(InputRoot.BLOB.BLOB AS CHAR CCSID iCcsid);
+		DECLARE chMessageType    CHAR ComIbmDnqFinExtractFromMT021_GetMsgType(chFinMessage);
+		DECLARE bHasRFH2Dni      BOOLEAN LASTMOVE(rRFH2ComIbmDni);
+		DECLARE bSetExtData      BOOLEAN FALSE;
+
+		-- Set default. Used in FILTER MODULE ComIbmDnqFinExtractFromMT021_IsError
+   		SET Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."bIsError" = FALSE;
+   		SET Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."iCcsid" = iCcsid;	
+   		SET Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."chFinMessage" = chFinMessage;   		
+   		
+		IF (chMessageType = 'O021') THEN
+			SET chExtractError = ComIbmDnqFinExtractFromMT021_GetNestedMessage(chFinMessage, chNestedMsg);
+			
+			-- Set Environment
+			SET Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."chExtractError" = chExtractError;
+			
+			-- Check if ther was an error in GetNestedMessage()
+			IF (LENGTH(chExtractError) > 0) THEN
+				-- Extraction Error. chNestedMsg contains the possible error value.
+				SET chExtractErrVal = chNestedMsg;
+
+				-- Set Extraction Data				
+				SET bSetExtData = TRUE;
+				
+				-- for History Entry
+				SET chFunctionResult = 'Failed';
+	    	
+	    		-- Keep Payload
+	    		
+	    		-- Update Environment
+	    		SET Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."bIsError"  = TRUE;
+				
+			ELSE
+				-- Nested message seems okay
+				
+				-- Set Extraction Data				
+				SET bSetExtData = TRUE;
+				
+				-- for History Entry
+				SET chFunctionResult = 'Ok';
+					
+    			-- Set Extracted Message as new Payload
+    			SET OutputRoot.BLOB.BLOB = CAST(chNestedMsg AS BLOB CCSID iCcsid);
+			END IF;
+		ELSE
+			-- Check if message is FIN APDU at all
+			IF ComIbmDnqFinExtractFromMT021_IsFinAPDU(chFinMessage) THEN
+				-- Nothing to do, just pass original message.
+			ELSE
+				-- No FIN APDU, pass message to error terminal
+				SET chExtractError = 'DNQK1128E';
+				
+				-- Set Extraction Data				
+				SET bSetExtData = TRUE;
+				
+				-- for History Entry
+				SET chFunctionResult = 'Failed';
+	    	
+	    		-- Keep Payload
+	    		
+	    		-- Update Environment
+	    		SET Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."bIsError"  = TRUE;
+			END IF;
+		END IF;
+		
+		-- Set new data if necessary
+		IF (bSetExtData) THEN
+			
+			-- Create Response Folder in LocalEnvironment, if there was an extraction error
+			IF (Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."bIsError") THEN
+				CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DnqFinExtractFromMT021"."Extract"."Response"."Completion" AS rCompletion;
+				SET rCompletion."Code" = 'Failed';
+				CREATE FIELD rCompletion."ReasonList"."Reason" AS rReason;
+				SET rReason."Code" = 'Failed';
+				SET rReason."Value" = chExtractError;
+				IF (LENGTH(chExtractErrVal) > 0) THEN
+					SET rReason."Reference" = chExtractErrVal;
+					SET rReason."Parameter1" = chExtractErrVal;
+				END IF;
+			END IF;
+			
+			-- Only set MQRFH2."ComIbmDni" if it was already delivered with the input message
+			IF (bHasRFH2Dni) THEN
+				-- Create History Entry
+				CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."History" AS rHistoryEntry;
+				CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+		
+				SET rHistoryEntry."UserId"         = TRIM(InputRoot.MQMD.UserIdentifier);
+				SET rHistoryEntry."Component"      = 'DNQ';			
+				SET rHistoryEntry."Service"        = 'ROUTING';
+				SET rHistoryEntry."TimeStamp"      = DnqUtil_GetCurrentWbifnTimestamp();
+				SET rHistoryEntry."Function"       = 'EXTRACT';
+				SET rHistoryEntry."FunctionResult" = chFunctionResult;
+			
+				IF NOT (Environment.Variables."ComIbmDni"."DnqFinExtractFromMT021"."bIsError") THEN
+					-- Extraction was okay, save original payload
+	    			CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN" AS rFIN;
+	    			SET rFIN."OriginalMT021Payload" = chFinMessage;
+				END IF;
+			END IF;
+		END IF;
+		
+		RETURN TRUE;
+	END;

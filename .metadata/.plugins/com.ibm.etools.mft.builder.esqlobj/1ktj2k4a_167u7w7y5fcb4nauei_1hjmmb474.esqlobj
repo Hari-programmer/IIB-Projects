@@ -1,0 +1,14 @@
+CREATE COMPUTE MODULE ComIbmDnqFinApplicationOutput_RestoreMTFIN
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE rEnv          REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinApplicationOutput";
+		DECLARE rElementCheck REFERENCE TO rEnv."TransformedMTFIN";
+		
+		IF LASTMOVE(rElementCheck) THEN
+			SET OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN" = rElementCheck;
+		END IF;
+		RETURN TRUE;
+	END;
+END MODULE;

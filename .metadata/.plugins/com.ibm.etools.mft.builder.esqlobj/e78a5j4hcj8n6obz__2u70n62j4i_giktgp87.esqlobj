@@ -1,0 +1,87 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		
+		DECLARE rEnv           REFERENCE TO Environment;
+		CREATE FIELD Environment.Variables."ComIbmDni"."DnqThrowCompletionException" AS rEnv;
+		DECLARE rCompletion    REFERENCE TO Environment; --@P01C
+		DECLARE rElementCheck  REFERENCE TO rEnv."chFunctionName"; --@P01A
+		DECLARE rParameter     REFERENCE TO Environment;
+		DECLARE chFunctionName CHAR '*'; --@P01A
+		DECLARE chMpu          CHAR '';
+		DECLARE chCatalog      CHAR '';
+		DECLARE chMessage      CHAR '';
+		DECLARE chException    CHAR '';
+		DECLARE chParamName    CHAR '';
+		DECLARE chParamValue   CHAR '';
+		DECLARE iParamCounter  INT 1;
+                                                                 -- begin @P01A
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET chFunctionName = rElementCheck;
+		END IF;
+		MOVE rCompletion TO InputLocalEnvironment."ComIbmDni"."Function".{chFunctionName}."Response"."Completion";
+                                                                   -- end @P01A
+/*
+Completion sample:
+
+
+<LocalEnvironment>
+  <ComIbmDni>
+    <Function>
+      <DniStandardsProcessing>
+        <Response>
+          <Completion>
+            <Code>Failed</Code>
+            <ReasonList>
+              <Reason>
+                <Code>Failed</Code>
+                <Value>DNIY0009E</Value>
+                <Reference>0</Reference>
+              </Reason>
+            </ReasonList>
+          </Completion>
+        </Response>
+      </DniStandardsProcessing>
+    </Function>
+  </ComIbmDni>
+</LocalEnvironment>
+
+*/
+
+		IF LASTMOVE(rCompletion) AND (rCompletion."Code" IS NOT NULL) AND
+			(rCompletion."Code" <> 'Ok') THEN
+			MOVE rCompletion TO rCompletion."ReasonList"."Reason"[>];
+			IF LASTMOVE(rCompletion) AND (rCompletion."Value" IS NOT NULL) THEN
+				SET chMpu = rCompletion."Value";
+				-- DNQO1002E
+				--         -> DNQ     + O             + 1002 + E
+				--    Catalog dnq + c + o + msg, Number 1002
+				SET chCatalog = LOWER(SUBSTRING(chMpu FROM 1 FOR 3) || 'c' ||
+					SUBSTRING(chMpu FROM 4 FOR 1) || 'msg');
+				SET chMessage = SUBSTRING(chMpu FROM 5 FOR 4);
+				SET chException = 'THROW USER EXCEPTION CATALOG ''' || chCatalog ||
+					''' MESSAGE ' || chMessage || ' VALUES (';
+
+				-- add reason parameter to the exception statement
+				WHILE iParamCounter <= 10 DO
+					SET chParamName = 'Parameter' || CAST(iParamCounter AS CHAR);
+					MOVE rParameter TO rCompletion.{chParamName};
+					IF LASTMOVE(rParameter) AND (rParameter IS NOT NULL) THEN
+						SET chParamValue = rParameter;
+					ELSE
+						SET chParamValue = '';
+					END IF;
+					SET chException = chException || '''' || chParamValue || ''', ';
+					SET iParamCounter = iParamCounter + 1;
+				END WHILE;
+
+				SET chException = chException || '''' || chMpu ||''')';
+				SET rEnv."chException" = chException;
+				EVAL(chException);
+
+			END IF;
+		END IF;
+
+		RETURN TRUE;
+	END;
+

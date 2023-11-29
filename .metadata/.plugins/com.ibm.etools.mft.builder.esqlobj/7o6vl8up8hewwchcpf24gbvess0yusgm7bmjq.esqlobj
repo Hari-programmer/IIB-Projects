@@ -1,0 +1,25 @@
+CREATE COMPUTE MODULE ComIbmDnqAttributeExtraction_CopyCompletion
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		
+		DECLARE rNetworkInformation REFERENCE TO Environment;
+		CREATE FIELD Environment."ComIbmDni"."Dnq"."Properties"."NetworkInformation" AS rNetworkInformation;
+		DECLARE rCompletion  REFERENCE TO Environment; --@P09C
+                                                             -- begin @P09A
+		MOVE rCompletion TO InputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."Completion";
+		IF (NOT LASTMOVE(rCompletion)) THEN
+			MOVE rCompletion TO InputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT".(Name)*[1]."Response"."Completion";     --@P10C
+		END IF;
+		IF (NOT LASTMOVE(rCompletion)) THEN
+			MOVE rCompletion TO InputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT".(Name)*[1]."Notification"."Completion"; --@P10C
+		END IF;
+		
+		IF LASTMOVE(rCompletion) THEN
+                                                               -- end @P09A
+			CALL DnqUtil_CopyTree(rCompletion, rNetworkInformation);
+		END IF; --@P09A
+ 		
+		RETURN TRUE;
+	END;
+END MODULE;

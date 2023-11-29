@@ -1,0 +1,190 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		/*-------------------------------*\
+		|  Check for correct input queue  |
+		\*-------------------------------*/
+		DECLARE chInputQueue         CHAR; -- @P12A
+		DECLARE chInputQueueRequired CHAR; -- @P12A
+		DECLARE iMPU                 INT;  -- @P12A
+
+		IF Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeFin THEN -- @P12C begin
+			SET chInputQueueRequired = 'DNQ_K_TPLFIN';
+			SET iMPU = 2055;
+		ELSE
+			SET chInputQueueRequired = 'DNQ_K_TPLMX';
+			SET iMPU = 3055;
+		END IF;
+
+		SET chInputQueue =
+			SUBSTRING(     InputRoot.MQMD.SourceQueue
+			          FROM (  LENGTH(InputRoot.MQMD.SourceQueue)
+			                - LENGTH(chInputQueueRequired)
+			                + 1)
+			          FOR  LENGTH(chInputQueueRequired)
+			);
+
+		IF (chInputQueue <> chInputQueueRequired) THEN
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE iMPU
+			      VALUES( InputRoot.MQMD.SourceQueue,
+			              'DNQK' || CAST(iMPU AS CHAR) || 'E' );
+		END IF;                                                              -- @P12C end
+
+		/*-------------------------*\
+		|  Check for empty payload  |                                        -- @P17A begin
+		\*-------------------------*/
+		DECLARE chBodyName CHAR FIELDNAME(InputBody);
+		IF (   chBodyName LIKE 'MQ%'
+		    OR chBodyName = 'Properties')
+		THEN
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1050
+			      VALUES( InputRoot.MQMD.SourceQueue, 'DNQK1050E' );
+		END IF;                                                              -- @P17A end
+
+		/*---------------------------------------------------------*\
+		|  Check request elements that are common for FIN and MSIF  |
+		\*---------------------------------------------------------*/
+		DECLARE iLength INT;
+		DECLARE iLengthMax INT;
+		DECLARE rElementCheck REFERENCE TO InputRoot; -- @P05A
+
+		-- ----
+		--  OU
+		-- ----
+		MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.OU;                     -- @P16A begin
+		IF LASTMOVE(rElementCheck) THEN
+			SET iLength = LENGTH(TRIM(rElementCheck)); -- TRIM() to check for blank value
+			IF (iLength = 0) THEN
+				-- Empty element (i.e., no value specified)
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1121 VALUES( 'OU', 'DNQK1121E' );
+			ELSE
+				SET iLengthMax = 8;
+				IF (iLength > iLengthMax) THEN
+					-- Value too long
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1122
+						VALUES( rElementCheck, FIELDNAME(rElementCheck), iLengthMax, iLength, 'DNQK1122E' );
+				END IF;
+			END IF; -- Empty element ?
+		END IF; -- Element specified ?                                              @P16A end
+
+		-- ------
+		-- Domain
+		-- ------
+		MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.MsgStandardInfo.Domain; -- @P05A begin
+		IF LASTMOVE(rElementCheck) THEN
+			SET iLength = LENGTH(TRIM(rElementCheck)); -- TRIM() to check for blank value
+			IF (iLength = 0) THEN
+				-- Empty element (i.e., no value specified)
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1121 VALUES( 'Domain', 'DNQK1121E' );
+			END IF;
+		END IF; -- Element specified ?                                              @P05A end
+
+		-- --------------
+		-- TargetMerQueue
+		-- --------------
+		MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.TargetMerQueue; -- @P05C: DECLARE replaced with MOVE
+		IF NOT LASTMOVE(rElementCheck) THEN
+			-- Element not specified
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1120 VALUES( 'TargetMerQueue', 'DNQK1120E' );
+		ELSE
+			SET iLength = LENGTH(TRIM(rElementCheck)); -- @P05C: TRIM() to check for blank value
+			IF (iLength = 0) THEN
+				-- Empty element (i.e., no value specified)
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1121 VALUES( FIELDNAME(rElementCheck), 'DNQK1121E' );
+			ELSE
+				SET iLengthMax = 48;
+				IF (iLength > iLengthMax) THEN
+					-- Value too long
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1122
+						VALUES( rElementCheck, FIELDNAME(rElementCheck), iLengthMax, iLength, 'DNQK1122E' );
+				END IF;
+			END IF; -- Empty element ?
+		END IF;    -- Element specified ?
+
+		-- -----------
+		-- Description
+		-- -----------
+		MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.Description;
+		IF LASTMOVE(rElementCheck) THEN
+			SET iLength = LENGTH(rElementCheck);
+			SET iLengthMax = 512;
+			IF (iLength > iLengthMax) THEN
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1122
+					VALUES( rElementCheck, FIELDNAME(rElementCheck), iLengthMax, iLength, 'DNQK1122E' );
+			END IF;
+		END IF; -- Element specified ?
+
+		IF Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeMsif THEN -- @P12A begin
+
+			/** Backup folder DNF_O_FT in the Environment to restore it before generating the response message.
+			 ** Note that this folder is added or updated if one of following request elements is specified:
+			 ** - Msif.TransferOptionSet
+			 ** - Msif.AppHdr.MsgRef
+			 **/
+			SET Environment.Variables.ComIbmDni.DnqTplImport.DNF_O_FT = InputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT;
+
+			/*---------------------------------------------------*\
+			|  Check request elements that are specific for MSIF  |
+			\*---------------------------------------------------*/
+
+			-- -------
+			-- LocalDN
+			-- -------
+			MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.Msif.LocalDN;
+			IF LASTMOVE(rElementCheck) THEN
+				SET iLength = LENGTH(rElementCheck);
+				SET iLengthMax = 100;
+				IF (iLength > iLengthMax) THEN
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1122
+						VALUES( rElementCheck, FIELDNAME(rElementCheck), iLengthMax, iLength, 'DNQK1122E' );
+				END IF;
+			END IF; -- Element specified ?
+
+			-- --------
+			-- RemoteDN
+			-- --------
+			MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.Msif.RemoteDN;
+			IF LASTMOVE(rElementCheck) THEN
+				SET iLength = LENGTH(rElementCheck);
+				SET iLengthMax = 100;
+				IF (iLength > iLengthMax) THEN
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1122
+						VALUES( rElementCheck, FIELDNAME(rElementCheck), iLengthMax, iLength, 'DNQK1122E' );
+				END IF;
+			END IF; -- Element specified ?
+
+			-- -----------------
+			-- TransferOptionSet
+			-- -----------------
+			MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.Msif.TransferOptionSet;
+			IF LASTMOVE(rElementCheck) THEN
+				SET iLength = LENGTH(rElementCheck);
+				SET iLengthMax = 30;
+				IF (iLength > iLengthMax) THEN
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1122
+						VALUES( rElementCheck, FIELDNAME(rElementCheck), iLengthMax, iLength, 'DNQK1122E' );
+				ELSE
+					SET OutputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.SendMsg.Request.TransferOptionSet = rElementCheck;
+				END IF;
+			END IF; -- Element specified ?
+
+			-- -------------
+			-- AppHdr.MsgRef
+			-- -------------
+			MOVE rElementCheck TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.Msif.AppHdr.MsgRef;
+			IF LASTMOVE(rElementCheck) THEN
+				SET iLength = LENGTH(rElementCheck);
+				SET iLengthMax = 30;
+				IF (iLength > iLengthMax) THEN
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1122
+						VALUES( rElementCheck, FIELDNAME(rElementCheck), iLengthMax, iLength, 'DNQK1122E' );
+				ELSE
+					SET OutputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.SendMsg.Request.AppHdr.MsgRef = rElementCheck;
+				END IF;
+			END IF; -- Element specified ?
+
+		END IF; -- Environment.Variables.ComIbmDni.Dnq.NodeType is Msif ?     @P12A end
+
+		RETURN TRUE;
+	END;

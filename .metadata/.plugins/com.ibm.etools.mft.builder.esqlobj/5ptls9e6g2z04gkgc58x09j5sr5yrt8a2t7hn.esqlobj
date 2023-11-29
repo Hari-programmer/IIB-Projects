@@ -1,0 +1,20 @@
+CREATE FILTER MODULE constructor_Filter
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		IF Root.XMLNSC.root.Name='Gnaneswar' Then
+			--Propagate TO TERMINAL 'TRUE';
+			RETURN True;
+		ELSEIF Root.XMLNSC.root.Name='Hari' Then
+			--Propagate TO TERMINAL 'FALSE';
+			RETURN FALSE;
+		ELSE
+			--Propagate TO TERMINAL 'UNKNOWN';
+			RETURN UNKNOWN;
+				
+		
+		END IF;
+		
+	END;
+
+END MODULE;

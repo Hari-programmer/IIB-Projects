@@ -1,0 +1,151 @@
+CREATE COMPUTE MODULE ComIbmDnqErMsifOutput_CheckParms
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment; --@P01A
+		
+		IF Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.NewId IS NULL THEN
+			-- DnqInput node has to be before DnqErMsifOutput node
+	    	THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqkumsg' MESSAGE 3051 VALUES( 'DNQK3051E' );		  		
+		END IF;
+		
+        -- Accepting ClientReceives with payload, rejecting those without
+		IF InputRoot.MQRFH2.ComIbmDni.Dnf.InterAct.ClientReceive IS NOT NULL AND InputRoot.BLOB.BLOB IS NULL THEN
+	    	THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqkumsg' MESSAGE 3052 VALUES( 'ClientReceive' , 'DNQK3052E' );		  		
+		END IF;
+
+		IF InputRoot.MQRFH2.ComIbmDni.Dnf.InterAct.ServerReceive IS NOT NULL THEN
+	    	THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqkumsg' MESSAGE 3052 VALUES( 'ServerReceive' , 'DNQK3052E' );		  		
+		END IF;
+		
+        -- Accepting ClientSends with payload, rejecting those without
+		IF InputRoot.MQRFH2.ComIbmDni.Dnf.InterAct.ClientSend IS NOT NULL AND InputRoot.BLOB.BLOB IS NULL THEN
+	    	THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqkumsg' MESSAGE 3052 VALUES( 'ClientSend' , 'DNQK3052E' );		  		
+		END IF;
+
+		IF InputRoot.MQRFH2.ComIbmDni.Dnf.InterAct.ClientSend.MsgOptionSet IS NULL THEN
+
+			IF InputRoot.MQRFH2.ComIbmDni.Dnq.Properties.Sender IS NOT NULL AND 
+		       POSITION( 'optionset' IN TRIM(InputRoot.MQRFH2.ComIbmDni.Dnq.Properties.Sender) ) = 1 THEN
+			
+				-- get the optionset from the Sender in Properties as created by portal
+				SET OutputRoot.MQRFH2.ComIbmDni.Dnf.InterAct.ClientSend.MsgOptionSet = TRIM( SUBSTRING(InputRoot.MQRFH2.ComIbmDni.Dnq.Properties.Sender FROM POSITION('=' IN InputRoot.MQRFH2.ComIbmDni.Dnq.Properties.Sender)+1) );
+			
+/*			ELSE IF Environment.ComIbmDni.Dnq.Properties.DefaultOptionSet IS NOT NULL AND 
+				    Environment.ComIbmDni.Dnq.Properties.DefaultOptionSet <> '' THEN
+				-- use the node property to set a default option set
+				SET OutputRoot.MQRFH2.ComIbmDni.Dnf.InterAct.ClientSend.MsgOptionSet = Environment.ComIbmDni.Dnq.Properties.DefaultOptionSet;
+			ELSE
+				-- no option set, no further processing
+	    		THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqkumsg' MESSAGE 3050 VALUES( 'DNQK3050E' );		  		
+			END IF;
+*/			END IF;
+                                                                 -- begin @P01A
+		-- CODE MOVED FROM Compute node Finalize
+		
+		IF CARDINALITY( InputRoot.MQMD[] ) = 0
+		THEN
+		  -- message was created by ER UI
+		  IF CARDINALITY( InputRoot.MQRFH2[] ) = 0
+  		  THEN
+  		    DECLARE chTmp CHARACTER;
+  		    
+            CREATE PREVIOUSSIBLING OF OutputRoot.*[<] DOMAIN 'MQMD';  		  
+            Set OutputRoot.MQMD.UserIdentifier = '';            
+            Set OutputRoot.MQMD.PutDate = LEFT( chTmp, LENGTH( chTmp ) - 1 );
+            Set chTmp = REPLACE( SUBSTRING( CAST( CURRENT_TIME AS CHARACTER ) FROM 7 ), ':', '' );
+            Set chTmp = REPLACE( chTmp, '.', '' );
+            Set OutputRoot.MQMD.PutTime = LEFT( chTmp, LENGTH( chTmp ) - 2 );            
+            Set OutputRoot.MQMD.ApplIdentityData = '';
+            Set OutputRoot.MQMD.PutApplyType = '';
+            Set OutputRoot.MQMD.PutApplName = '';            
+            Set OutputRoot.MQMD.ApplOriginData = '';            
+            CREATE NEXTSIBLING OF OutputRoot.MQMD DOMAIN 'MQRFH2';          
+	        Set OutputRoot.MQRFH2.(MQRFH2.Field)NameValueCCSID = 1208;
+	        Set OutputRoot.MQRFH2.(MQRFH2.Field)CodedCharSetId = 1208;            
+		  ELSE
+		  	CREATE PREVIOUSSIBLING OF OutputRoot.MQRFH2 DOMAIN 'MQMD';
+		  END IF;
+
+		END IF;
+
+		-- Set message type to REQUEST as required for ClientSend messages
+		Set OutputRoot.MQMD.MsgType = 1;
+		
+		-- set reply queue and mgr
+		DECLARE chReplyToSource CHAR COALESCE(UPPER(TRIM(Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToSource)),'');
+		IF (chReplyToSource='') OR (chReplyToSource='MSG') THEN
+			DECLARE mqmdReplyQ CHAR TRIM(COALESCE(OutputRoot.MQMD.ReplyToQ,''));
+			IF (LENGTH(mqmdReplyQ) = 0) THEN
+				IF Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ IS NOT NULL AND 
+				   Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ <> '' THEN
+		          -- set REQUEST		
+				  SET OutputRoot.MQMD.MsgType = 1;
+				  SET OutputRoot.MQMD.ReplyToQ = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ;
+				  SET OutputRoot.MQMD.ReplyToQMgr = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQMgr;		  
+				END IF;
+			END IF;
+		ELSEIF (chReplyToSource='NODE') THEN
+			DECLARE nodeReplyQ CHAR TRIM(COALESCE(Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ,''));
+			IF (LENGTH(nodeReplyQ) > 0) THEN
+				SET OutputRoot.MQMD.MsgType = 1;
+				SET OutputRoot.MQMD.ReplyToQ = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ;
+				SET OutputRoot.MQMD.ReplyToQMgr = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQMgr;		  
+			END IF;
+		ELSE
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 3054 VALUES(chReplyToSource ,'DNQK3054E' );
+		END IF;
+
+		-- set format as required by EIAS
+		Set OutputRoot.MQRFH2.Format='MQSTR   ';
+		
+		-- set localDN and remoteDN
+		SET OutputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.SendMsg.Request.TransferOptions.LocalDN  = Environment.ComIbmDni.Dnq.Properties.LocalAddress;
+		SET OutputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.SendMsg.Request.TransferOptions.RemoteDN = Environment.ComIbmDni.Dnq.Properties.RemoteAddress;
+		
+		IF InputRoot.MQRFH2.ComIbmDni.Version IS NULL THEN
+		   Set OutputRoot.MQRFH2.ComIbmDni.Version  = '1.0';
+		END IF;
+  
+  		IF OutputRoot.MQRFH2.ComIbmDni.OU IS NULL OR OutputRoot.MQRFH2.ComIbmDni.OU = '' THEN
+		  -- Set WBI-FN OU
+		  SET OutputRoot.MQRFH2.ComIbmDni.OU = InputRoot.MQRFH2.ComIbmDni.Dnq.Properties.ExternalSystem.OU;
+		END IF;
+		
+		SET OutputRoot.MQRFH2.(MQRFH2.Field)CodedCharSetId = 1208;
+                                                                 -- begin @P02A
+		-- update ApplicationInformation, if message was created in MER
+		DECLARE rHistoryEntry REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.History.HistoryEntry[>];
+		
+		IF  LASTMOVE(rHistoryEntry) AND
+			(rHistoryEntry.Component = 'DNQ') AND
+			(rHistoryEntry.Service   = 'ER') AND
+			(rHistoryEntry.Function  = 'CREATE')
+			THEN
+			SET OutputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.*[>].Request.ApplicationInformation.Application = 'DNQMER';
+			SET OutputRoot.MQRFH2.ComIbmDni.Function.DNF_O_FT.*[>].Request.ApplicationInformation.User        = rHistoryEntry.UserId;
+		END IF;
+                                                                   -- end @P02A
+		-- use MQOutput with setIdentity property if needed
+		IF (InputRoot.MQMD.UserIdentifier <> Environment.ComIbmDni.Properties.Common.BrokerUID) THEN
+			SET Environment.Variables.ComIbmDni.DnqFinMsifServiceOutput.bSetIdentity = TRUE;
+		END IF;
+		
+		-- Retrieve Audit configuration
+		SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.Name = COALESCE(InputRoot.MQRFH2.ComIbmDni.OU,'DNFSYSOU');
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Type = 'DniMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Name = 'DniMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Type = 'DniOptionsMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Name = 'DnqER';
+		
+		-- add DnqMwhUpdateInsert request
+		SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.ExtensionId = 'ComIbmDnqER';
+                                                                 -- begin @P01A
+		END IF;
+
+		RETURN TRUE;
+	END;
+
+END MODULE;

@@ -1,0 +1,15 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/ BEGIN
+
+    DECLARE err REFERENCE TO InputLocalEnvironment.Variables.DatabaseError;
+
+    DECLARE statement CHAR err.Statement;
+    DECLARE code      INT  err.SqlCode;
+    DECLARE state     CHAR err.SqlState;
+    DECLARE native    INT  err.SqlNative;
+    DECLARE text      CHAR err.SqlText;
+
+    THROW USER EXCEPTION CATALOG 'dniccmsg' MESSAGE 7704 VALUES (
+    'DniMwhUpdate', statement, code, state, native, text, '$eventId', 'DNIW7704E');
+
+  END;
+

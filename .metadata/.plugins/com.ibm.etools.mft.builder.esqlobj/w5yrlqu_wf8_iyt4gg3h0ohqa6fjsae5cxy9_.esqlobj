@@ -1,0 +1,763 @@
+CREATE COMPUTE MODULE "ComIbmDniMessageAudit_WriteToDatabase"
+CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+
+/* ============================================================================
+ * Following processing is done:
+ * 1. Get the required resources (i.e., schema name and table name)
+ * 2. Get the data to be audited (and check it if required):
+ *    a. Data to be generated dynamically (e.g., audit log timestamp)
+ *    b. Data from MQMD (e.g., user id)
+ *    c. Data from MQRFH2 (e.g., message type and broker name)
+ *    d. MQRFH2 header itself (i.e., NameValueData fields)
+ *    e. Message body (including appropriate CCSID and Encoding)
+ * 3. Build up the required INSERT statement
+ * 4. Pass through the INSERT statement (including the required parameters)
+ * 5. Check the SQL code:
+ *    In case of an database error throw WBI FN exception DNIX2001E
+ *
+ * NOTE: We can NOT use a Database node for this task because we have to copy
+ *       the MQRFH2.NameValueData fields temporarily to an output message.
+ * ============================================================================
+ * FLAG REASON  RLSE DATE   ORIGIN COMMENT                                    
+ * ---- ------- ---- ------ ------ --------------------------------------------
+ * n/a   4337   1100 031031 D wga  "Copy" and insert ESQL code from node
+ *                                 DniSaveMsgAuditData.WriteToDatabase
+ * @P01  3794   1100 040107 D wga  ASBITSTREAM(): Replace parameter value
+ *                                 4294967296 with constant FolderBitStream
+ * @P02  5420   1100 040122 D sty  Implementation of DCR 45 Stage 1
+ * @P03  5761   1100 040428 D ne   Support for partitioned audit logs
+ * @P04  59xx   1100 040603 D ne   Defects 5922 .. 5924, 5929, 5932
+ * @P05  6406   1200 041012 D ne   DNIDCR45 Stage 2
+ * @P06  6615   1200 041117 D ne   DNIDCR55
+ * @P07 12096   2201 070402 D ne   Function data can be kept with audit data
+ * ========================================================================== */
+DECLARE bMsgAuditFound         BOOLEAN FALSE;                        /* @P02C */
+DECLARE bOptionsMsgAuditFound  BOOLEAN FALSE;                        /* @P02A */
+DECLARE chCategory             CHAR;                                 /* @P06A */
+DECLARE chFct                  CHAR    'DniAuditMessage';
+DECLARE chFlagSaveMQRFH2       CHAR;                                 /* @P02A */
+DECLARE chOptions              CHAR;                                 /* @P06A */
+DECLARE chSchema               CHAR;
+DECLARE chTable                CHAR;
+DECLARE chStmt                 CHAR;
+DECLARE iLength                INTEGER;
+DECLARE iLoop                  INTEGER;
+DECLARE iSQLCode               INTEGER 0;                            /* @P08C */
+DECLARE chSQLState             CHAR '';                              /* @P08A */
+DECLARE chSQLErrorText         CHAR '';                              /* @P08A */
+DECLARE iSQLNativeError        INTEGER 0;                            /* @P08A */
+/* ----- elements of msg to be audited  ------------------------------------- */
+DECLARE chTimeStamp            CHAR;
+DECLARE chCfgTimeStamp         CHAR;                                 /* @P05A */
+DECLARE chMessageId            CHAR;
+DECLARE chMessageType          CHAR;
+DECLARE chMessageGroup         CHAR;
+DECLARE chMessageFlow          CHAR;
+DECLARE chBroker               CHAR;
+DECLARE chNode                 CHAR;
+DECLARE chBusinessGroup        CHAR;
+DECLARE chExternalMessageId    CHAR;
+DECLARE chMQRFH2               CHAR;
+DECLARE chBodyCCSID            CHAR;
+DECLARE chBodyEncoding         CHAR;
+DECLARE blobBody               BLOB;
+DECLARE blobUTF8               BLOB;
+/* ----- elements for partitioned audit logs -------------------------------- */
+DECLARE chPAType               CHAR;                           /* begin @P03A */
+DECLARE chPAAdjustTZ           CHAR;
+DECLARE chPADays4Part          CHAR;
+DECLARE chPAParts4Cyc          CHAR;                             /* end @P03A */
+
+/*============================*\
+|  get the required resources  |
+\*============================*/
+
+IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+                                                                /* begin @P06D
+  DECLARE cfgRef REFERENCE TO
+    Environment.ComIbmDni.Properties.{InputRoot.MQRFH2.ComIbmDni.OU};
+
+  IF (cfgRef.DniOptionsMsgAudit.*.DniFlagSaveMQRFH2 IS NULL) THEN
+    SET chFlagSaveMQRFH2 = 'Yes';
+  ELSE
+    SET chFlagSaveMQRFH2 = cfgRef.DniOptionsMsgAudit.*.DniFlagSaveMQRFH2;  	
+  END IF;
+                                                                   end @P06D */
+  DECLARE ref REFERENCE TO InputLocalEnvironment.ComIbmDni;   /* begin @P06A */
+
+  IF (CARDINALITY(ref.Function.DniAuditMessage[]) > 0) THEN
+
+    SET chCategory = ref.Function.DniAuditMessage.Store.Request.Category;
+    SET chOptions  = ref.Function.DniAuditMessage.Store.Request.Options;
+
+  END IF;
+
+  MOVE ref TO Environment.ComIbmDni.Properties.{InputRoot.MQRFH2.ComIbmDni.OU};
+
+                                                                /* end @P06A */
+  Set chSchema      = ref.DniMsgAudit.*[1].DniSchemaAudit;
+  Set chTable       = ref.DniMsgAudit.*[1].DniTableMsgAudit;
+  Set chPAType      = ref.DniMsgAudit.*[1].DniPartIndTypePartMsgAudit;
+  Set chPAAdjustTZ  = ref.DniMsgAudit.*[1].DniTimeAdjustPartMsgAudit;
+  Set chPADays4Part = ref.DniMsgAudit.*[1].DniUserDaysPerPartPartMsgAudit;
+  Set chPAParts4Cyc = ref.DniMsgAudit.*[1].DniUserPartsPerCycPartMsgAudit;
+
+  IF (chOptions IS NOT NULL) THEN                             /* begin @P06A */
+    MOVE ref TO ref.DniOptionsMsgAudit.{chOptions};
+  ELSE
+    MOVE ref TO ref.DniOptionsMsgAudit.*[1];
+  END IF;                                                       /* end @P06A */
+
+  SET chFlagSaveMQRFH2 = COALESCE(ref.DniFlagSaveMQRFH2, 'Yes');      -- @P06A
+
+ELSE
+
+  DECLARE ref REFERENCE TO InputRoot.MQRFH2.ComIbmDni;        /* begin @P06A */
+
+  IF (CARDINALITY(ref.Function.DniAuditMessage[]) > 0) THEN
+
+    SET chCategory = ref.Function.DniAuditMessage.Store.Request.Category;
+    SET chOptions  = ref.Function.DniAuditMessage.Store.Request.Options;
+
+  END IF;                                                       /* end @P06A */
+
+  MOVE ref TO
+   InputRoot.MQRFH2.ComIbmDni.Properties.OU.ConfigObjectList.ConfigObject[1];
+
+  WHILE (     LASTMOVE(ref) = TRUE
+  	      AND (bMsgAuditFound = FALSE OR bOptionsMsgAuditFound = FALSE)) DO /* @P02C */
+
+    IF (ref.Type = 'DniMsgAudit') THEN
+
+      SET chSchema = THE (SELECT ITEM A.Value
+                            FROM ref.AttributeList.Attribute[] AS A
+                           WHERE A.Name = 'DniSchemaAudit');
+      SET chTable  = THE (SELECT ITEM A.Value
+                            FROM ref.AttributeList.Attribute[] AS A
+                           WHERE A.Name = 'DniTableMsgAudit');
+      
+      SET chPAType =                                           /* begin @P03A */
+        THE (SELECT ITEM A.Value
+               FROM ref.AttributeList.Attribute[] AS A
+              WHERE A.Name = 'DniPartIndTypePartMsgAudit');
+              
+      SET chPAAdjustTZ =
+        THE (SELECT ITEM A.Value
+               FROM ref.AttributeList.Attribute[] AS A
+              WHERE A.Name = 'DniTimeAdjustPartMsgAudit');
+              
+      SET chPADays4Part =
+        THE (SELECT ITEM A.Value
+               FROM ref.AttributeList.Attribute[] AS A
+              WHERE A.Name = 'DniUserDaysPerPartPartMsgAudit');
+              
+      SET chPAParts4Cyc =
+        THE (SELECT ITEM A.Value
+               FROM ref.AttributeList.Attribute[] AS A
+              WHERE A.Name = 'DniUserPartsPerCycPartMsgAudit');  /* end @P03A */
+      
+      SET bMsgAuditFound = TRUE;   /* CT is found, exit while loop *//* @P02C */
+      
+    ELSE
+      /* @P02A - begin */
+      IF (     (ref.Type = 'DniOptionsMsgAudit')                       -- @P06C
+           AND (chOptions IS NULL OR ref.Name = chOptions))            -- @P06C
+      THEN                                                             -- @P06C
+
+        SET chFlagSaveMQRFH2 = THE (SELECT ITEM A.Value
+                                      FROM ref.AttributeList.Attribute[] AS A
+                                     WHERE A.Name = 'DniFlagSaveMQRFH2');
+
+        IF (chFlagSaveMQRFH2 IS NULL) THEN
+          /* If the attribute is not found, assume 'Yes' for its value. */
+          SET chFlagSaveMQRFH2 = 'Yes';
+        END IF;
+        SET bOptionsMsgAuditFound = TRUE;   /* CT is found, exit while loop */
+
+      END IF;                          /* is ConfigObject of type 'DniOptionsMsgAudit'? */
+      /* @P02A - end */
+    END IF;                            /* is ConfigObject of type 'DniMsgAudit'? */
+    MOVE ref NEXTSIBLING;              /* next ConfigObject */
+    
+  END WHILE;
+
+END IF;
+
+/* ----- check if required resources are available ----- */
+IF (chSchema IS NULL) THEN
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2301
+  VALUES(chFct, 'DniSchemaAudit', 'DniMsgAudit', 'DNIX2301E');
+END IF;
+IF (chTable IS NULL) THEN
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2301
+  VALUES(chFct, 'DniTableMsgAudit', 'DniMsgAudit', 'DNIX2301E');
+END IF;
+
+/*============================*\
+|  get the data to be audited  |
+\*============================*/
+DECLARE pDniFolder REFERENCE TO InputRoot.MQRFH2.ComIbmDni;
+DECLARE chDniPath  CHAR                  'MQRFH2.ComIbmDni.';
+
+/*----------------------------------*\
+|  data to be generated dynamically  |
+\*----------------------------------*/
+
+SET chTimeStamp = CAST (CURRENT_GMTTIMESTAMP AS CHAR);
+
+/* map the string "GMTTIMESTAMP 'yyyy-mm-dd hh:mm:ss'" */
+/*      to string "yyyy-mm-dd hh:mm:ss"                */      /* begin @P05C */
+SET chTimeStamp = SUBSTRING(chTimeStamp FROM POSITION('''' IN chTimeStamp) + 1);
+SET chTimeStamp = SUBSTRING(chTimeStamp FROM 1
+                                         FOR POSITION('''' IN chTimeStamp) - 1);
+                                     	
+/* make timestamp DB2-compliant (required for USS) */
+SET chTimeStamp = SUBSTRING(chTimeStamp FROM 1 FOR 10) || '-' ||
+                  SUBSTRING(chTimeStamp FROM 12 FOR 2) || '.' ||
+                  SUBSTRING(chTimeStamp FROM 15 FOR 2) || '.' ||
+                  SUBSTRING(chTimeStamp FROM 18);                /* end @P05C */
+/* ------------------------------------------------------------------------------------------------- */
+
+                                                               /* begin @P06C */
+SET chNode = COALESCE(chCategory,
+                      InputLocalEnvironment.Variables.ComIbmDni.AuditNode);
+
+IF (chNode IS NOT NULL) THEN
+
+  SET iLength = LENGTH(chNode);
+  IF (iLength > 254) THEN
+
+    IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+      VALUES( chFct, chNode, 'LocalEnvironment.ComIbmDni.Function' ||
+             '.DniAuditMessage.Store.Request.Category', 254, iLength,
+             'DNIX2304E');
+    ELSE
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+      VALUES( chFct, chNode, 'MQRFH2.ComIbmDni.Function.DniAuditMessage' ||
+             '.Store.Request.Category', 254, iLength, 'DNIX2304E');
+    END IF;
+  	
+  END IF;
+
+  -- If no value was specified for node property Audit node ID and the Category
+  -- property of ComIbmDni.Function.DniAuditMessage.Store.Request is not set, a
+  -- NULL value should be assigned to the DB field AM_NODE.
+
+  IF (LENGTH(chNode) < 1 ) THEN
+    SET chNode = NULL;
+  END IF;
+
+END IF;                                                         /* end @P06C */
+
+/*-----------------------*\
+|  data from MQMD header  |
+\*-----------------------*/
+SET blobUTF8 = CAST(InputRoot.MQMD.ReplyToQMgr AS BLOB CCSID 1208);
+IF (blobUTF8 IS NOT NULL) THEN
+  SET iLength = LENGTH(blobUTF8);
+  IF (iLength > 48) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, InputRoot.MQMD.ReplyToQMgr, 'MQMD.ReplyToQMgr', 48, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+SET blobUTF8 = CAST(InputRoot.MQMD.ReplyToQ AS BLOB CCSID 1208);
+IF (blobUTF8 IS NOT NULL) THEN 
+  SET iLength = LENGTH(blobUTF8);
+  IF (iLength > 48) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, InputRoot.MQMD.ReplyToQ, 'MQMD.ReplyToQ', 48, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+
+/*-------------------------*\
+|  data from MQRFH2 header  |
+\*-------------------------*/
+SET chMessageType = InputRoot.MQRFH2.mcd.Type;
+IF (chMessageType IS NOT NULL) THEN
+  SET iLength = LENGTH(chMessageType);
+  IF (iLength > 254) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, chMessageType, 'MQRFH2.mcd.Type', 254, iLength, 'DNIX2304E');
+  END IF;
+  IF (iLength < 1 ) THEN
+    SET chMessageType = NULL;
+  END IF;
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+SET chMessageGroup = pDniFolder.MessageGroup;
+IF (chMessageGroup IS NOT NULL) THEN
+  SET iLength = LENGTH(chMessageGroup);
+  IF (iLength > 50) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, chMessageGroup, chDniPath || 'MessageGroup', 50, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+SET chBusinessGroup = pDniFolder.BusinessGroup;
+IF (chBusinessGroup IS NOT NULL) THEN
+  SET iLength = LENGTH(chBusinessGroup);
+  IF (iLength > 50) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, chBusinessGroup, chDniPath || 'BusinessGroup', 50, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+SET chExternalMessageId = pDniFolder.ExternalMessageId;
+IF (chExternalMessageId IS NOT NULL) THEN
+  SET iLength = LENGTH(chExternalMessageId);
+  IF (iLength > 50) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, chExternalMessageId, chDniPath || 'ExternalMessageId', 50, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+
+/*----------------------------------------*\
+|  data from MQRFH2 folder or Environment  |
+\*----------------------------------------*/
+DECLARE prop REFERENCE TO pDniFolder.Properties;               /* begin @P05A */
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN 
+  MOVE prop TO Environment.ComIbmDni.Properties;
+  SET chDniPath = 'Environment.ComIbmDni.';
+END IF;
+
+SET chCfgTimeStamp = prop.Common.LastUpdate;
+IF (chCfgTimeStamp IS NULL) THEN
+	
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302
+  VALUES(chFct, chDniPath || 'Properties.Common.LastUpdate', 'DNIX2302E');
+  
+ELSE
+	
+  SET iLength = LENGTH(chCfgTimeStamp);
+  IF (iLength = 0) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2303
+    VALUES(chFct, chDniPath || 'Properties.Common.LastUpdate', 'DNIX2303E');
+  END IF;
+  
+  IF (   iLength < 19       /* format is neither YYYY-MM-DDTHH:MM:SS        */
+      OR iLength > 26) THEN /*           nor     YYYY-MM-DDTHH:MM:SS.NNNNNN */
+
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2305
+    VALUES(chFct, chCfgTimeStamp,
+           chDniPath || 'Properties.Common.LastUpdate', 'DNIX2305E');
+  ELSE
+  	
+    /* ----- make timestamp DB2-compliant (required for USS) ----- */
+    SET chCfgTimeStamp = SUBSTRING(chCfgTimeStamp FROM 1 FOR 10) || '-' ||
+                         SUBSTRING(chCfgTimeStamp FROM 12 FOR 2) || '.' ||
+                         SUBSTRING(chCfgTimeStamp FROM 15 FOR 2) || '.' ||
+                         SUBSTRING(chCfgTimeStamp FROM 18);
+  END IF;  
+  
+END IF;                                                          /* end @P05A */
+/* ------------------------------------------------------------------------------------------------- */
+SET chBroker = prop.Common.Broker;                                   /* @P05C */
+IF (chBroker IS NOT NULL) THEN
+  SET iLength = LENGTH(chBroker);
+  IF (iLength > 254) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, chBroker, chDniPath || 'Properties.Common.Broker', 254, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+/* ------------------------------------------------------------------------------------------------- */
+SET chMessageFlow = prop.Common.MessageFlow;                         /* @P05C */
+IF (chMessageFlow IS NOT NULL) THEN
+  SET iLength = LENGTH(chMessageFlow);
+  IF (iLength > 254) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, chMessageFlow, chDniPath || 'Properties.Common.MessageFlow', 254, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+
+-- Reset chDniPath to origin 
+SET chDniPath = 'MQRFH2.ComIbmDni.';
+
+
+/*----------------------*\
+|  MQRFH2 header itself  |
+\*----------------------*/
+IF (chFlagSaveMQRFH2 = 'No') THEN   /* @P02A */
+  SET chMQRFH2 =  NULL;             /* @P02A */
+ELSE                                /* @P02A */
+
+  /* ===== 1. copy NameValueData folder from MQRFH2 to output message ===== */
+
+  DECLARE folder REFERENCE TO InputRoot.MQRFH2.NameValueCCSID;
+  DECLARE ref    REFERENCE TO OutputRoot;                            /* @P05A */
+
+  MOVE folder NEXTSIBLING;
+  SET iLoop = 1;
+
+  WHILE (LASTMOVE(folder) = TRUE) DO
+
+    SET OutputRoot.MQRFH2.BodyMQRFH2.NameValueData[iLoop].{FIELDNAME(folder)} = folder;
+
+    IF (FIELDNAME(folder) = 'ComIbmDni') THEN                  /* begin @P05A */
+
+      -- DNIDCR45: Remove the configuration data (ComIbmDni.Properties group)
+      --           from the audit data.
+
+      MOVE ref TO
+        OutputRoot.MQRFH2.BodyMQRFH2.NameValueData[iLoop].ComIbmDni.Properties;
+      DETACH ref;
+
+      -- DNIDCR45: If the function data (ComIbmDni.Function group) should not
+      --           be kept, remove it from the audit data.
+
+                                                               /* begin @P07A */
+      DECLARE chFlagKeepFunction CHAR
+        InputLocalEnvironment.Variables.ComIbmDni.KeepFunction;
+
+      IF (    chFlagKeepFunction IS NULL
+      	   OR UPPER(chFlagKeepFunction) <> 'YES')
+      THEN                                                       /* end @P07A */
+
+        MOVE ref TO
+          OutputRoot.MQRFH2.BodyMQRFH2.NameValueData[iLoop].ComIbmDni.Function;       
+        DETACH ref;
+
+      END IF;                                                        /* @P07A */
+
+    END IF;                                                      /* end @P05A */
+
+    MOVE folder NEXTSIBLING;
+    SET iLoop = iLoop + 1;
+    
+  END WHILE;
+  
+  /*----------------------------------------------------------------------------*\
+  |  Next 2 checkings are unnecessary. Note that OutputRoot.MQRFH2.BodyMQRFH2    |
+  |  - IS (!) NOT (!) NULL and                                                   |
+  |  - contains at least one NameValueData field                                 |
+  |  because at least the ComIbmDni folder must be present. Otherwise, the       |
+  |  WBI for FN exception DNIX2301E would already have been thrown (indicating   |
+  |  that attribute 'DniSchemaAudit' of CT 'DniMsgAudit' is missing in           |
+  |  MQRFH2.ComIbmDni.Properties).                                               |
+  |                                                                              |
+  |  IF (OutputRoot.MQRFH2.BodyMQRFH2 IS NULL) THEN                              |
+  |    SET chMQRFH2 = NULL;                                                      |
+  |  ELSE                                                                        |
+  |    IF (OutputRoot.MQRFH2.BodyMQRFH2.NameValueData IS NULL) THEN              |
+  |      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2302         |
+  |      VALUES(chFct, chDniPath || 'MQRFH2.NameValueData', 'DNIX2302E');        |
+  |    ELSE                                                                      |
+  |      ...                                                                     |
+  \*----------------------------------------------------------------------------*/
+
+  /* ===== 2. get all NameValueData fields within one string ===== */
+  DECLARE iCCSID INTEGER;
+  SET iCCSID = CAST(InputRoot.MQRFH2.(MQRFH2.Field)NameValueCCSID AS INTEGER);
+  SET chMQRFH2 = CAST(ASBITSTREAM(OutputRoot.MQRFH2.BodyMQRFH2
+                                  CCSID   iCCSID
+                                  OPTIONS BITOR(FolderBitStream, ValidateNone)) /* @P01C: Value 4294967296 replaced with constant FolderBitStream */
+                      AS CHAR
+                      CCSID iCCSID);
+  /* ===== 3. check for maximum length ===== */
+  IF (LENGTH(chMQRFH2) > 104857600) THEN /* more than 100 MB */
+    /* ===== create list of all NameValueData fields ===== */
+    DECLARE chList CHAR '';
+    DECLARE pRefElt REFERENCE TO InputRoot.MQRFH2.NameValueCCSID;
+    MOVE pRefElt NEXTSIBLING;
+    SET iLoop = 0;
+    WHILE (LASTMOVE(pRefElt) = TRUE) DO
+      SET iLoop = iLoop + 1;
+      IF (iLoop > 1) THEN
+        SET chList = chList || ', ';
+      END IF;
+      SET chList = chList || FIELDNAME(pRefElt);
+      MOVE pRefElt NEXTSIBLING;
+    END WHILE; /* end looping NameValueData fields */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2308
+      VALUES(iLoop, chList, 'DNIX2308E');
+  END IF;
+END IF; /* must MQRFH2 be saved ? */ /* @P02A */
+
+/*--------------*\
+|  message body  |
+\*--------------*/
+SET blobBody = NULL;
+IF (FIELDNAME(InputBody) NOT LIKE 'MQ%') THEN
+  SET blobBody = BITSTREAM(InputBody);
+  SET iLength = LENGTH(blobBody);
+  IF (iLength > 104857600) THEN /* more than 100 MB */
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2304
+    VALUES(chFct, (SUBSTRING( CAST (blobBody AS CHAR) FROM 3 FOR 97) || '...'),
+           'Body', 104857600, iLength, 'DNIX2304E');
+  END IF;
+END IF;
+
+/*--------------------*\
+|  CCSID and encoding  |
+\*--------------------*/
+SET chBodyCCSID    = NULL;
+SET chBodyEncoding = NULL;
+IF (blobBody IS NOT NULL) THEN
+  /* get last header preceding the body that is neither a CICS nor an IMS information header */
+  SET iLength = CARDINALITY(InputRoot.*[]) - 1; /* start with preceding header */
+  SET iLoop = iLength;
+  WHILE (iLoop > 0) DO
+    IF (    FIELDNAME(InputRoot.*[iLoop]) <> 'MQCIH'
+        AND FIELDNAME(InputRoot.*[iLoop]) <> 'MQIIH') THEN
+      IF (InputRoot.*[iLoop].CodedCharSetId IS NOT NULL) THEN
+        SET chBodyCCSID = CAST(InputRoot.*[iLoop].CodedCharSetId AS CHAR);
+      END IF;
+      IF (InputRoot.*[iLoop]."Encoding" IS NOT NULL) THEN
+        SET chBodyEncoding = CAST(InputRoot.*[iLoop]."Encoding" AS CHAR);
+      END IF;
+      SET iLoop = 0; /* exit the loop */
+    ELSE
+      SET iLoop = iLoop - 1; /* next header              */
+    END IF;                  /* neither MQCIH nor MQIIH? */
+  END WHILE;                 /* end of looping headers   */
+END IF;                      /* body available */
+
+/*----------------------------*\
+|  build up the SQL statement  |
+\*----------------------------*/
+IF (chPAType IS NULL) THEN                                           /* @P03A */
+
+  SET chStmt =    'INSERT INTO ' || chSchema || '.' || chTable || '('
+               || ' AM_LOG_GMT_TS,AM_AUDIT_GMT_TS,AM_CFG_GMT_TS,AM_USER_ID,AM_OU_NAME,AM_MQRFH2,AM_BODY_CCSID,AM_BODY_ENCODING,AM_BODY,AM_MSG_ID,AM_MSG_TYPE,AM_EXT_MSG_ID,AM_MSG_GRP_ID,AM_BUS_GRP_ID,AM_REPLY_TO_QMGR,AM_REPLY_TO_Q,AM_BROKER,AM_MSG_FLOW,AM_NODE,AM_APPL_NAME'
+               || ') VALUES (CURRENT TIMESTAMP - CURRENT TIMEZONE,?,?,?,?,CAST(? AS CLOB(100M)),?,?,CAST(? AS BLOB(100M)),?,?,?,?,?,?,?,?,?,?,?)';
+
+ELSE                                                      /* begin @P03A @P04C*/
+
+  DECLARE chPartitionInd CHAR;
+  SET chPartitionInd =
+
+    CASE UPPER(chPAType)
+      WHEN 'USER'  THEN '1 + MOD(( DAYS( CURRENT TIMESTAMP - CURRENT TIMEZONE'
+                     ||                ' + ' || COALESCE(chPAAdjustTZ, '0')
+                     ||                ' HOURS)'
+                     ||          ' - 731641) / '
+                     ||          COALESCE(chPADays4Part, '7') || ', '
+                     ||          COALESCE(chPAParts4Cyc, '4') || ')'
+      WHEN 'MONTH' THEN 'MONTH(CURRENT TIMESTAMP - CURRENT TIMEZONE + '
+                     ||        COALESCE(chPAAdjustTZ, '0') || ' HOURS)'
+      WHEN 'DOW'   THEN 'DAYOFWEEK_ISO( CURRENT TIMESTAMP - CURRENT TIMEZONE'
+                     ||               ' + ' || COALESCE(chPAAdjustTZ, '0')
+                     ||               ' HOURS)'
+      WHEN 'DOM'   THEN 'DAYOFMONTH(CURRENT TIMESTAMP - CURRENT TIMEZONE + '
+                     ||             COALESCE(chPAAdjustTZ, '0') || ' HOURS)'
+
+    END;                                                         /* end @P04C */
+
+  IF (chPartitionInd IS NULL) THEN
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+    VALUES('DniSaveMsgAuditData', 'DniPartIndTypePartMsgAudit',
+           'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+  END IF;
+
+  SET chStmt =    'INSERT INTO ' || chSchema || '.' || chTable || '('
+               || ' AM_PARTITION_IND,AM_DS_MEMBER,AM_LOG_GMT_TS,AM_AUDIT_GMT_TS,AM_CFG_GMT_TS,AM_USER_ID,AM_OU_NAME,AM_MQRFH2,AM_BODY_CCSID,AM_BODY_ENCODING,AM_BODY,AM_MSG_ID,AM_MSG_TYPE,AM_EXT_MSG_ID,AM_MSG_GRP_ID,AM_BUS_GRP_ID,AM_REPLY_TO_QMGR,AM_REPLY_TO_Q,AM_BROKER,AM_MSG_FLOW,AM_NODE,AM_APPL_NAME'
+               || ') VALUES (' || chPartitionInd || ',CURRENT MEMBER,CURRENT TIMESTAMP - CURRENT TIMEZONE,?,?,?,?,CAST(? AS CLOB(100M)),?,?,CAST(? AS BLOB(100M)),?,?,?,?,?,?,?,?,?,?,?)';
+
+END IF;                                                          /* end @P03A */
+                                                                 -- begin @P01A
+/*------------------------*\
+|  check for long user ID  |
+\*------------------------*/
+DECLARE chUserId    CHAR InputRoot.MQMD.UserIdentifier;
+DECLARE rLongUserId REFERENCE TO InputRoot.MQRFH2.ComIbmDni.UserIdentifier;
+
+IF LASTMOVE(rLongUserId) AND (LENGTH(rLongUserId) > 0) THEN
+	SET chUserId = DecryptSecVal(rLongUserId);
+END IF;
+                                                                   -- end @P01A
+/*----------------------*\
+|  invoke SQL statement  |
+\*----------------------*/
+                                                                     -- @P08A begin
+BEGIN
+
+  DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+
+    IF (SQLCODE = 0) THEN
+
+      -- Retrieve the expected application encoding scheme
+
+      DECLARE stmt CHAR 'SELECT CURRENT APPLICATION ENCODING SCHEME FROM SYSIBM.SYSDUMMY1';
+      SET OutputLocalEnvironment.Variables.Result[] = PASSTHRU(stmt);
+
+      -- Check all characters of the value for the AM_MQRFH2 field, and substitute those
+      -- characters that cannot be converted to the expected application encoding scheme
+      -- with a '?' character
+
+      DECLARE cp INT OutputLocalEnvironment.Variables.Result.*[1];
+      DECLARE i INT LENGTH(chMQRFH2);
+      WHILE (i > 0) DO
+        DECLARE CONTINUE HANDLER FOR SQLSTATE LIKE '%' BEGIN
+          SET chMQRFH2 = OVERLAY(chMQRFH2 PLACING '?' FROM i);
+        END;
+        DECLARE data BLOB CAST(SUBSTRING(chMQRFH2 FROM i FOR 1) AS BLOB CCSID cp);
+	    SET i = i - 1;
+      END WHILE;
+
+      -- Re-execute the PASSTHRU statement with the escaped value for the AM_MQRFH2 field
+
+      PASSTHRU(chStmt,
+      /* AM_AUDIT_GMT_TS  */  chTimeStamp               ,
+      /* AM_CFG_GMT_TS    */  chCfgTimeStamp            ,
+      /* AM_USER_ID       */  chUserId                  ,
+      /* AM_OU_NAME       */  pDniFolder.OU             ,
+      /* AM_MQRFH2        */  chMQRFH2                  ,
+      /* AM_BODY_CCSID    */  chBodyCCSID               ,
+      /* AM_BODY_ENCODING */  chBodyEncoding            ,
+      /* AM_BODY          */  blobBody                  ,
+      /* AM_MSG_ID        */  InputRoot.MQMD.MsgId      ,
+      /* AM_MSG_TYPE      */  chMessageType             ,
+      /* AM_EXT_MSG_ID    */  chExternalMessageId       ,
+      /* AM_MSG_GRP_ID    */  chMessageGroup            ,
+      /* AM_BUS_GRP_ID    */  chBusinessGroup           ,
+      /* AM_REPLY_TO_QMGR */  InputRoot.MQMD.ReplyToQMgr,
+      /* AM_REPLY_TO_Q    */  InputRoot.MQMD.ReplyToQ   ,
+      /* AM_BROKER        */  chBroker                  ,
+      /* AM_MSG_FLOW      */  chMessageFlow             ,
+      /* AM_NODE          */  chNode                    ,
+      /* AM_APPL_NAME     */  InputRoot.MQMD.PutApplName  );
+
+    END IF; -- (SQLCODE = 0)
+
+    SET iSQLCode        = SQLCODE;
+    SET iSQLNativeError = SQLNATIVEERROR;
+    SET chSQLState      = SQLSTATE;
+    SET chSQLErrorText  = SQLERRORTEXT;
+
+  END;
+                                                                     -- @P08A end
+  PASSTHRU(chStmt,
+  /* AM_AUDIT_GMT_TS  */  chTimeStamp                  ,
+  /* AM_CFG_GMT_TS    */  chCfgTimeStamp               ,             /* @P05A */
+  /* AM_USER_ID       */  chUserId                     , --@P01A
+  /* AM_OU_NAME       */  pDniFolder.OU                ,
+  /* AM_MQRFH2        */  chMQRFH2                     ,
+  /* AM_BODY_CCSID    */  chBodyCCSID                  ,
+  /* AM_BODY_ENCODING */  chBodyEncoding               ,
+  /* AM_BODY          */  blobBody                     ,
+  /* AM_MSG_ID        */  InputRoot.MQMD.MsgId         ,
+  /* AM_MSG_TYPE      */  chMessageType                ,
+  /* AM_EXT_MSG_ID    */  chExternalMessageId          ,
+  /* AM_MSG_GRP_ID    */  chMessageGroup               ,
+  /* AM_BUS_GRP_ID    */  chBusinessGroup              ,
+  /* AM_REPLY_TO_QMGR */  InputRoot.MQMD.ReplyToQMgr   ,
+  /* AM_REPLY_TO_Q    */  InputRoot.MQMD.ReplyToQ      ,
+  /* AM_BROKER        */  chBroker                     ,
+  /* AM_MSG_FLOW      */  chMessageFlow                ,
+  /* AM_NODE          */  chNode                       ,
+  /* AM_APPL_NAME     */  InputRoot.MQMD.PutApplName     ); /* end of PASSTHRU() */
+
+END;                                                                 /* @P08A */
+
+/*-----------------------*\
+|  check SQL return code  |
+\*-----------------------*/
+--SET iSQLCode = SQLCODE;                                            /* @P08D */
+IF (iSQLCode <> 0) THEN
+                                                                     -- @P08D begin
+--DECLARE chSQLState             CHAR;
+--DECLARE chSQLErrorText         CHAR;
+--DECLARE iSQLNativeError        INTEGER;
+
+--SET iSQLNativeError = SQLNATIVEERROR;
+--SET chSQLState      = SQLSTATE;
+--SET chSQLErrorText  = SQLERRORTEXT;
+                                                                     -- @P08D begin
+  -- Unknown column or table name ..
+  --  .. maybe because of invalid configuration data (DNIX2309E).
+
+  IF (iSQLNativeError = -206) THEN                       /* begin @P03A @P04C */
+
+    DECLARE chVal  CHAR;
+    DECLARE iPos   INTEGER;
+
+    --
+    -- Extract invalid value from sql error text:
+    -- ' .. ERROR:  <value> IS NOT .. '
+    --
+    SET iPos  = POSITION('ERROR: ' IN chSQLErrorText) + LENGTH('ERROR: ');
+    SET chVal = SUBSTRING(chSQLErrorText FROM iPos + 1);
+    SET iPos  = POSITION(' IS NOT' IN chVal);
+    SET chVal = SUBSTRING(chVal FROM 1 FOR iPos - 1);
+
+    IF (chVal = UPPER(chPAAdjustTZ)) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+      VALUES('DniSaveMsgAuditData', 'DniTimeAdjustPartMsgAudit',
+             'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+    END IF;
+
+    IF (chVal = UPPER(chPADays4Part)) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+      VALUES('DniSaveMsgAuditData', 'DniUserDaysPerPartPartMsgAudit',
+             'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+    END IF;
+
+    IF (chVal = UPPER(chPAParts4Cyc)) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+      VALUES('DniSaveMsgAuditData', 'DniUserPartsPerCycPartMsgAudit',
+             'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+    END IF;
+
+  END IF;                                                  /* end @P03A @P04C */
+
+  -- Unsatisfied check constraint ..
+  --  .. maybe because of invalid configuration data (DNIX2309E).
+
+  IF (iSQLNativeError = -545) THEN                             /* begin @P04A */
+
+    IF (chPADays4Part < 0) THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+      VALUES('DniSaveMsgAuditData', 'DniUserDaysPerPartPartMsgAudit',
+             'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+    ELSE
+
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+      VALUES('DniSaveMsgAuditData', 'DniUserPartsPerCycPartMsgAudit',
+             'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+    END IF;
+           
+  END IF;
+
+  -- Division by zero ..
+  --  .. maybe because of invalid configuration data (DNIX2309E).
+
+  IF (iSQLNativeError = -802) THEN
+
+    IF (chPADays4Part = '0') THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+      VALUES('DniSaveMsgAuditData', 'DniUserDaysPerPartPartMsgAudit',
+             'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+    END IF;
+
+    IF (chPAParts4Cyc = '0') THEN
+      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2309
+      VALUES('DniSaveMsgAuditData', 'DniUserPartsPerCycPartMsgAudit',
+             'DniMsgAudit', InputRoot.MQRFH2.ComIbmDni.OU, 'DNIX2309E');
+    END IF;
+
+  END IF;                                                        /* end @P04A */
+
+  -- Other database error or unknown reason (DNIX2001E).
+
+  SET chStmt = chStmt || ' [Parameters: <'
+                      || chTimeStamp                   || '>, <'
+                      || InputRoot.MQMD.UserIdentifier || '>, '
+                      || '... ]';
+
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2001
+  VALUES('DniMessageAudit', chSchema, chTable, iSQLCode, chSQLState,
+          iSQLNativeError, chSQLErrorText, chStmt, 'DNIX2001E');
+
+END IF;
+
+RETURN true;
+END;
+                                                                 -- begin @P02A
+CREATE FUNCTION DecryptSecVal(IN encsecval CHAR)
+	RETURNS CHAR
+	LANGUAGE JAVA
+	EXTERNAL NAME "com.ibm.dni.sec.SecurityImplementation.decryptSecVal";
+                                                                   -- end @P02A
+END MODULE;

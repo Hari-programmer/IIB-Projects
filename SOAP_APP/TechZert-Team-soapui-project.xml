@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<con:soapui-project id="644eac62-7c2b-468e-a075-9e3c49a58cc3" activeEnvironment="Default" name="TechZert_Team" resourceRoot="${projectDir}" soapui-version="5.5.0" abortOnError="false" runType="SEQUENTIAL" xmlns:con="http://eviware.com/soapui/config"><con:settings/><con:interface xsi:type="con:WsdlInterface" id="aa95afee-a349-489b-aa38-fe66936133b2" wsaVersion="NONE" name="TechZert_TeamSOAP" type="wsdl" bindingName="{http://www.TechZert_Team.org/TechZert_Team/}TechZert_TeamSOAP" soapVersion="1_1" anonymous="optional" definition="TechZert_Team.wsdl" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings/><con:definitionCache type="TEXT" rootPart="file:\C:\Users\Hari\IBM\IIBT10\workspace\SOAP_APP\TechZert_Team.wsdl"><con:part><con:url>file:\C:\Users\Hari\IBM\IIBT10\workspace\SOAP_APP\TechZert_Team.wsdl</con:url><con:content><![CDATA[<wsdl:definitions name="TechZert_Team" targetNamespace="http://www.TechZert_Team.org/TechZert_Team/" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tns="http://www.TechZert_Team.org/TechZert_Team/" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <wsdl:documentation>
+    <wsdl:appinfo source="WMQI_APPINFO">
+      <MRWSDLAppInfo imported="true">
+        <generatedXSD location="TechZert_Team_InlineSchema1.xsd"/>
+        <binding hasEncoding="false" imported="true" name="TechZert_TeamSOAP" originalBindingStyle="document"/>
+      </MRWSDLAppInfo>
+    </wsdl:appinfo>
+  </wsdl:documentation>
+  <wsdl:types>
+    <xsd:schema targetNamespace="http://www.TechZert_Team.org/TechZert_Team/" xmlns:ibmSchExtn="http://www.ibm.com/schema/extensions">
+      <xsd:include schemaLocation="TechZert_Team_InlineSchema1.xsd"/>
+    </xsd:schema>
+  </wsdl:types>
+  <wsdl:message name="Employee_DetailsRequest">
+    <wsdl:part element="tns:Employee_Details" name="parameters"/>
+  </wsdl:message>
+  <wsdl:message name="Employee_DetailsResponse">
+    <wsdl:part element="tns:Employee_DetailsResponse" name="parameters"/>
+  </wsdl:message>
+  <wsdl:portType name="TechZert_Team">
+    <wsdl:operation name="Employee_Details">
+      <wsdl:input message="tns:Employee_DetailsRequest"/>
+      <wsdl:output message="tns:Employee_DetailsResponse"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="TechZert_TeamSOAP" type="tns:TechZert_Team">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="Employee_Details">
+      <soap:operation soapAction="http://www.TechZert_Team.org/TechZert_Team/Employee_Details"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="TechZert_Team">
+    <wsdl:port binding="tns:TechZert_TeamSOAP" name="TechZert_TeamSOAP">
+      <soap:address location="http://127.0.0.1:7801/TechZert_Team/getEmpDeatils"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>]]></con:content><con:type>http://schemas.xmlsoap.org/wsdl/</con:type></con:part><con:part><con:url>file:\C:\Users\Hari\IBM\IIBT10\workspace\SOAP_APP\TechZert_Team_InlineSchema1.xsd</con:url><con:content><![CDATA[<xsd:schema targetNamespace="http://www.TechZert_Team.org/TechZert_Team/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:ibmSchExtn="http://www.ibm.com/schema/extensions" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tns="http://www.TechZert_Team.org/TechZert_Team/" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+  <xsd:element ibmSchExtn:docRoot="true" name="Employee_Details">
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:element name="Emp_Id" type="xsd:int"/>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+  <xsd:element ibmSchExtn:docRoot="true" name="Employee_DetailsResponse">
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:element name="Name" type="xsd:string"/>
+        <xsd:element name="Mobile" type="xsd:int"/>
+        <xsd:element name="From" type="xsd:string"/>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+</xsd:schema>]]></con:content><con:type>http://www.w3.org/2001/XMLSchema</con:type></con:part></con:definitionCache><con:endpoints><con:endpoint>http://127.0.0.1:7801/TechZert_Team/getEmpDeatils</con:endpoint></con:endpoints><con:operation id="289e64d4-2f90-44ea-bd92-ee543c0f0faf" isOneWay="false" action="http://www.TechZert_Team.org/TechZert_Team/Employee_Details" name="Employee_Details" bindingOperationName="Employee_Details" type="Request-Response" inputName="" receivesAttachments="false" sendsAttachments="false" anonymous="optional"><con:settings/><con:call id="b3ba2daf-c015-4766-b260-1a86da3cd777" name="Request 1"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:encoding>UTF-8</con:encoding><con:endpoint>http://127.0.0.1:7800/TechZert_Team/getEmpDeatils</con:endpoint><con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tec="http://www.TechZert_Team.org/TechZert_Team/">\r
+   <soapenv:Header/>\r
+   <soapenv:Body>\r
+      <tec:Employee_Details>\r
+         <Emp_Id>1</Emp_Id>\r
+      </tec:Employee_Details>\r
+   </soapenv:Body>\r
+</soapenv:Envelope>]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:wsaConfig mustUnderstand="NONE" version="200508" action="http://www.TechZert_Team.org/TechZert_Team/Employee_Details"/><con:wsrmConfig version="1.2"/></con:call></con:operation></con:interface><con:properties/><con:wssContainer/><con:oAuth2ProfileContainer/><con:oAuth1ProfileContainer/></con:soapui-project>

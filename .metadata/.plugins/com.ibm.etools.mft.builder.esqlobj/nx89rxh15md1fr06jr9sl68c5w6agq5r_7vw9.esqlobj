@@ -1,0 +1,390 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE X INTEGER;
+		DECLARE I INTEGER;		
+		DECLARE J INTEGER;
+		DECLARE bIsCopy     BOOLEAN FALSE;
+		DECLARE bIsPureCopy BOOLEAN FALSE;
+		DECLARE bIsOriginal BOOLEAN FALSE;
+		DECLARE chStmt CHARACTER;
+		DECLARE chSchema CHAR Environment.Variables.ComIbmDni.Dnq.Properties.SchemaName;
+		DECLARE chDomain CHAR InputRoot.MQRFH2.ComIbmDni.MsgStandardInfo.Domain;
+		DECLARE chQueueName CHAR;
+		DECLARE chQueueType CHAR;
+		DECLARE chNextProcessingType CHAR;
+		DECLARE xMsgID BLOB;
+		DECLARE WorkFolder BLOB;
+		DECLARE xComIbmDni BLOB;
+		
+		DECLARE rEnv REFERENCE TO Environment;
+		DECLARE rTrace REFERENCE TO Environment;
+		DECLARE rWorkfolder REFERENCE TO Environment;
+--		DECLARE rTmpFolder REFERENCE TO Environment;
+		DECLARE rDnqInput REFERENCE TO Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput;
+		DECLARE rDnqOutput REFERENCE TO Environment;
+		DECLARE rDestinationData REFERENCE TO InputLocalEnvironment.Destination.Dnq.DestinationData;
+		DECLARE rER REFERENCE TO Environment.ComIbmDni.Dnq.ER;
+		DECLARE rCurrentAction REFERENCE TO rER.CurrentAction;
+		DECLARE rTemp REFERENCE TO Environment;
+      	DECLARE rComIbmDni REFERENCE TO Environment;
+		DECLARE rInputRoot  REFERENCE TO InputRoot;
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment; --@P02A
+		DECLARE rOutputLocalEnvironment REFERENCE TO OutputLocalEnvironment; --@P02A
+		DECLARE rProperties REFERENCE TO Environment.Variables.ComIbmDni.Dnq.Properties; --@P02A
+		DECLARE bAllowMsgManipulation BOOLEAN (rProperties.AllowMsgManipulation = 'YES'); --@P02A
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Trace.DnqOutput AS rTrace;
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput AS rDnqOutput;
+		
+		DELETE FIELD Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput.DestinationData;
+		-- Copy Dnq folder before recreating headers from DB
+		SET Environment.Variables.ComIbmDni.OU = InputRoot.MQRFH2.ComIbmDni.OU;
+		SET Environment.Variables.ComIbmDni.Properties = Environment.ComIbmDni.Properties;
+		
+	    -- check for copy indicator in message history
+	    CALL ComIbmDnqErQueueOutput_CheckCopy(rInputRoot, rDnqInput.LastHistoryEntryTS, bIsCopy, bIsOriginal, bIsPureCopy);
+		
+	    IF LASTMOVE(rDestinationData) THEN
+		  SET rDnqOutput.DestinationData.QueueName = rDestinationData.QueueName;
+		  SET rDnqOutput.DestinationData.QueueType = rDestinationData.QueueType;		  
+		  SET rDnqOutput.DestinationData.NextProcessingType = rDestinationData.NextProcessingType;
+	    ELSE
+	      -- no ER destination found, return
+		  RETURN FALSE;	
+	    END IF;
+		
+		-- Get work folder
+		IF (NOT bIsCopy) THEN -- workfolder of copy is allready retrieved
+			SET chStmt = 'SELECT QUEUE, QUEUETYPE, ROUTINGREQ, EXTERNALID, COMIBMDNI FROM ' || chSchema || '.DNQE_MESSAGES WHERE ID = ?';
+			SET rTrace.Workfolder.chStmt = chStmt;
+			SET rTrace.Workfolder.Id = rDnqInput.NewId;
+	 		SET rDnqOutput.Workfolder[] = PASSTHRU( chStmt, rDnqInput.NewId );
+	 		IF CARDINALITY( rDnqOutput.Workfolder.COMIBMDNI[] ) < 1 OR rDnqOutput.Workfolder.COMIBMDNI = '' THEN
+			    -- error	
+	  	      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1101 VALUES( rDnqInput.NewId, 'DNQK1101E' );		  
+			END IF;
+		END IF;
+		
+		MOVE rWorkfolder TO rDnqOutput.Workfolder;
+		SET rTrace.Workfolder.Result = rWorkfolder.COMIBMDNI;
+		
+		-- backup ApplicationInformation which must be restored in retrieved work folder
+		SET rDnqOutput.ApplicationInformation = Environment.ComIbmDni.Dnq.ER.ApplicationInformation;
+
+		-- Insert retrieved work folder in message tree
+		IF (NOT bAllowMsgManipulation) THEN --@P02A
+	      	DELETE FIELD OutputRoot.MQRFH2.ComIbmDni;
+			DELETE FIELD Environment.ComIbmDni;
+			DELETE FIELD OutputRoot.XMLNSC;        
+	      	SET OutputRoot.MQRFH2.CodedCharSetId = 1208;
+	      	CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC' PARSE( rWorkfolder.COMIBMDNI CCSID 1208 );
+	      	MOVE rComIbmDni TO OutputRoot.XMLNSC.Root.MQRFH2.ComIbmDni;
+	      	IF LASTMOVE(rComIbmDni) THEN
+			    SET xComIbmDni = ASBITSTREAM( OutputRoot.XMLNSC.Root.MQRFH2.ComIbmDni OPTIONS FolderBitStream CCSID 1208 );
+	      		CREATE LASTCHILD OF OutputRoot.MQRFH2 DOMAIN('MQRFH2') PARSE( xComIbmDni CCSID 1208 OPTIONS FolderBitStream);
+	      	END IF;
+	      	MOVE rTemp TO OutputRoot.XMLNSC.Root.Environment.ComIbmDni;
+	      	IF LASTMOVE(rTemp) THEN
+	      		CALL ComIbmDnqRouting.DnqUtil_CopyTree(rTemp, rEnv);
+	      	END IF;
+	      	DELETE FIELD OutputRoot.XMLNSC;
+		    SET OutputRoot.XMLNSC = InputRoot.XMLNSC;
+		END IF; --@P02A
+
+	    MOVE rComIbmDni TO OutputRoot.MQRFH2.ComIbmDni;
+
+		-- re-initialize to new env subtree
+		MOVE rER TO Environment.ComIbmDni.Dnq.ER;
+		MOVE rCurrentAction TO rER.CurrentAction;
+		
+        -- update external msg id in DB
+		SET Environment.Variables.Temp.msgId = InputRoot.MQMD.MsgId;
+		
+		-- restore ApplicationInformation and Completion folders from input message
+		SET Environment.ComIbmDni.Dnq.ER.ApplicationInformation = rDnqOutput.ApplicationInformation;
+		SET OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion = InputRoot.MQRFH2.ComIbmDni.Dnq.Completion;
+		
+	    SET rDnqOutput.CurrentAction = NULL;  	    
+		IF LASTMOVE(rCurrentAction) THEN
+			SET rDnqOutput.CurrentAction = rCurrentAction;
+			DELETE FIELD rCurrentAction;
+		END IF;
+	    MOVE rCurrentAction TO rDnqOutput.CurrentAction;
+		IF rCurrentAction.UserAction = 'RETRYROUTING' THEN
+	      -- Move BackoutCurrentAction back to CurrentAction for next routing step
+	      SET rER.CurrentAction = rER.BackoutCurrentAction;
+	      DELETE FIELD rER.BackoutCurrentAction;
+	      -- delete routing errors from completion folder
+		  DECLARE rReason REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList.Reason[1];
+		  WHILE LASTMOVE(rReason) DO
+		  	MOVE rTemp TO rReason;
+		  	MOVE rReason NEXTSIBLING;
+		  	IF (rTemp.Parameter10 = 'DNQvRR') THEN
+		  		DELETE FIELD rTemp;
+		  	END IF;
+		  END WHILE;
+		  IF CARDINALITY(OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList.Reason[]) = 0 THEN  -- @P05A
+		  	SET OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.Code = 'Ok';                            -- @P05A
+		  END IF;                                                                                  -- @P05A
+	    END IF;
+	    
+	    -- determine destination data
+		MOVE rTemp TO rDnqOutput.DestinationData.QueueName;
+		IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+			SET chQueueName = rTemp;
+		ELSE
+			SET chQueueName = rWorkfolder.QUEUE;
+		END IF;
+   	    
+		MOVE rTemp TO rDnqOutput.DestinationData.QueueType;
+		IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+			SET chQueueType = rTemp;
+		ELSE
+			-- set default QueueType MAIN
+			SET chQueueType = 'MAIN';
+		END IF;
+		
+		MOVE rTemp TO rDnqOutput.DestinationData.NextProcessingType;
+		IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+			SET chNextProcessingType = SUBSTRING(rTemp FROM 1 FOR 1);
+		END IF;
+				
+		MOVE rTemp TO Environment.Variables.Temp.msgId;
+		IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+			SET xMsgID = Environment.Variables.Temp.msgId;
+		ELSE
+			SET xMsgID = rWorkfolder.EXTERNALID;
+		END IF;
+		
+		-- create Message History record
+		DECLARE rHistory       REFERENCE TO Environment;
+		DECLARE rHistoryEntry  REFERENCE TO Environment;
+		
+		DECLARE rTemp2 REFERENCE TO Environment;
+		
+		CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.History AS rHistory;
+		
+		IF bIsCopy OR bIsOriginal THEN
+			CALL ComIbmDnqErQueueOutput_CopyHistoryEntries(rInputRoot, rHistory, rDnqInput.LastHistoryEntryTS);
+			IF bIsCopy THEN
+				SET OutputRoot.MQRFH2.ComIbmDni.ParentMessageId = InputRoot.MQRFH2.ComIbmDni.ParentMessageId;
+			END IF;
+		END IF;
+		
+		-- add new history entry
+		CREATE LASTCHILD OF rHistory AS rHistoryEntry NAME 'HistoryEntry';
+		IF (CARDINALITY(rCurrentAction.UserId[])>0) AND (rCurrentAction.UserId<>'') THEN
+			SET rHistoryEntry.UserId = rCurrentAction.UserId;
+		ELSE
+			IF (CARDINALITY(InputRoot.MQMD.UserIdentifier[])>0) AND (TRIM(InputRoot.MQMD.UserIdentifier)<>'') THEN
+				SET rHistoryEntry.UserId = TRIM(InputRoot.MQMD.UserIdentifier);
+			ELSE
+				SET rHistoryEntry.UserId = Environment.ComIbmDni.Properties.Common.BrokerUID;
+			END IF;
+		END IF;
+		SET rHistoryEntry.Component      = 'DNQ';
+		SET rHistoryEntry.Service        = 'ER';
+		IF (CARDINALITY(rCurrentAction.UserAction[])>0) AND (rCurrentAction.UserAction<>'') THEN
+			SET rHistoryEntry.UserAction = rCurrentAction.UserAction;
+		END IF;
+		IF (CARDINALITY(rCurrentAction.TimeStamp[])>0) AND (rCurrentAction.TimeStamp<>'') THEN
+			SET rHistoryEntry.TimeStamp  = rCurrentAction.TimeStamp;
+		ELSE
+			SET rHistoryEntry.TimeStamp  = DnqUtil_GetCurrentWbifnTimestamp();
+		END IF;
+		SET rHistoryEntry.QueueType      = chQueueType;
+		SET rHistoryEntry.QueueName      = chQueueName;
+		IF (CARDINALITY(rCurrentAction.Function[])>0) AND (rCurrentAction.Function<>'') THEN
+			SET rHistoryEntry.Function   = rCurrentAction.Function;
+		ELSE
+			SET rHistoryEntry.Function   = 'ERROUTING';
+		END IF;
+		SET rHistoryEntry.FunctionResult = 'Ok';
+		
+		-- @P04
+		IF rCurrentAction.Function = 'ADMIN' AND rCurrentAction.UserAction = 'CHGADDR' AND 
+			CARDINALITY(rCurrentAction.UserActionInformation[]) > 0 THEN
+			SET rHistoryEntry.ServiceInformation.PreviousLocalAddress = rCurrentAction.UserActionInformation;
+		END IF;
+		
+		-- for MSIF messages fill request type for MWH
+		IF (chDomain <> 'DNIFIN') THEN
+			SET Environment.ComIbmDni.Dnq.Properties.MSIF.RequestType = InputRoot.MQRFH2.ComIbmDni.MsgStandardInfo.Type;
+		END IF;
+                                                                 /* begin @P02D
+                                                                 -- begin @P01A
+		DECLARE bRemoveAck BOOLEAN;
+		DECLARE rRequest REFERENCE TO InputLocalEnvironment.ComIbmDni.Function.DnqErQueueOutput.UpdateMessage.Request;
+		IF LASTMOVE(rRequest) THEN
+			IF (CARDINALITY(rRequest.RemoveACK[]) > 0) AND
+				(LENGTH(rRequest.RemoveACK) > 0) AND 
+				(UPPER(rRequest.RemoveACK) = 'YES') THEN
+				
+				SET bRemoveAck = TRUE;
+				
+				SET OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.MergedAcknowledgment = NULL;
+				
+				SET Environment.ComIbmDni.Dnq.Properties.NetworkInformation.NetworkCode   = NULL;
+				SET Environment.ComIbmDni.Dnq.Properties.NetworkInformation.NetworkString = NULL;
+				
+			END IF;
+		END IF;
+                                                                   -- end @P01A
+*/                                                                 -- end @P02D
+   	    -- create workfolder structure for DB @P02C
+   	    DECLARE rOutputRoot  REFERENCE TO OutputRoot;
+   	    DECLARE rEnvironment REFERENCE TO Environment;
+   	    
+   	    IF NOT bAllowMsgManipulation THEN
+			CALL DnqErCommon_CreateWorkfolder(rInputRoot, rOutputRoot, rEnvironment);
+			SET WorkFolder = Environment.Variables.ComIbmDni.Dnq.Trace.xComIbmDni;
+   	    END IF;
+	    
+      	-- prepare chQueueType for DB
+      	SET chQueueType = SUBSTRING(chQueueType FROM 1 FOR 1);
+		
+   	    IF bIsCopy THEN
+                                                                 -- begin @P02A
+			IF bAllowMsgManipulation THEN
+				-- insert message as manipulated
+				CALL DnqErCommon_PutMessageToErQueue(rEnvironment, rInputLocalEnvironment, rOutputLocalEnvironment, rInputRoot, rOutputRoot, FALSE, 0); --@P02A
+			ELSE
+                                                                   -- end @P02A
+	          	DECLARE chLocalAddress CHAR COALESCE(Environment.ComIbmDni.Dnq.Properties.LocalAddress,' ');
+		      	SET chStmt = 'INSERT INTO ' || chSchema || '.DNQE_MESSAGES '
+			      	|| '(STORETIME, OU, QUEUE, QUEUETYPE, ROUTINGREQ, LOCALADDRESS, EXTERNALID, COMIBMDNI) '
+		      		|| 'VALUES (CURRENT TIMESTAMP - CURRENT TIMEZONE, ?, ?, ?, ?, ?, ?, ?)';
+				SET rTrace.Copy.Insert.chStmt = chStmt;
+				SET rTrace.Copy.Insert.OU = Environment.Variables.ComIbmDni.OU;
+		        SET rTrace.Copy.Insert.chQueueName = chQueueName;
+		        SET rTrace.Copy.Insert.chQueueType = chQueueType;
+		        SET rTrace.Copy.Insert.chNextProcessingType = chNextProcessingType;
+		        SET rTrace.Copy.Insert.chLocalAddress = chLocalAddress;
+		        SET rTrace.Copy.Insert.MsgId = InputRoot.MQMD.MsgId;
+		       	SET rTrace.Copy.Insert.Workfolder = WorkFolder;
+		        PASSTHRU( chStmt,
+		        		  Environment.Variables.ComIbmDni.OU,
+		                  chQueueName,
+		                  chQueueType,
+		                  chNextProcessingType,
+		                  chLocalAddress,
+		                  InputRoot.MQMD.MsgId,
+		       	          WorkFolder
+		                );
+	
+				SET chStmt = 'SELECT ID FROM ' || chSchema || '.DNQE_MESSAGES WHERE EXTERNALID = ?';
+				SET Environment.Variables.ComIbmDni.Dnq.Tmp.CopyId[] = PASSTHRU( chStmt, InputRoot.MQMD.MsgId );
+				IF Environment.Variables.ComIbmDni.Dnq.Tmp.CopyId.ID IS NULL THEN
+					THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1103 VALUES( 'DNQK1103E' );
+				END IF;
+	                                                                 /* begin @P01A @P02D
+				IF (NOT bEmptyPayload) THEN
+					SET xPayload = ASBITSTREAM( OutputRoot.*[<] CCSID InputRoot.MQRFH2.CodedCharSetId );
+				END IF;
+	
+				IF bAllowMsgManipulation THEN
+					SET chStmt = 'UPDATE ' || chSchema || '.DNQE_MESSAGES SET '
+						|| '(LOCALADDRESS, REMOTEADDRESS, MSGDOMAIN, MSGTYPE, DIRECTION, POSSIBLEDUPLICATE, LASTCHGUSER) = '
+						|| '(SELECT LOCALADDRESS, REMOTEADDRESS, MSGDOMAIN, MSGTYPE, DIRECTION, POSSIBLEDUPLICATE, LASTCHGUSER '
+						|| 'FROM ' || chSchema || '.DNQE_MESSAGES WHERE ID = ?) WHERE ID = ?';
+				ELSE
+*/                                                                  -- end @P01A @P02D
+					SET chStmt = 'UPDATE ' || chSchema || '.DNQE_MESSAGES SET '
+						|| '(LOCALADDRESS, REMOTEADDRESS, MSGDOMAIN, MSGTYPE, DIRECTION, POSSIBLEDUPLICATE, LASTCHGUSER, MQHEADERENC, MQHEADER, PAYLOAD) = '
+						|| '(SELECT LOCALADDRESS, REMOTEADDRESS, MSGDOMAIN, MSGTYPE, DIRECTION, POSSIBLEDUPLICATE, LASTCHGUSER, MQHEADERENC, MQHEADER, PAYLOAD '
+						|| 'FROM ' || chSchema || '.DNQE_MESSAGES WHERE ID = ?) WHERE ID = ?';
+--				END IF; --@P01A @P02D
+	
+				SET rTrace.Copy.Update.chStmt = chStmt;
+				PASSTHRU( 	chStmt,
+							rDnqInput.NewId,
+							Environment.Variables.ComIbmDni.Dnq.Tmp.CopyId.ID);
+				IF (chDomain = 'DNIFIN') THEN
+					SET chStmt = 'INSERT INTO ' || chSchema || '.DNQE_ME_DNIFIN '
+						|| '(ID, VALUEDATE, AMOUNT, CURRENCY, PRIORITY, SESSION, ISN, OSN, APPLREFERENCE) '
+						|| 'SELECT 0+?, VALUEDATE, AMOUNT, CURRENCY, PRIORITY, SESSION, ISN, OSN, APPLREFERENCE FROM '
+						|| chSchema || '.DNQE_ME_DNIFIN WHERE ID = ?';
+					SET rTrace.Copy.MeInsert.chStmt = chStmt;
+					PASSTHRU(	chStmt,
+								Environment.Variables.ComIbmDni.Dnq.Tmp.CopyId.ID,
+								rDnqInput.NewId);
+				ELSEIF (chDomain = 'DNIFUNDS') THEN
+					SET chStmt = 'INSERT INTO ' || chSchema || '.DNQE_ME_DNIFUNDS '
+						|| '(ID, VALUEDATE, UNITS, SECURITYID, SECSTANDARD, ORDERREFERENCE) '
+						|| 'SELECT 0+?, VALUEDATE, UNITS, SECURITYID, SECSTANDARD, ORDERREFERENCE FROM '
+						|| chSchema || '.DNQE_ME_DNIFUNDS WHERE ID = ?';
+					SET rTrace.Copy.MeInsert.chStmt = chStmt;
+					PASSTHRU(	chStmt,
+								Environment.Variables.ComIbmDni.Dnq.Tmp.CopyId.ID,
+								rDnqInput.NewId);
+				ELSEIF (chDomain = 'DNIENI') THEN
+					SET chStmt = 'INSERT INTO ' || chSchema || '.DNQE_ME_DNIENI '
+						|| '(ID, CASEID, CASECREATOR) '
+						|| 'SELECT 0+?, CASEID, CASECREATOR FROM '
+						|| chSchema || '.DNQE_ME_DNIENI WHERE ID = ?';
+					SET rTrace.Copy.MeInsert.chStmt = chStmt;
+					PASSTHRU(	chStmt,
+								Environment.Variables.ComIbmDni.Dnq.Tmp.CopyId.ID,
+								rDnqInput.NewId);
+				END IF;
+			END IF; --@P02A
+
+			-- only delete the original with the pure (i.e. the last) copy
+			IF ((bIsPureCopy) AND (Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput.DBAction[1] = 'deferedDelete')) THEN
+				-- delete message
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_MESSAGES    WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIFIN   WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIFUNDS WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIENI   WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_MSGDESC     WHERE MSGID = ?', rDnqInput.NewId );
+			END IF;
+			
+			
+   	    ELSE
+                                                                 -- begin @P02A
+   	    	IF bAllowMsgManipulation THEN
+				-- update message as manipulated
+				CALL DnqErCommon_PutMessageToErQueue(rEnvironment, rInputLocalEnvironment, rOutputLocalEnvironment, rInputRoot, rOutputRoot, TRUE, rDnqInput.NewId);
+   	    	ELSE
+                                                                   -- end @P02A
+		      	SET chStmt = 'UPDATE ' || chSchema || '.DNQE_MESSAGES SET STORETIME = CURRENT TIMESTAMP - CURRENT TIMEZONE, COMIBMDNI = ?, ' ||
+				             'QUEUE = ?, QUEUETYPE = ?, ROUTINGREQ = ?, EXTERNALID = ? WHERE ID = ?';
+				SET rTrace.Update.chStmt = chStmt;
+		       	SET rTrace.Update.Workfolder = WorkFolder;
+		        SET rTrace.Update.QueueName = chQueueName;
+		        SET rTrace.Update.QueueType = chQueueType;
+		        SET rTrace.Update.NextProcessingType = chNextProcessingType;
+		        SET rTrace.Update.msgId = xMsgID;
+		        SET rTrace.Update.NewId = rDnqInput.NewId;
+		        PASSTHRU( chStmt, 
+		       	          WorkFolder,
+		                  chQueueName,
+		                  chQueueType,
+						  chNextProcessingType,
+		                  xMsgID,
+		                  rDnqInput.NewId
+		                );
+   	    	END IF; --@P02A
+   	    END IF;
+   	    
+		IF (CARDINALITY(rDnqOutput.CurrentAction[])>0) THEN
+	        SET rER.CurrentAction = rDnqOutput.CurrentAction;
+		END IF;
+        
+        CREATE LASTCHILD OF rDnqOutput NAME 'DBAction' VALUE 'Yes';
+        
+		SET OutputRoot.MQRFH2.ComIbmDni.OU = Environment.Variables.ComIbmDni.OU;
+		SET Environment.ComIbmDni.Properties = Environment.Variables.ComIbmDni.Properties;
+		DELETE FIELD Environment.Variables.ComIbmDni.Properties;
+	    DELETE FIELD Environment.Variables.ComIbmDni.Dnq.Tmp;		
+		
+		-- add DnqMwhUpdateInsert request
+		SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.Status      = 'Routed';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.Destination = chQueueName;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.ExtensionId = 'ComIbmDnqER'; --@P01A
+		
+      RETURN TRUE;
+	END;
+

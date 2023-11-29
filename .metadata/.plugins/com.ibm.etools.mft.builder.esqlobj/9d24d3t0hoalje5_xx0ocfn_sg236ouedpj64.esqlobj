@@ -1,0 +1,28 @@
+CREATE COMPUTE MODULE ComIbmDnqSetTarget_CheckProperties
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE rElementCheck REFERENCE TO Environment.Variables."ComIbmDni"."SetTarget"."chQueueName";
+		
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueName = rElementCheck;
+		END IF;
+
+		MOVE rElementCheck TO Environment.Variables."ComIbmDni"."SetTarget"."chQueueType";
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueType = rElementCheck;
+		END IF;
+
+		MOVE rElementCheck TO Environment.Variables."ComIbmDni"."SetTarget"."chNextProcessingType";
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET OutputLocalEnvironment.Destination.Dnq.DestinationData.NextProcessingType = rElementCheck;
+		END IF;
+
+		-- clean-up
+		DELETE FIELD Environment.Variables."ComIbmDni"."SetTarget";
+
+		RETURN TRUE;
+	END;
+END MODULE;

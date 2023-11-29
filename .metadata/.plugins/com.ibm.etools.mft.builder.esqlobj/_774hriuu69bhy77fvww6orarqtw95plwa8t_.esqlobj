@@ -1,0 +1,354 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		
+	
+		DECLARE EV REFERENCE TO Environment.Variables;
+		CREATE LASTCHILD OF EV.Req DOMAIN 'JSON' PARSE (InputRoot.BLOB.BLOB);	
+	
+		DECLARE JSONREQ REFERENCE TO EV.Req.JSON.Data.Application_Upload;
+		
+		--DECLARE JSONRES REFERENCE To OutputRoot.JSON.Data.Application_Upload.Application;
+		
+		CREATE FIELD OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls IDENTITY (JSON.Array) Document_Dtls;
+		 
+		
+		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.RCU_Remarks      = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.RCU_Remarks;	
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.DMS_URL          = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.DMS_URL;	
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.RCU_Date         = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.RCU_Date;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.RCU_Agency_Code  = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.RCU_Agency_Code;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.Received_Date    = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.Received_Date;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.Doc_ID           = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.Doc_ID;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.RCU_Status       = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.RCU_Status;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Document_Dtls.Item.Doc_Status       = JSONREQ.Application.(JSON.Array)Document_Dtls.Item.Doc_Status;
+		
+        SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls .Mandate_Type                           = JSONREQ.Application.SI_Dtls.Mandate_Type;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls .Mandate_Limit                          =JSONREQ.Application.SI_Dtls.Mandate_Limit;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.UMRN                                    = JSONREQ.Application.SI_Dtls.UMRN;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls .Customer_ACC_No                        = JSONREQ.Application.SI_Dtls.Customer_ACC_No;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls .IFSC_Code                              = JSONREQ.Application.SI_Dtls.IFSC_Code;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls .Mandate_Flag                           = JSONREQ.Application.SI_Dtls.Mandate_Flag; 
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls .Instrument_Type                        = JSONREQ.Application.SI_Dtls.Instrument_Type;
+		
+		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler5    = JSONREQ.Application.Filler_Dtls.Filler5;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler4    = JSONREQ.Application.Filler_Dtls.Filler4;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler7    = JSONREQ.Application.Filler_Dtls.Filler7;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler10   = JSONREQ.Application.Filler_Dtls.Filler10;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler6    = JSONREQ.Application.Filler_Dtls.Filler6;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler20   = JSONREQ.Application.Filler_Dtls.Filler20;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler1    = JSONREQ.Application.Filler_Dtls.Filler1;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler3    = JSONREQ.Application.Filler_Dtls.Filler3;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler2    = JSONREQ.Application.Filler_Dtls.Filler2;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler9    = JSONREQ.Application.Filler_Dtls.Filler9;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler8    = JSONREQ.Application.Filler_Dtls.Filler8;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler19   = JSONREQ.Application.Filler_Dtls.Filler19;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler1    = JSONREQ.Application.Filler_Dtls.Filler16;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler15   = JSONREQ.Application.Filler_Dtls.Filler15;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler18   = JSONREQ.Application.Filler_Dtls.Filler18;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler17   = JSONREQ.Application.Filler_Dtls.Filler17;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler12   = JSONREQ.Application.Filler_Dtls.Filler12;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler11   = JSONREQ.Application.Filler_Dtls.Filler11;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler14   = JSONREQ.Application.Filler_Dtls.Filler14;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler13   = JSONREQ.Application.Filler_Dtls.Filler13;
+		
+		
+		 
+		 DECLARE i INTEGER 1;
+		
+		FOR Req AS JSONREQ.Application.Charge_Dtls.Item[]  DO
+			
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Charge_Dtls.Item[i].Charge_Amount = JSONREQ.Application.(JSON.Array)Charge_Dtls.Item[i].Charge_Amount;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Charge_Dtls.Item[i].Charge_ID     = JSONREQ.Application.(JSON.Array)Charge_Dtls.Item[i].Charge_ID ;
+		
+		SET i=i+1;
+		END FOR;
+		 
+		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Tranche_No               =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Tranche_No;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Disbursal_Amount         =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Disbursal_Amount;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Payment_Mode             = JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Payment_Mode;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Error_Desc               =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Error_Desc;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Disbrsmnt_Bank           =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Disbrsmnt_Bank; 
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Cheque_No                =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Cheque_No;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.In_Favor_of              = JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.In_Favor_of;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.IFSC_Code                =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.IFSC_Code ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Disbursal_To             =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Disbursal_To;		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Insurance_Cheque         = JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Insurance_Cheque; 
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Paymnt_Gtway_Status      = JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Paymnt_Gtway_Status;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.Account_No               =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.Account_No ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Disbursal_Dtls.Item.FT_Mode                  =JSONREQ.Application.(JSON.Array)Disbursal_Dtls.Item.FT_Mode;
+		
+		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Scheme                 = JSONREQ.Application.Application_Dtls.Scheme;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Lead_ID                = JSONREQ.Application.Application_Dtls.Lead_ID;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Source_System          = JSONREQ.Application.Application_Dtls.Source_System;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Product                = JSONREQ.Application.Application_Dtls.Product;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Loan_Purpose           = JSONREQ.Application.Application_Dtls.Loan_Purpose ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls .Interest_Rate         = JSONREQ.Application.Application_Dtls .Interest_Rate;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls .CAS_ID                = JSONREQ.Application.Application_Dtls .CAS_ID ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls . Date_of_Receipt      = JSONREQ.Application.Application_Dtls . Date_of_Receipt;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Disbursal_Type        = JSONREQ.Application.Application_Dtls.Disbursal_Type;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Tenure                = JSONREQ.Application.Application_Dtls.Tenure;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Type                  = JSONREQ.Application.Application_Dtls.Type;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Branch                = JSONREQ.Application. Application_Dtls.Branch ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .No_of_AdvEMI         = JSONREQ.Application.Application_Dtls .No_of_AdvEMI;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Relationship_Manager  = JSONREQ.Application.Application_Dtls .Int_Start_Date;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Int_Start_Date       = JSONREQ.Application.Application_Dtls .Int_Start_Date;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Due_Day               = JSONREQ.ApplicationApplication_Dtls.Due_Day;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Supplier_ID           = JSONREQ.Application. Application_Dtls.Supplier_ID;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Disbursed_To         = JSONREQ.Application.Application_Dtls .Disbursed_To;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Loan_Amount          = JSONREQ.Application.Application_Dtls .Loan_Amount;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Disbursement_Flag    = JSONREQ.Application.Application_Dtls .Disbursement_Flag ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Loan_EMI             = JSONREQ.Application. Application_Dtls .Loan_EMI;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Instalmnt_Plan       = JSONREQ.Application. Application_Dtls .Instalmnt_Plan;
+	
+	DECLARE j INTEGER 1 ;
+	
+	FOR Req1 AS  JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[] DO
+		
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Adrs_Line1    = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Adrs_Line1;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Adrs_Line2    = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Adrs_Line2;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Adrs_Line3    = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Adrs_Line3;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].State         = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].State;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Email_ID      = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Email_ID;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Country       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Country;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Adrs_Type     = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls[j].Adrs_Type;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].City          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].City;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Mailing_Flag  = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Mailing_Flag;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Mobile        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].Mobile;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].PinCode       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.(JSON.Array)Address_Dtls.Item[j].PinCode;
+	
+	SET j=j+1;
+	END FOR;
+		
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Amount                            = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Amount;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Frequency                         = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Frequency;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Income_Head                       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Income_Head;
+	   
+	   
+	
+	
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Aadhar_Card        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Aadhar_Card;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Middle_Name        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_DtlsMiddle_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Marital_Status     = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_DtlsMarital_Status;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Passport_Expiry_Dt = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_DtlsPassport_Expiry_Dt;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Gender             = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_DtlsGender;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.INDV_CORP_Flag     = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.INDV_CORP_Flag;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Yrs_at_Employment  = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Industry;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.ItemFirst_Name     = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.First_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Busniness_Name     = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Busniness_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.CIF_Number         = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.CIF_Number;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Applicant_Type     = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Applicant_Type;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Father_Name        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Father_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Employer_Name      = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Employer_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.DL_No              = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.DL_No;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Mother_Name        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Mother_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Employment_Type    = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Employment_Type;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.PAN_No             = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.PAN_No;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.DL_Expiry_Dt       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.DL_Expiry_Dt;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Constitution       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Constitution;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Date_of_Birth      = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Date_of_Birth;	
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.No_of_Dependents   = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.No_of_Dependents;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Title              = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Title;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Citizenship        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Citizenship;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Edu_Qualification  = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Edu_Qualification;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Last_Name          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Last_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Spouse_Name        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Spouse_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Relationship       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Relationship;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Voter_ID           = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Voter_ID;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Passport_NO        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Passport_NO;	
+	
+	
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Item.Investigation_Dtls               = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Investigation_Dtls;
+    
+    SET OutputRoot.JSON.Data.Application_Upload.ServiceRequestID                                                             = JSONREQ.ServiceRequestID;
+		
+		
+		
+		 
+		/* 
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.RCU_Remarks    = JSONREQ.Application.Document_Dtls.Item.RCU_Remarks;	
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.DMS_URL        = JSONREQ.Application.Document_Dtls.Item.DMS_URL;	
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.RCU_Date       = JSONREQ.Application.Document_Dtls.Item.RCU_Date;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.RCU_Agency_Code  = JSONREQ.Application.Document_Dtls.Item.RCU_Agency_Code;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.Received_Date   = JSONREQ.Application.Document_Dtls.Item.Received_Date;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.Doc_ID         = JSONREQ.Application.Document_Dtls.Item.Doc_ID;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.RCU_Status     = JSONREQ.Application.Document_Dtls.Item.RCU_Status;
+	    SET OutputRoot.JSON.Data.Application_Upload.Application.Document_Dtls.Item.Doc_Status      = JSONREQ.Application.Document_Dtls.Item.Doc_Status;
+	    
+	    
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.Mandate_Type     = JSONREQ.Application.SI_Dtls.Mandate_Type;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.Mandate_Limit    =JSONREQ.Application.SI_Dtls.Mandate_Limit;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.UMRN             = JSONREQ.Application.SI_Dtls.UMRN;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.Customer_ACC_No  = JSONREQ.Application.SI_Dtls.Customer_ACC_No;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.IFSC_Code        = JSONREQ.Application.SI_Dtls.IFSC_Code;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.Mandate_Flag     = JSONREQ.Application.SI_Dtls.Mandate_Flag; 
+		SET OutputRoot.JSON.Data.Application_Upload.Application.SI_Dtls.Instrument_Type  = JSONREQ.Application.SI_Dtls.Instrument_Type;
+		
+		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler5 = JSONREQ.Application.Filler_Dtls.Filler5;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler4 = JSONREQ.Application.Filler_Dtls.Filler4;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler7 = JSONREQ.Application.Filler_Dtls.Filler7;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler10 = JSONREQ.Application.Filler_Dtls.Filler10;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler6 = JSONREQ.Application.Filler_Dtls.Filler6;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler20 = JSONREQ.Application.Filler_Dtls.Filler20;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler1 = JSONREQ.Application.Filler_Dtls.Filler1;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler3 = JSONREQ.Application.Filler_Dtls.Filler3;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler2 = JSONREQ.Application.Filler_Dtls.Filler2;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler9 = JSONREQ.Application.Filler_Dtls.Filler9;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler8 = JSONREQ.Application.Filler_Dtls.Filler8;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler19 = JSONREQ.Application.Filler_Dtls.Filler19;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler16 = JSONREQ.Application.Filler_Dtls.Filler16;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler15 = JSONREQ.Application.Filler_Dtls.Filler15;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler18 = JSONREQ.Application.Filler_Dtls.Filler18;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler17 = JSONREQ.Application.Filler_Dtls.Filler17;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler12 = JSONREQ.Application.Filler_Dtls.Filler12;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler11 = JSONREQ.Application.Filler_Dtls.Filler11;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler14 = JSONREQ.Application.Filler_Dtls.Filler14;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Filler_Dtls.Filler13 = JSONREQ.Application.Filler_Dtls.Filler13;
+		
+		
+		CREATE FIELD OutputRoot.JSON.Data.Application_Upload.Application.Charge_Dtls IDENTITY(JSON.Array);  
+		
+		DECLARE i INTEGER 1;
+		
+		FOR Req AS JSONREQ.Application.Charge_Dtls.Item[]  DO
+			
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Charge_Dtls.Item[i].Charge_Amount = JSONREQ.Application.Charge_Dtls.Item[i].Charge_Amount   ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Charge_Dtls.Item[i].Charge_ID    = JSONREQ.Application.Charge_Dtls.Item[i].Charge_ID ;
+		
+		SET i=i+1;
+		END FOR;
+		
+		CREATE FIELD OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls IDENTITY (JSON.Array) Disbursal_Dtls; 
+		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Tranche_No              =JSONREQ.Application.Disbursal_Dtls.Item.Tranche_No;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Disbursal_Amount       =JSONREQ.Application.Disbursal_Dtls.Item.Disbursal_Amount;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Payment_Mode            = JSONREQ.Application.Disbursal_Dtls.Item.Payment_Mode;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Error_Desc               =JSONREQ.Application.Disbursal_Dtls.Item.Error_Desc;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Disbrsmnt_Bank           =JSONREQ.Application.Disbursal_Dtls.Item.Disbrsmnt_Bank; 
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Cheque_No                =JSONREQ.Application.Disbursal_Dtls.Item.Cheque_No;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.In_Favor_of              = JSONREQ.Application.Disbursal_Dtls.Item.In_Favor_of;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.IFSC_Code                =JSONREQ.Application.Disbursal_Dtls.Item.IFSC_Code ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Disbursal_To              =JSONREQ.Application.Disbursal_Dtls.Item.Disbursal_To;		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Insurance_Cheque          = JSONREQ.Application.Disbursal_Dtls.Item.Insurance_Cheque; 
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Paymnt_Gtway_Status      = JSONREQ.Application.Disbursal_Dtls.Item.Paymnt_Gtway_Status;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.Account_No               =JSONREQ.Application.Disbursal_Dtls.Item.Account_No ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Disbursal_Dtls.Item.FT_Mode                  =JSONREQ.Application.Disbursal_Dtls.Item.FT_Mode;
+		
+		
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Scheme                 = JSONREQ.Application.Application_Dtls.Scheme;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Lead_ID                = JSONREQ.Application.Application_Dtls.Lead_ID;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Source_System          = JSONREQ.Application.Application_Dtls.Source_System;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls.Product                = JSONREQ.Application.Application_Dtls.Product;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Loan_Purpose          = JSONREQ.Application.Application_Dtls.Loan_Purpose ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls .Interest_Rate         = JSONREQ.Application.Application_Dtls .Interest_Rate;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls .CAS_ID                = JSONREQ.Application.Application_Dtls .CAS_ID ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application.Application_Dtls . Date_of_Receipt      = JSONREQ.Application.Application_Dtls . Date_of_Receipt;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Disbursal_Type        = JSONREQ.Application.Application_Dtls.Disbursal_Type;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Tenure                 = JSONREQ.Application.Application_Dtls.Tenure;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Type                  = JSONREQ.Application.Application_Dtls.Type;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Branch                 = JSONREQ.Application. Application_Dtls.Branch ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .No_of_AdvEMI          = JSONREQ.Application.Application_Dtls .No_of_AdvEMI;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Relationship_Manager    = JSONREQ.Application.Application_Dtls .Int_Start_Date;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Int_Start_Date        = JSONREQ.Application.Application_Dtls .Int_Start_Date;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Due_Day                = JSONREQ.ApplicationApplication_Dtls.Due_Day;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls.Supplier_ID           = JSONREQ.Application. Application_Dtls.Supplier_ID;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Disbursed_To         = JSONREQ.Application.Application_Dtls .Disbursed_To;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Loan_Amount         = JSONREQ.Application.Application_Dtls .Loan_Amount;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Disbursement_Flag    = JSONREQ.Application.Application_Dtls .Disbursement_Flag ;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Loan_EMI           = JSONREQ.Application. Application_Dtls .Loan_EMI;
+		SET OutputRoot.JSON.Data.Application_Upload.Application. Application_Dtls .Instalmnt_Plan     = JSONREQ.Application. Application_Dtls .Instalmnt_Plan;
+	
+	    
+	
+	
+    CREATE FIELD OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls IDENTITY (JSON.Array)Applicant_Dtls;
+	CREATE FIELD OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls IDENTITY (JSON.Array)Address_Dtls;
+		
+	DECLARE j INTEGER 1 ;
+	
+	
+	FOR Req1 AS JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[] DO
+		
+    
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Adrs_Line1    = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Adrs_Line1;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Adrs_Line2    = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Adrs_Line2;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Adrs_Line3    = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Adrs_Line3;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].State         = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].State;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Email_ID      = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Email_ID;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Country       = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Country;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Adrs_Type     = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Ite[j].Adrs_Type;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].City          = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].City;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Mailing_Flag  = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Mailing_Flag;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Mobile        = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].Mobile;
+    SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].PinCode       = JSONREQ.Application.Applicant_Dtls.Item.Address_Dtls.Item[j].PinCode;
+	
+	SET j=j+1;
+	END FOR;
+	
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Income_Dtls.Amount = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Amount;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Income_Dtls.Frequency = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Frequency;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Income_Dtls.Income_Head = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Income_Dtls.Income_Head;
+	   
+	   
+	
+	
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Aadhar_Card          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Aadhar_Card;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Middle_Name          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Middle_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Marital_Status       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Marital_Status;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Passport_Expiry_Dt   = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Passport_Expiry_Dt;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Gender               = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Gender;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.INDV_CORP_Flag       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.INDV_CORP_Flag;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Yrs_at_Employment    = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Industry;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.ItemFirst_Name       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.First_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Busniness_Name       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Busniness_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.CIF_Number           = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.CIF_Number;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Applicant_Type       = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Applicant_Type;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Father_Name          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Father_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Employer_Name        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Employer_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.DL_No                = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.DL_No;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Mother_Name          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Mother_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Employment_Type      = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Employment_Type;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.PAN_No               = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.PAN_No;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.DL_Expiry_Dt         = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.DL_Expiry_Dt;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Constitution         = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Constitution;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Date_of_Birth        = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Date_of_Birth;	
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.No_of_Dependents     = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.No_of_Dependents;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Title                = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Title;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Citizenship          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Citizenship;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Edu_Qualification    = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Edu_Qualification;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Last_Name            = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Last_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Spouse_Name          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Spouse_Name;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Relationship         = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Relationship;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Voter_ID             = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Voter_ID;
+	SET OutputRoot.JSON.Data.Application_Upload.Application.Applicant_Dtls.Personal_Dtls.Passport_NO          = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Personal_Dtls.Passport_NO;	
+	
+	
+	
+	
+    SET OutputRoot.JSON.Data.Application_Upload.Application.(JSON.Array)Applicant_Dtls.Investigation_Dtls = JSONREQ.Application.(JSON.Array)Applicant_Dtls.Item.Investigation_Dtls;
+    
+    SET OutputRoot.JSON.Data.Application_Upload.ServiceRequestID = JSONREQ.ServiceRequestID;
+    */
+    
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;

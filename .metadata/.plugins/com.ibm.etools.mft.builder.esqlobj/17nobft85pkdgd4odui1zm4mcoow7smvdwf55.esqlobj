@@ -1,0 +1,27 @@
+CREATE COMPUTE MODULE postSubstraction_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		CREATE LASTCHILD OF EV.REQ DOMAIN 'JSON' PARSE (InputRoot.BLOB.BLOB);
+		
+		SET OutputRoot.JSON.Data.output.Result = EV.REQ.JSON.Data.input.element1 - EV.REQ.JSON.Data.input.element2;
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;

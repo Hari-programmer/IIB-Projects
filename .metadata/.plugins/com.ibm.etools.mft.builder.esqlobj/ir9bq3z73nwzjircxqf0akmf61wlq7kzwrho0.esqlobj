@@ -1,0 +1,24 @@
+CREATE COMPUTE MODULE Acc_URL_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		DECLARE chrRef CHARACTER CAST(InputRoot.BLOB.BLOB AS CHARACTER CCSID 1208);
+		
+		CREATE LASTCHILD OF EV.Ref DOMAIN 'JSON' PARSE(chrRef CCSID 1208);
+		
+		SET OutputRoot.JSON.Data.word = EV.Ref.JSON.Data.Item.word;
+        SET OutputRoot.JSON.Data.definition = EV.Ref.JSON.Data.Item.meanings.Item.definitions.Item.definition;
+        Propagate TO TERMINAL 'out';
+        
+        
+        SET OutputRoot.DFDL.URLOutput.record.word       = EV.Ref.JSON.Data.Item.word;
+        SET OutputRoot.DFDL.URLOutput.record.definition = EV.Ref.JSON.Data.Item.meanings.Item.definitions.Item.definition;
+        PROPAGATE TO TERMINAL 'out1' ;
+         
+		
+		RETURN FALSE;
+	END;
+
+	
+END MODULE;

@@ -1,0 +1,234 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		
+		DECLARE iID        INTEGER;
+	    DECLARE I          INTEGER;
+	    DECLARE chSchema   CHAR Environment.Variables.ComIbmDni.Dnq.Properties.SchemaName;
+	    DECLARE chBrkUser  CHAR Environment.ComIbmDni.Properties.Common.BrokerUID;
+	    DECLARE chStmt     CHAR;
+ 		DECLARE WorkFolder BLOB;
+ 		DECLARE xComIbmDni BLOB;
+ 		DECLARE bReturn    BOOLEAN TRUE;
+		
+		DECLARE rEnv       REFERENCE TO Environment;
+		DECLARE rTemp      REFERENCE TO InputRoot;
+		DECLARE rTmpFolder REFERENCE TO Environment; -- dummy initialization
+		DECLARE rTrace     REFERENCE TO Environment; -- dummy initialization
+		
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Trace.Backout AS rTrace;
+		
+		MOVE rTemp TO Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.NewId;
+		IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+			SET iID = CAST( rTemp AS INTEGER );
+		ELSE
+			MOVE rTemp TO Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.PreviousId;
+			IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+				SET iID = CAST( rTemp AS INTEGER );
+			ELSE
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1103 VALUES( 'ID', 'DNQK1103E' );
+			END IF;
+		END IF;
+		
+        SET Environment.Variables.ComIbmDni.Dnq.Tmp[] = PASSTHRU( 'SELECT ID, COMIBMDNI, QUEUE, QUEUETYPE, ROUTINGREQ, OU, MQHEADER FROM ' || chSchema || 
+                                       	                '.DNQE_MESSAGES WHERE ID = ?', iID );
+                                       	                
+		MOVE rTmpFolder TO Environment.Variables.ComIbmDni.Dnq.Tmp;
+		
+        IF CARDINALITY( rTmpFolder.ID[] ) < 1 THEN
+          -- Message already processed by another flow
+          SET bReturn = FALSE;
+          
+        ELSE
+	        
+	        IF CARDINALITY( rTmpFolder.COMIBMDNI[] ) < 1 OR rTmpFolder.COMIBMDNI = '' THEN		  
+	  	      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1009 VALUES( Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.PreviousId, 'DNQK1009E' );		  
+			END IF;    
+			
+	        DELETE FIELD OutputRoot.XMLNSC;
+		    DELETE FIELD OutputRoot.MQRFH2.ComIbmDni;
+		    DELETE FIELD Environment.ComIbmDni;
+		
+	      	CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC' PARSE( rTmpFolder.COMIBMDNI CCSID 1208 );
+	      	DECLARE rComIbmDni REFERENCE TO OutputRoot.XMLNSC.Root.MQRFH2.ComIbmDni;
+	      	IF LASTMOVE(rComIbmDni) THEN
+			    SET xComIbmDni = ASBITSTREAM( OutputRoot.XMLNSC.Root.MQRFH2.ComIbmDni OPTIONS FolderBitStream CCSID 1208 );
+	      		CREATE LASTCHILD OF OutputRoot.MQRFH2 DOMAIN('MQRFH2') PARSE( xComIbmDni CCSID 1208 OPTIONS FolderBitStream);
+	      	END IF;
+	      	MOVE rTemp TO OutputRoot.XMLNSC.Root.Environment.ComIbmDni;
+	      	IF LASTMOVE(rTemp) THEN
+	      		CALL ComIbmDnqRouting.DnqUtil_CopyTree(rTemp, rEnv);
+	      	END IF;
+	      	DELETE FIELD OutputRoot.XMLNSC;
+	      	MOVE rComIbmDni TO OutputRoot.MQRFH2.ComIbmDni;
+	      	
+	      	SET rComIbmDni.OU = TRIM(rTmpFolder.OU);
+	      	
+		    Set Environment.ComIbmDni.Dnq.ER.QueueName = rTmpFolder.QUEUE;
+		    Set Environment.ComIbmDni.Dnq.ER.QueueType = DnqUtil_ErDecodeQueueType( COALESCE( rTmpFolder.QUEUETYPE, '' ) );
+		    SET Environment.ComIbmDni.Dnq.ER.BackoutProcessType = DnqUtil_ErDecodeRoutingReq( rTmpFolder.ROUTINGREQ );
+		    
+			DECLARE rCurrentAction REFERENCE TO Environment.ComIbmDni.Dnq.ER.CurrentAction;
+	        IF CARDINALITY( Environment.ComIbmDni.Dnq.ER.BackoutCurrentAction[] ) < 1 THEN
+	          -- first time message is backed out          
+	          -- create BackoutCurrentAction folder
+	          IF LASTMOVE(rCurrentAction) THEN
+		          SET Environment.ComIbmDni.Dnq.ER.BackoutCurrentAction = Environment.ComIbmDni.Dnq.ER.CurrentAction;
+	          END IF;
+	        END IF;
+	        
+			-- create Message History record
+			DECLARE rHistoryEntry  REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.History AS rHistoryEntry;
+			CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+			DECLARE chUserId CHAR '';
+			
+			IF (CARDINALITY(rCurrentAction.UserId[])>0) AND (rCurrentAction.UserId<>'') THEN
+				SET chUserId = rCurrentAction.UserId;
+			ELSE
+				IF LENGTH(TRIM(InputRoot.MQMD.UserIdentifier)) > 0 THEN
+					SET chUserId = TRIM(InputRoot.MQMD.UserIdentifier);
+				ELSE
+					MOVE rTemp TO rTmpFolder.MQHEADER;
+					IF LASTMOVE(rTemp) AND (LENGTH(rTemp)>0) THEN
+						
+						-- exctract MQMD from MQHEADER
+						--   MQHEADER structure is: headerlenth;headername;header;...
+						DECLARE xMQHeader  BLOB rTemp;
+						DECLARE iTotalLen  INT LENGTH(xMQHeader);
+						DECLARE iHeaderLen INT 0;
+						DECLARE iBeginPos  INT 0;
+						DECLARE iEndPos    INT 0;
+						DECLARE chTemp     CHAR;
+						DECLARE bMQMDFound BOOLEAN FALSE;
+						
+						WHILE ((NOT bMQMDFound) AND (iEndPos < iTotalLen)) DO
+							-- extract length
+							SET iBeginPos = iEndPos + 1;
+							SET iEndPos = POSITION( X'3B' IN xMQHeader FROM iBeginPos );
+							IF (iEndPos > 0) THEN
+								SET chTemp = CAST( SUBSTRING( xMQHeader FROM iBeginPos FOR iEndPos-iBeginPos ) AS CHAR CCSID 1208 );
+								SET iHeaderLen = CAST( chTemp AS INTEGER );
+								-- extract header name
+								SET iBeginPos = iEndPos + 1;
+								SET iEndPos = POSITION( X'3B' IN xMQHeader FROM iBeginPos );
+								IF (iEndPos = 0) THEN
+									SET iEndPos = iTotalLen;
+								END IF;
+								SET chTemp = CAST( SUBSTRING( xMQHeader FROM iBeginPos FOR iEndPos-iBeginPos ) AS CHAR CCSID 1208);
+								IF (iHeaderLen > 0) THEN
+									-- walk over header
+									SET iBeginPos = iEndPos + 1;
+									SET iEndPos = iBeginPos + iHeaderLen;
+									IF (chTemp = 'MQMD') THEN
+										SET bMQMDFound = TRUE;
+										-- get MQMD
+										DECLARE xMQMD BLOB SUBSTRING( xMQHeader FROM iBeginPos FOR iHeaderLen );
+										SET chTemp = CAST( SUBSTRING(xMQMD FROM 197 FOR 12) AS CHAR CCSID 1208 );
+										SET chUserId = TRIM(chTemp);
+									END IF;
+								END IF;
+							ELSE
+								SET iEndPos = iTotalLen;
+							END IF;
+						END WHILE;
+					END IF;
+					IF (LENGTH(chUserId) > 0) THEN
+						SET rTrace.UserId = chUserId;
+					ELSE
+						SET chUserId = chBrkUser;
+					END IF;
+				END IF;
+			END IF;
+			SET rHistoryEntry.UserId    = chUserId;
+			SET rHistoryEntry.Component = 'DNQ';
+			SET rHistoryEntry.Service   = 'ER';
+			IF (CARDINALITY(rCurrentAction.UserAction[])>0) AND (rCurrentAction.UserAction<>'') THEN
+				SET rHistoryEntry.UserAction = rCurrentAction.UserAction;
+			END IF;
+			IF (CARDINALITY(rCurrentAction.TimeStamp[])>0) AND (rCurrentAction.TimeStamp<>'') THEN
+				SET rHistoryEntry.TimeStamp  = rCurrentAction.TimeStamp;
+			ELSE
+				SET rHistoryEntry.TimeStamp  = DnqUtil_GetCurrentWbifnTimestamp();
+			END IF;
+			SET rHistoryEntry.QueueType      = 'BACKOUT';
+			SET rHistoryEntry.QueueName      = Environment.ComIbmDni.Dnq.ER.QueueName;
+			IF (CARDINALITY(rCurrentAction.Function[])>0) AND (rCurrentAction.Function<>'') THEN
+				SET rHistoryEntry.Function   = rCurrentAction.Function;
+			ELSE
+				SET rHistoryEntry.Function   = 'ERROUTING';
+			END IF;
+			SET rHistoryEntry.FunctionResult = 'Failed';
+			   		
+	-- 		SET Environment.Variables.ComIbmDni.Dnq.Properties.ExternalSystem = OutputRoot.MQRFH2.ComIbmDni.Dnq.Properties.ExternalSystem;    
+			IF LASTMOVE(rCurrentAction) THEN
+	   	    	DELETE FIELD Environment.ComIbmDni.Dnq.ER.CurrentAction;
+			END IF;
+			
+			-- copy dnq completion folder containing routing errors
+			DECLARE rReason     REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList.Reason[<];
+			DECLARE rReasonList REFERENCE TO OutputRoot;
+			DECLARE chCodeIn    CHAR COALESCE(InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.Code,'Ok');
+			DECLARE chCodeOut   CHAR COALESCE(OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.Code,'Ok');
+			SET OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.Code = DnqUtil_GetRelevantCompletionCode(chCodeOut, chCodeIn);
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList AS rReasonList;
+			IF LASTMOVE(rReason) THEN
+				CALL DnqUtil_CopyTree(rReason, rReasonList);
+			END IF;
+			
+	   	    /* create workfolder structure for DB
+	   	    <Root>
+	   	    	<MQRFH2>
+	   	    		<ComIbmDni>
+	   	    		...
+	   	    		</ComIbmDni>
+	   	    	</MQRFH2>
+	   	    	<Environment>
+	   	    		<ComIbmDni>
+	   	    		...
+	   	    		</ComIbmDni>
+	   	    	</Environment>
+	   	    </Root>
+	   	    */
+	      	MOVE rComIbmDni TO OutputRoot.MQRFH2.ComIbmDni;
+	   	    DELETE FIELD OutputRoot.XMLNSC;
+	   	    SET OutputRoot.MQRFH2.CodedCharSetId = 1208;
+	   	    CREATE FIELD OutputRoot.XMLNSC.Root;
+	   	    CREATE FIRSTCHILD OF OutputRoot.XMLNSC.Root NAME 'MQRFH2';
+	   	    CREATE LASTCHILD  OF OutputRoot.XMLNSC.Root AS rTemp NAME 'Environment';
+	   	    CREATE LASTCHILD  OF rTemp AS rTemp NAME 'ComIbmDni';
+	   	    IF LASTMOVE(rComIbmDni) THEN
+			    SET xComIbmDni = ASBITSTREAM( OutputRoot.MQRFH2.ComIbmDni OPTIONS FolderBitStream CCSID 1208 );
+	      		CREATE LASTCHILD OF OutputRoot.XMLNSC.Root.MQRFH2 DOMAIN('XMLNSC') PARSE( xComIbmDni CCSID 1208 OPTIONS FolderBitStream);
+	   	    END IF;
+	   	    MOVE rComIbmDni TO Environment.ComIbmDni.Dnq;
+	      	IF LASTMOVE(rComIbmDni) THEN
+	      		CALL ComIbmDnqRouting.DnqUtil_CopyTree(rComIbmDni, rTemp);
+	      	END IF;
+		    SET WorkFolder = ASBITSTREAM( OutputRoot.XMLNSC.Root OPTIONS FolderBitStream CCSID 1208 );
+		    -- restore payload
+	      	DELETE FIELD OutputRoot.XMLNSC;
+	      	SET OutputRoot.XMLNSC = InputRoot.XMLNSC;
+	      	MOVE rComIbmDni TO OutputRoot.MQRFH2.ComIbmDni;
+      	
+		    SET chStmt = '';
+	
+			SET rTrace.chStmt = chStmt;
+			SET rTrace.QUEUETYPE = 'B';
+			SET rTrace.ROUTINGREQ = 'A';
+			SET rTrace.COMIBMDNI = WorkFolder;
+			SET rTrace.iID = CAST(iID AS CHAR);
+			
+	        -- update workfolder and move to backout queue
+	        PASSTHRU( 'UPDATE ' || chSchema || 
+		              '.DNQE_MESSAGES SET (QUEUETYPE, STORETIME, ROUTINGREQ, COMIBMDNI ) = (?, CURRENT TIMESTAMP - CURRENT TIMEZONE, ?, ? ) WHERE ID = ?',
+		              'B', 
+		              'A', 
+		              WorkFolder,
+					  iID
+		            );        		
+	
+        END IF;
+		RETURN bReturn;
+	END;
+

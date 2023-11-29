@@ -1,0 +1,308 @@
+CREATE COMPUTE MODULE "ComIbmDnqPrintInputAdapter_PrintTableInsert"
+
+	CREATE FUNCTION main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE SN REFERENCE TO Environment.Variables.ComIbmDnqPrint.SN;
+
+		DECLARE dnq    REFERENCE TO InputLocalEnvironment.Variables.ComIbmDnqPrint;
+		DECLARE dni    REFERENCE TO InputRoot.MQRFH2.ComIbmDni;
+		DECLARE db2env REFERENCE TO Environment; -- @P01A
+
+		DECLARE iSqlCode INT 0;
+		DECLARE chStmt   CHAR '';
+
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		MOVE db2env TO Environment."Variables"."ComIbmDnqPrint"."Db2"; -- @P01A
+
+		/*------------------------------------*\
+		|  Check if print queue is configured  |                     @P08A begin
+		\*------------------------------------*/
+		DECLARE rQueue REFERENCE TO InputLocalEnvironment.ComIbmDni.Function.
+			DniConfiguration.Retrieve.Response.{dnq.OU}.{CT_PRINT_QUEUE}.{dnq.printQ};
+
+		IF (LASTMOVE(rQueue) = FALSE) THEN
+			-- No config data found
+			DECLARE msgId BLOB InputRoot.MQMD.MsgId;
+			DECLARE chPrintQ CHARACTER dni.Function.DnqPrint.Print.Request.PrintQueue;
+			IF (chPrintQ IS NULL) THEN
+				-- Default queue is used
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_DEFAULT_NO_CFG_DATA)
+					VALUES (dnq.printQ, dnq.OU, msgId, MSG_PIA_Q_DEFAULT_NO_CFG_DATA);
+			ELSE
+				-- Default queue is NOT used
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_REQUEST_NO_CFG_DATA)
+					VALUES (dnq.printQ, dnq.OU, msgId, MSG_PIA_Q_REQUEST_NO_CFG_DATA);
+			END IF; -- Default queue is used ?
+		END IF;    -- Configuration data found ?                     @P08A end
+
+		/*------------------------------------------------------*\
+		|  Check if InputEnabled is defined for the Print Queue  |
+		\*------------------------------------------------------*/
+		DECLARE cfg REFERENCE TO InputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Response.{dnq.OU};
+		IF (   LASTMOVE(cfg) = FALSE
+		    OR cfg.{CT_PRINT_QUEUE}.{dnq.printQ}.{ATTR_INPUT_ENABLED} IS NULL)
+		THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg'
+				MESSAGE MsgNo(MSG_PIA_INPUT_NOT_ENABLED)
+				VALUES (dnq.msgId, dnq.printQ, MSG_PIA_INPUT_NOT_ENABLED);
+		END IF;
+
+		/*----------------------------------------------------------*\
+		|  Copy properties extracted by DnqAttributeExtraction node  |
+		|  to folder MQRFH2.ComIbmDni.DnqPrint.Properties            |
+		\*----------------------------------------------------------*/
+
+		/**  Notes:
+		 **  o  This is required in order to make these properties persistent
+		 **     (note that the Environment tree is NOT safe-stored in
+		 **      DB table DNQP_CONTENT).
+		 **  o  During print processing the Java compute node DoPrinting accesses
+		 **     this folder to retrieve appropriate data for print output.
+		 **  o  This folder must not be externalized because it is not part of
+		 **     the WBI FN API. Especially:
+		 **     -  It is not described in WBI FN AP guide
+		 **     -  It is not reflected in WBI FN schema files
+		 **     -  It must be removed before the message is
+		 **        *  written to the message warehouse
+		 **        *  propagated to the configured WMQ target queue
+		 **/
+
+		DECLARE propRef REFERENCE TO Environment;
+		MOVE propRef TO Environment.ComIbmDni.Dnq.Properties;
+		IF (LASTMOVE(propRef)) THEN
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.DnqPrint.Properties FROM propRef;
+	--	ELSE                                                                         @P10D
+	--		SET OutputRoot.MQRFH2.ComIbmDni.DnqPrint.Properties.Flag = 'empty';      @P10D (not required)
+		END IF;
+		DECLARE prop REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.DnqPrint.Properties;
+
+		/* ------------------------- @P05D begin ---------------------------- *\
+		/*---------------------*\                                 @P03A begin
+		|  Set sender/receiver  |
+		\*---------------------*/
+		DECLARE chSender CHAR;
+		DECLARE chReceiver CHAR;
+
+		IF (    prop.MessageDirection IS NOT NULL
+		    AND prop.MessageDirection = 'O')
+		THEN
+			-- output message
+			SET chSender   = prop.RemoteAddress;
+			SET chReceiver = prop.LocalAddress;
+		ELSE
+			-- input message
+			SET chSender   = prop.LocalAddress;
+			SET chReceiver = prop.RemoteAddress;
+		END IF;                                                -- @P03A end
+		\* ------------------------- @P05D end ------------------------------ */
+
+		/*--------------------------------------*\
+		|  Store metadata in DNQP_MESSAGE table  |
+		\*--------------------------------------*/
+		DECLARE msgtype CHARACTER prop.MessageType;
+		IF (msgtype IS NULL) THEN
+			SET msgtype = OutputRoot.MQRFH2.ComIbmDni.MsgStandardInfo.Type;
+		END IF;
+
+		-- @P01C begin: Do not call SQL directly
+		--SET chStmt = 'INSERT INTO '||SN||'.DNQP_MESSAGE (MSG_ID, OU, QUEUE_NAME, ORDER_SN, MSG_SN,
+		--		MSG_TYPE, MSG_SENDER, MSG_RECEIVER, MSG_APPLREF, MSG_STATE, MSG_PRINTED)
+		--	VALUES ( MSG_ID, '||dnq.OU||', '||dnq.printQ||', 0, 0,
+		--		MSG_TYPE, MSG_SENDER, MSG_RECEIVER, MSG_APPLREF, PENDING, 0)';
+		--
+		--IF prop.MessageDirection IS NOT NULL AND prop.MessageDirection = 'O' THEN
+		--	-- output message: SENDER:RemoteAddress RECEIVER:LocalAddress
+		--	INSERT INTO Database.{SN}.DNQP_MESSAGE (MSG_ID, OU, QUEUE_NAME, ORDER_SN, MSG_SN,
+		--			MSG_TYPE, MSG_SENDER, MSG_RECEIVER, MSG_APPLREF,
+		--			MSG_STATE, MSG_PRINTED)
+		--		VALUES (dnq.msgId, dnq.OU, dnq.printQ, 0, 0,
+		--			msgtype, prop.RemoteAddress, prop.LocalAddress, prop.DNIFIN.ApplicationReference,
+		--			PENDING, 0);
+		--ELSE
+		--	-- input message: SENDER:LocalAddress RECEIVER:RemoteAddress
+		--	INSERT INTO Database.{SN}.DNQP_MESSAGE (MSG_ID, OU, QUEUE_NAME, ORDER_SN, MSG_SN,
+		--			MSG_TYPE, MSG_SENDER, MSG_RECEIVER, MSG_APPLREF,
+		--			MSG_STATE, MSG_PRINTED)
+		--		VALUES (dnq.msgId, dnq.OU, dnq.printQ, 0, 0,
+		--			msgtype, prop.LocalAddress, prop.RemoteAddress, prop.DNIFIN.ApplicationReference,
+		--			PENDING, 0);
+		--END IF;
+
+		SET chStmt =
+			   'INSERT INTO ' || SN || '.DNQP_MESSAGE '
+			||  '(ROW_CREATION_UTS, MSG_ID, OU, QUEUE_NAME, ORDER_SN, MSG_SN, MSG_TYPE, '              -- @P02A: ROW_CREATION_UTS
+			||   'MSG_LOCAL_ADDR, MSG_REMOTE_ADDR, MSG_APPLREF, MSG_TRANREF, MSG_STATE, MSG_PRINTED) ' -- @P04C, @P05C
+			|| 'VALUES ('
+			||   'CURRENT TIMESTAMP - CURRENT TIMEZONE, ' -- @P02A (value for column ROW_CREATION_UTS)
+			||   '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';   -- @P03C: 0 replaced with ? for ORDER_SN, MSG_SN, MSG_PRINTED
+
+		SET db2env."MsgInsert"."chStmt"          = chStmt;
+		SET db2env."MsgInsert"."MSG_ID"          = dnq.msgId;
+		SET db2env."MsgInsert"."OU"              = dnq.OU;
+		SET db2env."MsgInsert"."QUEUE_NAME"      = dnq.printQ;
+		SET db2env."MsgInsert"."ORDER_SN"        = 0;                                -- @P03A
+		SET db2env."MsgInsert"."MSG_SN"          = 0;                                -- @P03A
+		SET db2env."MsgInsert"."MSG_TYPE"        = msgtype;
+		SET db2env."MsgInsert"."MSG_LOCAL_ADDR"  = prop.LocalAddress;                -- @P03A @P05C
+		SET db2env."MsgInsert"."MSG_REMOTE_ADDR" = prop.RemoteAddress;               -- @P03A @P05C
+		SET db2env."MsgInsert"."MSG_APPLREF"     = prop.DNIFIN.ApplicationReference;
+		SET db2env."MsgInsert"."MSG_TRANREF"     = prop.DNIFIN.TransactionReference; -- @P04A @P06C @P07C
+		SET db2env."MsgInsert"."MSG_STATE"       = MSGST_PENDING;                    -- @P03A
+		SET db2env."MsgInsert"."MSG_PRINTED"     = 0;                                -- @P03A
+
+		/* ------------------------------ @P03D begin ------------------------------ *\
+		IF prop.MessageDirection IS NOT NULL AND prop.MessageDirection = 'O' THEN
+			-- output message: SENDER:RemoteAddress RECEIVER:LocalAddress
+			SET db2env."MsgInsert"."MSG_SENDER"   = prop.RemoteAddress;
+			SET db2env."MsgInsert"."MSG_RECEIVER" = prop.LocalAddress;
+
+			SET db2env."MsgInsert"."Result"[] = PASSTHRU(chStmt, dnq.msgId, dnq.OU, dnq.printQ, msgtype,
+														prop.RemoteAddress, prop.LocalAddress, prop.DNIFIN.ApplicationReference, MSGST_PENDING );
+		ELSE
+			-- input message: SENDER:LocalAddress RECEIVER:RemoteAddress
+			SET db2env."MsgInsert"."MSG_SENDER"   = prop.LocalAddress;
+			SET db2env."MsgInsert"."MSG_RECEIVER" = prop.RemoteAddress;
+
+			SET db2env."MsgInsert"."Result"[] = PASSTHRU(
+			  chStmt,
+			  dnq.msgId,
+			  dnq.OU,
+			  dnq.printQ,
+			  msgtype,
+			  prop.LocalAddress,
+			  prop.RemoteAddress,
+			  prop.DNIFIN.ApplicationReference,
+			  MSGST_PENDING
+			);
+		END IF;
+		-- @P01C end
+		\* ------------------------------ @P03D end ------------------------------ */
+
+		SET db2env."MsgInsert"."Result"[] = PASSTHRU( -- @P03A begin
+			chStmt,
+			db2env."MsgInsert"."MSG_ID",
+			db2env."MsgInsert"."OU",
+			db2env."MsgInsert"."QUEUE_NAME",
+			db2env."MsgInsert"."ORDER_SN",
+			db2env."MsgInsert"."MSG_SN",
+			db2env."MsgInsert"."MSG_TYPE",
+			db2env."MsgInsert"."MSG_LOCAL_ADDR",      -- @P05C
+			db2env."MsgInsert"."MSG_REMOTE_ADDR",     -- @P05C
+			db2env."MsgInsert"."MSG_APPLREF",
+			db2env."MsgInsert"."MSG_TRANREF",         -- @P04A
+			db2env."MsgInsert"."MSG_STATE",
+			db2env."MsgInsert"."MSG_PRINTED"
+		);                                            -- @P03A end
+
+		SET iSqlCode = SQLCODE;
+		IF (iSqlCode <> 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_DB_ERROR)
+				VALUES ('DNQP_MESSAGE', CAST (iSqlCode AS CHAR), SQLSTATE, SQLERRORTEXT, CAST( SQLNATIVEERROR AS CHAR), chStmt, MSG_PIA_DB_ERROR);
+		END IF;
+
+		/*-------------------------------------------*\
+		|  Store message parts in DNQP_CONTENT table  |
+		\*-------------------------------------------*/
+		DECLARE part REFERENCE TO OutputRoot.MQMD;
+		DECLARE pos INTEGER 1;
+		DECLARE partCCSID INTEGER DEFAULT_CCSID;
+		DECLARE partEncoding INTEGER DEFAULT_ENCODING;
+		DECLARE parser CHARACTER;
+		DECLARE xBitstream BLOB; -- @P01A
+		DECLARE noOfParts INTEGER CARDINALITY(OutputRoot.*[]) - 1; -- Properties don't count
+
+		WHILE LASTMOVE(part) DO
+			IF (pos = noOfParts) THEN -- last part is message body and
+				SET pos = MAX_INT;    -- gets pos value of 2147483647
+			END IF;
+			SET parser = FIELDNAME(part);
+
+			-- @P01C begin: Do not call SQL directly
+			--SET chStmt = 'INSERT INTO '||SN||'.DNQP_CONTENT (MSG_ID, POS, PARSERNAME, CCSID, ENCODING, BITSTREAM)
+			--	VALUES ( MSG_ID, '||CAST(pos AS CHAR)||', '||parser||', '||CAST(partCCSID AS CHAR)||', '||CAST(partEncoding AS CHAR)||', ASBITSTREAM(part, partEncoding, partCCSID)';
+			--INSERT INTO Database.{SN}.DNQP_CONTENT (MSG_ID, POS, PARSERNAME, CCSID, ENCODING, BITSTREAM) VALUES (
+			--	dnq.msgId, pos, parser, partCCSID, partEncoding, ASBITSTREAM(part, partEncoding, partCCSID)
+			--);
+			SET xBitstream = ASBITSTREAM(part, partEncoding, partCCSID);
+
+			SET chStmt =
+				   'INSERT INTO '||SN||'.DNQP_CONTENT (MSG_ID, POS, PARSERNAME, CCSID, ENCODING, BITSTREAM) '
+				|| 'VALUES ( ?, ?, ?, ?, ?, ? )';
+
+			SET db2env."ContentInsert".{parser}."chStmt" 		= chStmt;
+			SET db2env."ContentInsert".{parser}."MSG_ID" 		= dnq.msgId;
+			SET db2env."ContentInsert".{parser}."POS" 			= pos;
+			SET db2env."ContentInsert".{parser}."PARSERNAME"	= parser;
+			SET db2env."ContentInsert".{parser}."CCSID"			= partCCSID;
+			SET db2env."ContentInsert".{parser}."ENCODING"		= partEncoding;
+			SET db2env."ContentInsert".{parser}."BITSTREAM5"	= SUBSTRING(xBitstream FROM 1 FOR 5);
+
+			SET db2env."ContentInsert".{parser}."Result"[] = PASSTHRU(
+				chStmt,
+				dnq.msgId,
+				pos,
+				parser,
+				partCCSID,
+				partEncoding,
+				xBitstream
+			);                                                    -- @P01C end
+
+			SET iSqlCode = SQLCODE;
+			IF (iSqlCode <> 0) THEN
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_DB_ERROR)
+					VALUES ('DNQP_CONTENT', CAST (iSqlCode AS CHAR), SQLSTATE, SQLERRORTEXT, CAST( SQLNATIVEERROR AS CHAR), chStmt, MSG_PIA_DB_ERROR);
+			END IF;
+
+			/*--------------------------*\
+			|  Set values for next part  |
+			\*--------------------------*/
+			CASE
+				WHEN part.CodedCharSetId > 0              THEN SET partCCSID = part.CodedCharSetId;
+				WHEN part.CodedCharSetId = MQCCSI_INHERIT THEN SET partCCSID = partCCSID;
+				ELSE                                           SET partCCSID = DEFAULT_CCSID;
+			END CASE;
+
+			-- @P01D: SET partEncoding = part.Encoding;
+			-- @P01A: Only set partEncoding if part.Encoding is set, otherwise use default.
+			IF (part.Encoding > 0) THEN
+				SET partEncoding = part.Encoding;
+			ELSE
+				SET partEncoding = DEFAULT_ENCODING;
+			END IF;
+
+			/*-------------------*\
+			|  Move to next part  |
+			\*-------------------*/
+			SET pos = pos + 1;
+			MOVE part NEXTSIBLING;
+
+		END WHILE; -- looping OutputRoot.*[]
+
+		/*------------------------------------------------------------------------*\
+		|  Check Message Warehouse configuration and create update request folder  |
+		\*------------------------------------------------------------------------*/
+		IF (UPPER(cfg.{CT_OPTIONS_MWH}.*.{ATTR_FLAG_MWH}) = 'YES') THEN
+		    -- @P11A begin
+			-- add DnqMwhUpdateInsert request
+			SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.Status      = 'PENDING';
+			SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.Destination = dnq.printQ;
+			SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.ExtensionId = 'ComIbmDnqPrint';
+		    -- @P11A end
+
+			-- Don't provide folder MQRFH2.ComIbmDni.DnqPrint in MWH entry
+			-- because this folder is not part of the WBI FN API
+			SET OutputRoot.MQRFH2.ComIbmDni.DnqPrint = NULL; -- @P10A
+
+			-- Propagate to terminal 'out', i.e.
+			-- to DnqMwhUpdateInsert node
+			RETURN TRUE;
+		ELSE
+			-- @P01A: Propagate to terminal 'out1', i.e.
+			--        to DniTrace node (for trace purposes only)
+			PROPAGATE TO TERMINAL 1;
+			RETURN FALSE;
+		END IF;
+	END;
+END MODULE;

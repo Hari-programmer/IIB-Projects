@@ -1,0 +1,23 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		IF Root.XMLNSC.name='Hari' Then
+			
+			SET LocalEnvironment.XMLNSC.Phn='845745685';
+			SET LocalEnvironment.XMLNSC.From='Yanam';
+			
+			RETURN TRUE;
+		ELSEIF Root.XMLNSC.name='Priya' Then
+			SET LocalEnvironment.XMLNSC.Phn='945854654587';
+			SET LocalEnvironment.XMLNSC.From='Hyd';
+			RETURN FALSE;
+			
+		ELSE
+			RETURN UNKNOWN;
+		END IF;
+		
+		
+		
+		RETURN TRUE;
+	END;
+

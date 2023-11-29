@@ -1,0 +1,90 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		
+		DECLARE CONVERT_CCSID                CONSTANT INT 1208;
+		DECLARE DNQO_VAILDATION_REQUIRED     CONSTANT CHAR 'Yes';
+		DECLARE DNQO_VAILDATION_NOT_REQUIRED CONSTANT CHAR 'No';
+		DECLARE DNQO_TRANSFORM_MODE_FIN2XML  CONSTANT CHAR '1';
+		DECLARE DNQO_TRANSFORM_MODE_NONE     CONSTANT CHAR '0';
+
+		DECLARE rEnv                 REFERENCE TO Environment;
+		CREATE FIELD Environment."Variables"."ComIbmDni"."DnqFinInput" AS rEnv;
+		DECLARE iCcsid               INT  InputRoot.*[<2].CodedCharSetId;
+		DECLARE rInputPayload        REFERENCE TO InputRoot.*[<]; --@P02C
+		DECLARE chPayloadDomain      CHAR FIELDNAME(InputRoot.*[<]);
+                                                                 -- begin @P04A
+		DECLARE rElementCheck        REFERENCE TO OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MessageValid";
+		DECLARE chTransformMode      CHAR DNQO_TRANSFORM_MODE_FIN2XML; --@P09C
+		DECLARE chValidationRequired CHAR DNQO_VAILDATION_NOT_REQUIRED; --@P08C
+		DECLARE bValidationRequired  BOOLEAN FALSE; --@P08C
+                                                                   -- end @P04A
+                                                                 -- begin @P22A
+		-- store original InputLocalEnvironment
+		DECLARE rOrgLocalEnv REFERENCE TO Environment;
+		CREATE FIELD rEnv."OriginalLocalEnv" AS rOrgLocalEnv;
+		SET rOrgLocalEnv = InputLocalEnvironment;
+                                                                   -- end @P22A
+                                                                 -- begin @P02A
+		DECLARE bTransform      BOOLEAN FALSE;
+		IF chPayloadDomain = 'BLOB' THEN
+			MOVE rInputPayload TO InputRoot.BLOB.BLOB;
+		END IF;
+                                                                   -- end @P02A
+		IF ((chPayloadDomain = 'XMLNSC') OR (chPayloadDomain = 'BLOB')) THEN --@P23A
+			DECLARE	xPayload        BLOB BITSTREAM(rInputPayload);
+			DECLARE chPayload       CHAR CAST(xPayload AS CHAR CCSID iCcsid);
+	
+			SET rEnv."OriginalCCSID"   = iCcsid;
+			SET rEnv."OriginalPayload" = rInputPayload;
+			
+			SET rEnv."chPayloadDomain" = chPayloadDomain;
+	
+			IF (iCcsid <> CONVERT_CCSID) THEN
+				SET xPayload = CAST(chPayload AS BLOB CCSID CONVERT_CCSID);
+				SET OutputRoot.*[<] = NULL;
+				CREATE LASTCHILD OF OutputRoot DOMAIN chPayloadDomain PARSE(xPayload);
+				SET OutputRoot.*[<2].CodedCharSetId = CONVERT_CCSID;
+			END IF;
+			
+			SET rEnv."ConvertedPayload" = xPayload;
+			SET rEnv."ConvertedPayloadInBody" = OutputRoot.*[<].*[<];
+	                                                                 -- begin @P01A
+			-- store MTFIN in Environment, if present (payload of type BLOB and first character is '{'),
+			-- to be copied to MQRFH2 as soon as it is created
+			IF (chPayloadDomain = 'BLOB') AND
+				((SUBSTRING(xPayload FROM 1 FOR 1) = CAST('{' AS BLOB CCSID CONVERT_CCSID))) THEN
+				SET rEnv."chMTFIN" = CAST(xPayload AS CHAR CCSID CONVERT_CCSID);
+	--			SET bTransform = TRUE; --@P02A @P09D
+	--			SET chTransformMode = DNQO_TRANSFORM_MODE_FIN2XML; --@P04C @P09D
+			END IF;
+	                                                                   -- end @P01A
+		END IF; --@P23A
+		SET rEnv."bTransform" = bTransform; --@P02A
+                                                                 /* begin @P03D
+		-- check node properties
+		DECLARE chValidateMessage CHAR UPPER(COALESCE(Environment.Variables."ComIbmDni"."DnqFinInput"."chValidateMessage", 'YES'));
+		
+		IF chValidateMessage NOT IN ('YES', 'NO') THEN
+			-- ValidateMessage: invalid property value
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1000
+			VALUES (chValidateMessage, 'DNQO1000E');
+		END IF;
+*/                                                                 -- end @P03D
+                                                                 -- begin @P04A
+		-- create Standards node request
+                                                                 -- begin @P08C
+		IF LASTMOVE(rElementCheck) AND (UPPER(Environment.ComIbmDni.StandardsProcessing.MessageValidation) = 'YES') THEN --@P06C --@P28C
+			IF (LENGTH(rElementCheck) > 0) AND (UPPER(rElementCheck) = 'NO') THEN
+				SET chValidationRequired = DNQO_VAILDATION_REQUIRED;
+				SET bValidationRequired = TRUE;
+			END IF;
+                                                                   -- end @P08C
+			SET OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Validate"."Request"."Required" = chValidationRequired;
+		END IF;
+		SET rEnv."bValidationRequired" = bValidationRequired;
+--		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Validate"."Request"."Required" = chValidationRequired; @P08D
+--		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Transform"."Request"."Mode" = chTransformMode; @P09D
+                                                                   -- end @P04A
+		RETURN TRUE;
+	END;

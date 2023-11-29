@@ -1,0 +1,53 @@
+CREATE COMPUTE MODULE ComIbmDnqMwhUpdateInsert_Convert
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE CONVERT_CCSID   CONSTANT INT 1208;
+
+		DECLARE rEnv            REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+                                                                 -- begin @P18A
+		DECLARE bPayloadPresent BOOLEAN FALSE;
+                                                                 -- begin @P21A
+		DECLARE chPayloadType CHAR UPPER(FIELDNAME(InputRoot.*[<]));
+		IF chPayloadType = 'BLOB' THEN
+			IF LENGTH(InputRoot.BLOB.BLOB) > 0 THEN
+				SET bPayloadPresent = TRUE;
+			END IF;
+		ELSE
+			IF (SUBSTRING(chPayloadType FROM 1 FOR 3) = 'XML') AND
+				(CARDINALITY(InputRoot.{chPayloadType}.*[]) > 0) THEN
+				SET bPayloadPresent = TRUE;
+			END IF;
+		END IF;
+		SET rEnv."bPayloadPresent" = bPayloadPresent;
+                                                                   -- end @P21A
+		IF bPayloadPresent THEN --@P20C @P21C
+--			SET bPayloadPresent = TRUE; @P21D
+--			SET rEnv."bPayloadPresent" = bPayloadPresent; @P21D
+                                                                   -- end @P18A
+			DECLARE iCcsid               INT  InputRoot.*[<2].CodedCharSetId;
+			DECLARE rInputPayload        REFERENCE TO InputRoot.*[<];
+			DECLARE chPayloadDomain      CHAR FIELDNAME(InputRoot.*[<]);
+			DECLARE	xPayload             BLOB BITSTREAM(rInputPayload);
+			DECLARE chPayload            CHAR CAST(xPayload AS CHAR CCSID iCcsid);
+	
+			SET rEnv."OriginalCCSID"   = iCcsid;
+			SET rEnv."OriginalPayload" = rInputPayload;
+			
+			SET rEnv."chPayloadDomain" = chPayloadDomain;
+	
+			IF (iCcsid <> CONVERT_CCSID) THEN
+				SET xPayload = CAST(chPayload AS BLOB CCSID CONVERT_CCSID);
+				SET OutputRoot.*[<] = NULL;
+				CREATE LASTCHILD OF OutputRoot DOMAIN chPayloadDomain PARSE(xPayload);
+				SET OutputRoot.*[<2].CodedCharSetId = CONVERT_CCSID;
+			END IF;
+			
+			SET rEnv."ConvertedPayload" = xPayload;
+			SET rEnv."ConvertedPayloadInBody" = OutputRoot.*[<].*[<];
+		END IF; --@P18A
+
+		RETURN TRUE;
+	END;
+END MODULE;

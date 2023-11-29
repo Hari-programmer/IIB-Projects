@@ -1,0 +1,29 @@
+CREATE COMPUTE MODULE Acc_URL_Compute1
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		
+		FOR InRef AS InputRoot.DFDL.Data.Input.record DO
+		DECLARE i INTEGER 1;
+		 --EXISTS(InRef.Data[]) <> ''
+		IF InRef.Data[i] = Source1.Employee_Id THEN	 THEN
+			
+		SET OutputLocalEnvironment.Destination.HTTP.RequestURL[] = 'https://api.dictionaryapi.dev/api/v2/entries/en/' ||  InRef;
+		SET OutputLocalEnvironment.Destination.HTTP.Timeout = 42; 
+		SET OutputLocalEnvironment.Destination.HTTP.RequestLine.Method = 'GET';
+		SET OutputLocalEnvironment.Destination.HTTP.RequestLine.HTTPVersion = 'HTTP/1.1'; 
+		SET OutputLocalEnvironment.Destination.HTTP.SSLProtocol = 'TLS';
+		
+		ELSE 
+			SET OutputRoot.JSON.Data.URLName = 'InvalidName';	 
+		END IF;
+		
+		
+		SET i=i+1;
+		END FOR;
+		
+		
+		RETURN TRUE;
+	END;
+
+END MODULE;

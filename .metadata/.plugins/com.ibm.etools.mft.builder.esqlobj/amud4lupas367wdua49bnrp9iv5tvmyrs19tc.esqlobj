@@ -1,0 +1,51 @@
+CREATE COMPUTE MODULE task06_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		 CALL CopyMessageHeaders();
+		 CALL CopyEntireMessage();
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		--SET OutputRoot = InputRoot;
+		
+		SET OutputRoot.XMLNSC.root.empinfo.title = InputRoot.XMLNSC.root.empinfo.title;
+		SET OutputRoot.XMLNSC.root.empinfo.firstname = InputRoot.XMLNSC.root.empinfo.firstname;
+		SET OutputRoot.XMLNSC.root.empinfo.lastname = InputRoot.XMLNSC.root.empinfo.lastname;
+		SET OutputRoot.XMLNSC.root.empinfo.street = InputRoot.XMLNSC.root.empinfo.street;
+		SET OutputRoot.XMLNSC.root.empinfo.city = InputRoot.XMLNSC.root.empinfo.city;
+		SET OutputRoot.XMLNSC.root.empinfo.phn = InputRoot.XMLNSC.root.empinfo.phn;
+		SET OutputRoot.XMLNSC.root.empinfo.age = InputRoot.XMLNSC.root.empinfo.age;
+		SET OutputRoot.XMLNSC.root.empinfo.nickname = InputRoot.XMLNSC.root.empinfo.nickname;
+		SET OutputRoot.XMLNSC.root.empinfo.gender = InputRoot.XMLNSC.root.empinfo.gender;
+		
+		SET OutputRoot.XMLNSC.root.empinfo.name.status.details.completename = InputRoot.XMLNSC.root.empinfo.firstname||InputRoot.XMLNSC.root.empinfo.lastname;
+		SET OutputRoot.XMLNSC.root.empinfo.info.Details.detail.final.last.petname = InputRoot.XMLNSC.root.empinfo.nickname;
+		SET OutputRoot.XMLNSC.root.empinfo.gender = InputRoot.XMLNSC.root.empinfo.gender;
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	END;
+END MODULE;

@@ -1,0 +1,51 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+
+    SET OutputRoot = InputRoot;
+    SET OutputLocalEnvironment = InputLocalEnvironment;
+
+    DECLARE cdl CHAR Environment.ComIbmDni.ConfigDataLoc;
+
+    -- Set destination queue for remote audit service.
+
+    DECLARE instance CHAR '';
+    IF (cdl = 'env') THEN
+      SET instance = Environment.ComIbmDni.Properties.Common.Instance;
+    ELSE
+      SET instance = OutputRoot.MQRFH2.ComIbmDni."Properties".Common.Instance;
+    END IF;
+
+    DECLARE mq REFERENCE TO OutputLocalEnvironment;
+    CREATE FIELD OutputLocalEnvironment.Destination.MQDestinationList AS mq;
+
+    SET mq.DestinationData.queueName = TRIM(instance) || '.SYSOU.DNI_R_AUDIT';
+
+    -- If required, move the user audit request to the MQRFH2.
+
+    IF (cdl = 'env') THEN
+
+      -- Copy the DniAuditUser group from the local environment to the MQRFH2
+      -- of the message.
+
+      DECLARE source REFERENCE TO OutputLocalEnvironment;
+      MOVE source TO OutputLocalEnvironment.ComIbmDni.Function.DniAuditUser;
+
+      DECLARE target REFERENCE TO OutputRoot;
+      CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniAuditUser AS target;
+
+      SET target.Store.Request = source.Store.Request;
+
+      -- With the statement above, all attributes got lost. Thus, add them
+      -- manually.
+
+      SET target.Store.Request.TimeStamp.(NameValue)dnidt = 'dateTime';
+
+      -- Delete the DniAuditUser group from the local environment.
+
+      DELETE FIELD source;
+
+    END IF;
+
+    RETURN TRUE;
+
+  END;
+

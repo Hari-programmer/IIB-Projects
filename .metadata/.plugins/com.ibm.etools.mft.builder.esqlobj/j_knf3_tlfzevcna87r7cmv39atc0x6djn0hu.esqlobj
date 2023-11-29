@@ -1,0 +1,42 @@
+CREATE COMPUTE MODULE ComIbmDnqMwhUpdateInsert_RethrowException
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+
+		DECLARE rException REFERENCE TO InputExceptionList.*[1];
+		DECLARE chExceptionStatement CHAR '';
+		
+		WHILE LASTMOVE(rException) DO
+			MOVE rException LASTCHILD;
+		END WHILE;
+		IF rException."Number" IS NULL THEN
+			MOVE rException PARENT;
+		END IF;
+		WHILE rException."Number" IS NULL AND LASTMOVE(rException) DO
+			MOVE rException PARENT;
+		END WHILE;
+
+		SET chExceptionStatement = 'THROW USER EXCEPTION ' ||
+			' SEVERITY ' || CAST(rException."Severity" AS CHAR) ||
+			' CATALOG ''' || rException."Catalog" ||
+			''' MESSAGE ' || CAST(rException."Number" AS CHAR);
+
+		IF CARDINALITY(rException."Insert"[]) > 0 THEN
+			DECLARE rInsert REFERENCE TO rException."Insert"[1];
+			DECLARE chText  CHAR '';
+			SET chExceptionStatement = chExceptionStatement || ' VALUES (';
+			WHILE LASTMOVE(rInsert) DO
+				IF rInsert."Type" IN (2, 3) THEN
+					SET chText = CAST(rInsert."Text" AS CHAR);
+				ELSE
+					SET chText = '''' || REPLACE(rInsert."Text", '''', '''''') || ''''; --@P23C
+				END IF;
+				SET chExceptionStatement = chExceptionStatement || chText || ',';
+				MOVE rInsert NEXTSIBLING;
+			END WHILE;
+			SET chExceptionStatement = OVERLAY(chExceptionStatement PLACING ')' FROM LENGTH(chExceptionStatement) FOR 1);
+		END IF;
+		EVAL(chExceptionStatement);
+
+		RETURN TRUE;
+	END;
+END MODULE;

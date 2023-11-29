@@ -1,0 +1,368 @@
+CREATE COMPUTE MODULE ComIbmDnqErQueueInput_QueryDB
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		DECLARE rEnv        REFERENCE TO Environment;
+		DECLARE rProperties REFERENCE TO Environment.Variables.ComIbmDni.Dnq.Properties;
+		DECLARE rDnqProps   REFERENCE TO Environment;
+		DECLARE rER         REFERENCE TO Environment;
+		DECLARE rDnqInput   REFERENCE TO rProperties.DnqInput;
+		DECLARE rDomain     REFERENCE TO rDnqInput.Domain[1];
+		DECLARE rQueue      REFERENCE TO rDnqInput.Queue[1];
+		DECLARE rTemp       REFERENCE TO Environment; -- dummy initialization
+		DECLARE rOu         REFERENCE TO Environment; -- dummy initialization
+		DECLARE rTrace      REFERENCE TO Environment; -- dummy initialization
+		DECLARE rMQHeader   REFERENCE TO Environment; -- dummy initialization
+		DECLARE rTmpFolder  REFERENCE TO Environment; -- dummy initialization
+		DECLARE rProcInfo   REFERENCE TO Environment; -- dummy initialization
+		
+		DECLARE chStmt           CHAR '';
+		DECLARE chSchema         CHAR rProperties.SchemaName;
+		DECLARE chGeneralFields  CHAR '';
+		DECLARE chFinFields      CHAR '';
+		DECLARE chFundsFields    CHAR '';
+		DECLARE chEniFields      CHAR '';
+		DECLARE chSelectClause   CHAR '';
+		DECLARE chFromClause     CHAR 'FROM ' || chSchema || '.DNQE_MESSAGES AS GENERIC ';
+		DECLARE chWhereClause    CHAR '';
+		DECLARE chOrderByClause  CHAR 'ORDER BY STORETIME ASC FETCH FIRST ROW ONLY';
+		DECLARE xComIbmDni       BLOB;
+
+		DECLARE iSqlCode INT 0;
+		
+		DECLARE bFin    BOOLEAN FALSE;
+		DECLARE bFunds  BOOLEAN FALSE;
+		DECLARE bEni    BOOLEAN FALSE;
+		DECLARE bReturn BOOLEAN TRUE;
+	
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Trace AS rTrace;
+		
+		SET Environment.Variables.ComIbmDni.Properties = Environment.ComIbmDni.Properties;
+            
+		SET chGeneralFields = 'STORETIME, EXTERNALID, OU, QUEUE, QUEUETYPE, ROUTINGREQ, MQHEADERENC, MQHEADER, ' ||
+			'COMIBMDNI, PAYLOAD, LOCALADDRESS, REMOTEADDRESS, MSGDOMAIN, MSGTYPE, LASTCHGUSER, POSSIBLEDUPLICATE';
+		SET chFinFields = 'APPLREFERENCE, DNIFIN.VALUEDATE AS FINVALUEDATE, CHAR( AMOUNT,''.'') AS AMOUNT, CURRENCY, PRIORITY, SESSION, ISN, OSN';
+		SET chFundsFields = 'DNIFUNDS.VALUEDATE AS FUNDSVALUEDATE, CHAR( UNITS, ''.'') AS UNITS, SECURITYID, SECSTANDARD, ORDERREFERENCE';
+		SET chEniFields = 'CASEID, CASECREATOR';
+		
+		SET chWhereClause = 'WHERE ROUTINGREQ IN (''' || rProperties.ProcessingType || ''') AND (';
+		
+		-- handle different OUs
+		WHILE LASTMOVE(rQueue) DO
+			IF POSITION( '*' IN rQueue.Name ) <> 0 OR
+			   POSITION( '?' IN rQueue.Name ) <> 0 THEN
+				SET rQueue.Name = REPLACE( rQueue.Name, '*', '%' );
+				SET rQueue.Name = REPLACE( rQueue.Name, '?', '_' );
+				SET chWhereClause = chWhereClause || '(QUEUE LIKE ''' || rQueue.Name || ''' AND (';
+			ELSE
+				SET chWhereClause = chWhereClause || '(QUEUE = ''' || rQueue.Name || ''' AND (';
+			END IF;
+			MOVE rTemp TO rQueue.OUWithWC;
+			MOVE rOu TO rQueue.OU[1];
+			IF LASTMOVE(rTemp) THEN
+				WHILE LASTMOVE(rOu) DO          	  	
+					IF POSITION( '*' IN rOu ) <> 0 OR
+					   POSITION( '?' IN rOu ) <> 0 THEN
+						SET rOu = REPLACE( rOu, '*', '%' );
+						SET rOu = REPLACE( rOu, '?', '_' );         	  
+						SET chWhereClause = chWhereClause || 'OU like ''' || rOu || ''' OR ';           	
+					ELSE
+						Set chWhereClause = chWhereClause || 'OU = ''' || rOu || ''' OR ';           		
+					END IF;	
+					MOVE rOu NEXTSIBLING NAME 'OU';
+				END WHILE;
+				SET chWhereClause = LEFT( chWhereClause, LENGTH( chWhereClause ) - 3 ) || ')) OR ';
+			ELSE
+				SET chWhereClause = chWhereClause || 'OU IN (';
+				WHILE LASTMOVE(rOu) DO          	  	
+					Set chWhereClause = chWhereClause || '''' || rOu || ''',';
+					MOVE rOu NEXTSIBLING NAME 'OU';
+				END WHILE;
+				SET chWhereClause = LEFT( chWhereClause, LENGTH( chWhereClause ) - 1 ) || '))) OR ';
+			END IF;
+			MOVE rQueue NEXTSIBLING NAME 'Queue';
+		END WHILE;
+		-- remove last 'OR '
+		SET chWhereClause = LEFT( chWhereClause, LENGTH( chWhereClause ) - 3 ) || ')';
+		
+		-- handle msg domains - build up where clause and join ME tables
+		IF LASTMOVE(rDomain) THEN
+			SET chWhereClause = chWhereClause || ' AND MSGDOMAIN IN (';
+	        
+			WHILE LASTMOVE(rDomain) DO
+				SET chWhereClause = chWhereClause || '''' || rDomain || ''',';
+				-- select special fields for domains with existing ME tables (FIN, FUNDS and ENI)
+				IF (rDomain IN ('DNIFIN','DNIFUNDS','DNIENI')) THEN
+					SET chFromClause = chFromClause || 'LEFT JOIN ' || chSchema || '.DNQE_ME_' || rDomain ||
+						' AS ' || rDomain || ' ON GENERIC.ID = ' || rDomain || '.ID ';
+					IF (rDomain = 'DNIFIN') THEN
+						SET bFin = TRUE;
+					ELSEIF (rDomain = 'DNIFUNDS') THEN
+						SET bFunds = TRUE;
+					ELSEIF (rDomain = 'DNIENI') THEN
+						SET bEni = TRUE;
+					END IF;
+				ELSE
+					-- tolerate other domains
+					SET rTrace.OtherDomain = rDomain;
+				END IF;
+				MOVE rDomain NEXTSIBLING NAME 'Domain';
+			END WHILE;
+	
+			-- remove tailing ',' and close domain condition
+			SET chWhereClause = LEFT( chWhereClause, LENGTH( chWhereClause ) - 1 ) || ') ';
+		END IF;
+		
+		DECLARE chCheckStmt   CHAR 'SELECT GENERIC.ID, GENERIC.STORETIME, GENERIC.ROUTINGREQ ' || chFromClause ||
+			chWhereClause || chOrderByClause; --' WITH UR';
+		DECLARE chReserveStmt CHAR 'UPDATE ' || chSchema || '.DNQE_MESSAGES SET ROUTINGREQ=? WHERE ID=? AND ROUTINGREQ<>? AND STORETIME=?'; --@P01C
+			-- chWhereClause || 'AND ID=?';
+		DECLARE iMsgId        INT 0;
+		DECLARE chRoutingReq  CHAR '';
+
+		SET rTrace."chCheckStmt" = chCheckStmt;
+	
+		SET Environment.Variables.ComIbmDni.Dnq.Tmp[] = PASSTHRU( chCheckStmt );
+	      
+		SET iSqlCode = SQLCODE;
+		IF (iSqlCode < 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqckmsg' MESSAGE 1017
+			VALUES (chCheckStmt, iSqlCode, SQLSTATE, SQLERRORTEXT, SQLNATIVEERROR, chStmt, 'DNQK1017E');
+		END IF;
+
+		MOVE rTmpFolder TO Environment.Variables.ComIbmDni.Dnq.Tmp;
+
+		IF (NOT LASTMOVE(rTmpFolder)) THEN
+			-- stop processing - no msg available
+			RETURN FALSE;
+		END IF;
+
+		SET iMsgId = rTmpFolder.ID;
+		SET chRoutingReq = rTmpFolder.ROUTINGREQ;
+		SET rTrace."iMsgId" = iMsgId;
+		SET rTrace."chReserveStmt" = chReserveStmt;
+
+		PASSTHRU(chReserveStmt, 'A', iMsgId, 'A', rTmpFolder.STORETIME); --@P01C
+		SET iSqlCode = SQLCODE;
+		IF (iSqlCode < 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqckmsg' MESSAGE 1017
+			VALUES (chReserveStmt, iSqlCode, SQLSTATE, SQLERRORTEXT, SQLNATIVEERROR, chStmt, 'DNQK1017E');
+		ELSE
+			-- IF (iSqlCode = 100) THEN
+			IF (iSqlCode <> 0) THEN
+				-- stop processing for a message already in use
+				SET Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.NewId = iMsgId;
+				RETURN FALSE;
+			END IF;
+		END IF;
+
+		-- remove current results
+		DELETE FIELD Environment.Variables.ComIbmDni.Dnq.Tmp;
+
+		SET chSelectClause = 'SELECT GENERIC.ID, ' || chGeneralFields;
+		
+		IF bFin THEN
+			SET chSelectClause = chSelectClause  || ', ' || chFinFields;
+		END IF;
+		IF bFunds THEN
+			SET chSelectClause = chSelectClause  || ', ' || chFundsFields;
+		END IF;
+		IF bEni THEN
+			SET chSelectClause = chSelectClause  || ', ' || chEniFields;
+		END IF;
+		
+		SET chSelectClause = chSelectClause || ' ';
+		
+		SET chStmt = chSelectClause || chFromClause || 'WHERE GENERIC.ID = ?';
+		
+		SET rTrace.chStmt = chStmt;
+	
+		SET Environment.Variables.ComIbmDni.Dnq.Tmp[] = PASSTHRU( chStmt, iMsgId );
+
+		SET iSqlCode = SQLCODE;
+		IF (iSqlCode < 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqckmsg' MESSAGE 1017
+			VALUES (chCheckStmt, iSqlCode, SQLSTATE, SQLERRORTEXT, SQLNATIVEERROR, chStmt, 'DNQK1017E');
+		END IF;
+
+		MOVE rTmpFolder TO Environment.Variables.ComIbmDni.Dnq.Tmp;
+		MOVE rTemp TO rTmpFolder.ID;
+		
+		IF LASTMOVE(rTmpFolder) AND LASTMOVE(rTemp) THEN
+			
+			DECLARE chID CHAR rTemp;
+	      		      	
+			DECLARE I INTEGER;	      	
+			Set I = 1;
+			
+			-- Create headers
+			DECLARE Semi INTEGER;
+			DECLARE L    INTEGER;
+			DECLARE Name CHARACTER;
+			DECLARE LS BLOB;	 
+			DECLARE Len INTEGER;
+	      	
+			MOVE rTemp TO rTmpFolder.COMIBMDNI;
+			IF NOT LASTMOVE(rTemp) THEN
+			  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1009 VALUES( chID, 'DNQK1009E' );	      		
+			END IF;
+	      	
+			MOVE rTemp TO rTmpFolder.MQHEADER;
+			IF LASTMOVE(rTemp) AND (LENGTH(rTemp)>0) THEN
+			  DECLARE xMQHeader BLOB rTemp;
+	      	  SET Len = LENGTH( xMQHeader );
+	      	  X : LOOP
+       		  
+	      	    SET Semi = POSITION( X'3B' IN xMQHeader FROM I ) - I;
+	      	    IF Semi = 0 THEN
+	      	      SET L = 0;
+	      	    ELSE
+  	      	      SET LS = SUBSTRING( xMQHeader FROM I FOR Semi );
+	      	      SET L = CAST( SUBSTRING( CAST( LS AS CHARACTER CCSID 1208 ) FROM 1 FOR LENGTH( LS ) ) AS INTEGER );
+	      	    END IF;
+	      	    SET I = I + Semi + 1;
+	      	    SET Semi = POSITION( X'3B' IN xMQHeader FROM I ) - I;
+	      	    IF Semi = 0 
+	      	    THEN
+	      	      -- Error
+	      	  	  LEAVE X;
+	      	    END IF;
+	      	    SET Name = CAST( SUBSTRING( xMQHeader FROM I FOR Semi ) AS CHARACTER CCSID 1208 );
+	      	    SET I = I + Semi + 1;
+	      	    IF L > 0 
+	      	    THEN
+  	      	      CREATE LASTCHILD OF OutputRoot DOMAIN(Name) PARSE( SUBSTRING( xMQHeader FROM I FOR L ) CCSID 1208 ENCODING rTmpFolder.MQHEADERENC );
+	      	    END IF;
+	      	    SET I = I + L;       		  
+  	      	    IF I >= Len
+	      	    THEN
+	      	      LEAVE X;
+	      	    END IF;
+	      	  END LOOP X;
+			ELSE
+				DECLARE rRfh2 REFERENCE TO InputRoot;
+				CREATE LASTCHILD OF OutputRoot DOMAIN 'MQMD';
+				SET OutputRoot.MQMD.UserIdentifier = Environment.ComIbmDni.Properties.Common.BrokerUID;
+				CREATE NEXTSIBLING OF OutputRoot.MQMD AS rRfh2 DOMAIN 'MQRFH2' NAME 'MQRFH2';
+				SET rRfh2.(MQRFH2.Field)"Format"         = MQFMT_STRING;
+				SET rRfh2.(MQRFH2.Field)"CodedCharSetId" = 1208;
+				SET rRfh2.(MQRFH2.Field)"NameValueCCSID" = 1208;
+                                                                                     -- @P02C begin
+--				MOVE rTemp TO rTmpFolder.EXTERNALID;
+--				IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+--					SET OutputRoot.MQMD.MsgId = rTemp;
+--				ELSE
+				DECLARE DNQ_EMPTY_MSGID CONSTANT BLOB X'000000000000000000000000000000000000000000000000';
+				SET OutputRoot.MQMD.MsgId = OVERLAY(DNQ_EMPTY_MSGID PLACING UUIDASBLOB FROM 1);
+--				END IF;
+                                                                                     -- @P02C end
+	      	END IF;
+                                                                                     -- @P02A begin
+			MOVE rTemp TO rTmpFolder.EXTERNALID;
+			IF LASTMOVE(rTemp) AND rTemp<>'' THEN
+				SET OutputRoot.MQMD.MsgId = rTemp;
+			END IF;
+                                                                                     -- @P02A end
+            DELETE FIELD OutputRoot.XMLNSC;
+            CREATE FIELD Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput AS rProcInfo;
+	      	SET rProcInfo.NewId = rTmpFolder.ID;
+	      	SET rProcInfo.QueueName = rTmpFolder.QUEUE;
+	      	SET rProcInfo.QueueType = DnqUtil_ErDecodeQueueType(UPPER(rTmpFolder.QUEUETYPE));
+	      	SET rProcInfo.RoutingReq = DnqUtil_ErDecodeRoutingReq(chRoutingReq); -- use original from first DB SELECT
+
+	      	DELETE FIELD OutputRoot.MQRFH2.ComIbmDni;
+			DELETE FIELD Environment.ComIbmDni;
+	      	
+	      	SET OutputRoot.MQRFH2.CodedCharSetId = 1208;
+	      	CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC' PARSE( rTmpFolder.COMIBMDNI CCSID 1208 );
+	      	DECLARE rComIbmDni REFERENCE TO OutputRoot.XMLNSC.Root.MQRFH2.ComIbmDni;
+	      	IF LASTMOVE(rComIbmDni) THEN
+			    SET xComIbmDni = ASBITSTREAM( OutputRoot.XMLNSC.Root.MQRFH2.ComIbmDni OPTIONS FolderBitStream CCSID 1208 );
+	      		CREATE LASTCHILD OF OutputRoot.MQRFH2 DOMAIN('MQRFH2') PARSE( xComIbmDni CCSID 1208 OPTIONS FolderBitStream);
+	      	END IF;
+	      	MOVE rTemp TO OutputRoot.XMLNSC.Root.Environment.ComIbmDni;
+	      	IF LASTMOVE(rTemp) THEN
+	      		CALL ComIbmDnqRouting.DnqUtil_CopyTree(rTemp, rEnv);
+	      	END IF;
+	      	DELETE FIELD OutputRoot.XMLNSC;
+	      	MOVE rComIbmDni TO OutputRoot.MQRFH2.ComIbmDni;
+	      	
+	      	DECLARE rDnq REFERENCE TO Environment;
+	      	CREATE FIELD Environment.ComIbmDni.Dnq AS rDnq;
+
+			-- US: support Funds responses w/o payload (defect (9917), create payload in msg only if payload available in DNQ_MESSAGES
+			MOVE rTemp TO rTmpFolder.PAYLOAD;
+	      	IF (LASTMOVE(rTemp) AND (LENGTH(rTemp)>0)) THEN
+    	      CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC' PARSE( rTemp CCSID 1208 );
+	      	END IF;
+	      	
+			MOVE rTemp TO rDnq.ER.CurrentAction;
+			IF NOT LASTMOVE(rTemp) THEN
+			  CREATE FIELD rDnq.ER.CurrentAction AS rTemp;
+              SET rTemp.UserId = RTRIM( InputRoot.MQMD.UserIdentifier );
+   	          SET rTemp.DateTime = DnqUtil_GetCurrentWbifnTimestamp();   	  
+   	          SET rTemp.Function = 'ROUTING';   	  
+   	          SET rTemp.ProcessType = 'BUSINESS';
+	      	END IF;
+	      	SET rProperties.ExternalSystem = OutputRoot.MQRFH2.ComIbmDni.Dnq.Properties.ExternalSystem;
+	      	SET rDnq.MessageId = rProcInfo.NewId;
+	      	SET rComIbmDni.OU = TRIM(rTmpFolder.OU);
+	      	SET rProcInfo.OU = rComIbmDni.OU;
+	      	SET rDnq.StoreTime = rTmpFolder.STORETIME;
+	      	SET rDnq.ExternalMessageId = rTmpFolder.EXTERNALID;
+			
+			CREATE FIELD Environment.ComIbmDni.Dnq.ER AS rER;
+	      	SET rER.QueueName = rProcInfo.QueueName;
+	      	SET rER.QueueType = rProcInfo.QueueType;
+			SET rER.ProcessType = rProcInfo.RoutingReq;
+			
+			/* fill Dnq Properties and ER folder ** removed - filled by UI
+			CREATE FIELD Environment.ComIbmDni.Dnq.Properties AS rDnqProps;
+			SET rDnqProps.LocalAddress         = rTmpFolder.LOCALADDRESS;
+			SET rDnqProps.RemoteAddress        = rTmpFolder.REMOTEADDRESS;
+			SET rDnqProps.MessageType          = rTmpFolder.MSGTYPE;
+			IF (rTmpFolder.MSGDOMAIN = 'DNIFIN') THEN
+				SET rDnqProps.ApplicationReference = rTmpFolder.APPLREFERENCE;
+				SET rDnqProps.ValueDate            = rTmpFolder.FINVALUEDATE;
+				SET rDnqProps.Amount               = rTmpFolder.AMOUNT;
+				SET rDnqProps.Currency             = rTmpFolder.CURRENCY;
+				SET rDnqProps.Priority             = rTmpFolder.PRIORITY;
+				SET rDnqProps.SessionId            = rTmpFolder.SESSION;
+				SET rDnqProps.SessionISN           = rTmpFolder.ISN;
+				SET rDnqProps.SessionOSN           = rTmpFolder.OSN;
+			ELSEIF (rTmpFolder.MSGDOMAIN = 'DNIFUNDS') THEN
+				SET rDnqProps.ValueDate        = rTmpFolder.FUNDSVALUEDATE;
+				SET rDnqProps.Units            = rTmpFolder.UNITS;
+				SET rDnqProps.SecurityID       = rTmpFolder.SECURITYID;
+				SET rDnqProps.SecurityStandard = rTmpFolder.SECSTANDARD;
+				SET rDnqProps.OrderReference   = rTmpFolder.ORDERREFERENCE;
+			END IF; */
+			
+			-- for MSIF messages fill request type as this is not filled by UI
+			IF (rTmpFolder.MSGDOMAIN <> 'DNIFIN') THEN
+				SET Environment.ComIbmDni.Dnq.Properties.MSIF.RequestType = rTmpFolder."MSGTYPE";
+			END IF;
+			
+			-- remember timestamp of last history entry
+			DECLARE rHistoryEntry  REFERENCE TO Environment;
+	   	    MOVE rHistoryEntry TO OutputRoot.MQRFH2.ComIbmDni.History.HistoryEntry[<];
+	   	    IF LASTMOVE(rHistoryEntry) THEN
+	   	    	SET Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.LastHistoryEntryTS = rHistoryEntry.TimeStamp;
+	   	    ELSE
+	   	    	SET Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.LastHistoryEntryTS = ' ';
+	   	    END IF;
+	
+			SET Environment.ComIbmDni.Properties = Environment.Variables.ComIbmDni.Properties;
+			DELETE FIELD Environment.Variables.ComIbmDni.Properties;
+	      	MOVE rTmpFolder To Environment;
+            DELETE FIELD Environment.Variables.ComIbmDni.Dnq.Tmp;
+            
+	    ELSE
+			-- no result returned
+			SET bReturn = FALSE;
+		END IF;
+
+		RETURN bReturn;
+	END;
+    
+END MODULE;

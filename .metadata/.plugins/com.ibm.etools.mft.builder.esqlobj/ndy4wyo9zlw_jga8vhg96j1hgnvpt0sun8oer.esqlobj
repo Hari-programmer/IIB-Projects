@@ -1,0 +1,39 @@
+CREATE COMPUTE MODULE ComIbmDnqErFinInput_CreateValidPropErrEvent
+  CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+
+	SET OutputRoot = InputRoot;
+	SET OutputLocalEnvironment = InputLocalEnvironment;
+
+    DECLARE chEvtTS CHAR CAST(CURRENT_GMTTIMESTAMP AS CHAR);
+    DECLARE iPos    INT  POSITION('''' in chEvtTS) + 1;
+    DECLARE evt     REFERENCE TO OutputRoot;
+	DECLARE chInst  CHAR Environment.Variables.ComIbmDni.Dnq.Properties.Instance;
+	
+    SET chEvtTS = SUBSTRING(chEvtTS FROM iPos FOR LENGTH(chEvtTS) - iPos);
+    SET chEvtTS = OVERLAY  (chEvtTS PLACING 'T' FROM 11);
+
+    -- Create a WBI FN event message
+    DELETE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store;
+    CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request AS evt;
+
+    SET evt.TimeStamp = chEvtTS;
+    SET evt.TimeStamp.(NameValue)dnidt = 'dateTime';
+
+    SET evt.EventId  = 'DNQK2012I';
+    SET evt.OU       = OutputRoot.MQRFH2.ComIbmDni.OU;
+    SET evt.Service  = Environment.ComIbmDni.Properties.Common.Service;
+    SET evt.SystemId = 'QM_' || Environment.ComIbmDni.Properties.Common.QueueManager;
+    SET evt.MessageFlow    = Environment.ComIbmDni.Properties.Common.MessageFlow;
+    SET evt.ExecutionGroup = Environment.ComIbmDni.Properties.Common.ExecutionGroup;
+    SET evt.Broker         = Environment.ComIbmDni.Properties.Common.Broker;
+    SET evt.ComponentName  = 'DNQK';
+    SET evt.SearchKey      = 'Exception';
+    SET evt.Parameter1     = InputLocalEnvironment.Destination.Dnq.DestinationData.QueueName;
+	
+	-- address event queue
+	SET OutputLocalEnvironment.Destination.MQ.DestinationData.queueName = chInst || '.SYSOU.DNI_R_EVENT';
+
+	RETURN TRUE;
+  END;
+END MODULE;

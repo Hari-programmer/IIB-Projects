@@ -1,0 +1,134 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "title" : "RestApp",
+    "version" : "1.0.0",
+    "description" : "RestApp"
+  },
+  "paths" : {
+    "/AddOpeartion/Add" : {
+      "post" : {
+        "operationId" : "postAdd",
+        "responses" : {
+          "200" : {
+            "description" : "The operation was successful.",
+            "schema" : {
+              "$ref" : "#/definitions/output"
+            }
+          }
+        },
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "description" : "Insert a Add",
+        "parameters" : [ {
+          "name" : "body",
+          "in" : "body",
+          "schema" : {
+            "$ref" : "#/definitions/input"
+          },
+          "description" : "The request body for the operation",
+          "required" : true
+        } ]
+      }
+    },
+    "/DivisionOpeartion/Division" : {
+      "post" : {
+        "operationId" : "postDivision",
+        "responses" : {
+          "200" : {
+            "description" : "The operation was successful.",
+            "schema" : {
+              "$ref" : "#/definitions/output"
+            }
+          }
+        },
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "description" : "Insert a Division",
+        "parameters" : [ {
+          "name" : "body",
+          "in" : "body",
+          "schema" : {
+            "$ref" : "#/definitions/input"
+          },
+          "description" : "The request body for the operation",
+          "required" : true
+        } ]
+      }
+    },
+    "/MultiplicationOpeartion/Multiplication" : {
+      "post" : {
+        "operationId" : "postMultiplication",
+        "responses" : {
+          "200" : {
+            "description" : "The operation was successful.",
+            "schema" : {
+              "$ref" : "#/definitions/input"
+            }
+          }
+        },
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "description" : "Insert a Multiplication",
+        "parameters" : [ {
+          "name" : "body",
+          "in" : "body",
+          "schema" : {
+            "type" : "number"
+          },
+          "description" : "The request body for the operation",
+          "required" : true
+        } ]
+      }
+    },
+    "/SubstractionOperation/Substraction" : {
+      "post" : {
+        "operationId" : "postSubstraction",
+        "responses" : {
+          "200" : {
+            "description" : "The operation was successful.",
+            "schema" : {
+              "$ref" : "#/definitions/output"
+            }
+          }
+        },
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "description" : "Insert a Substraction",
+        "parameters" : [ {
+          "name" : "body",
+          "in" : "body",
+          "schema" : {
+            "$ref" : "#/definitions/input"
+          },
+          "description" : "The request body for the operation",
+          "required" : true
+        } ]
+      }
+    }
+  },
+  "basePath" : "/restapp/v1",
+  "definitions" : {
+    "input" : {
+      "type" : "object",
+      "properties" : {
+        "element1" : {
+          "type" : "integer"
+        },
+        "element2" : {
+          "type" : "integer"
+        }
+      }
+    },
+    "output" : {
+      "type" : "object",
+      "properties" : {
+        "Result" : {
+          "type" : "integer"
+        }
+      }
+    }
+  },
+  "schemes" : [ "http" ],
+  "host" : "desktop-8l19k30:7800"
+}

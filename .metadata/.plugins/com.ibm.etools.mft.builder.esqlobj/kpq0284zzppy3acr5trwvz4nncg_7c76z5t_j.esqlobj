@@ -1,0 +1,400 @@
+/*EATE PROCEDURE substitute(IN ref REFERENCE, IN name CHAR) BEGIN
+
+    -- Retrieve the expected application encoding scheme
+
+    DECLARE stmt CHAR 'SELECT CURRENT APPLICATION ENCODING SCHEME FROM SYSIBM.SYSDUMMY1';
+    SET OutputLocalEnvironment.Variables.Result[] = PASSTHRU(stmt);
+
+    -- Check all parameters, and substitute any characters that cannot be converted to
+    -- the expected application encoding scheme with a '?' character
+
+    DECLARE cp INT OutputLocalEnvironment.Variables.Result.*[1];
+    FOR p AS ref.{name}[] DO
+
+      DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+        DECLARE value CHAR FIELDVALUE(p);
+        DECLARE i     INT 1;
+        DECLARE max   INT LENGTH(value) + 1;
+        WHILE (i < max) DO
+          DECLARE CONTINUE HANDLER FOR SQLSTATE LIKE '%' BEGIN
+            SET value = OVERLAY(value PLACING '?' FROM i);
+          END;
+          DECLARE data BLOB CAST(SUBSTRING(value FROM i FOR 1) AS BLOB CCSID cp);
+          SET i = i + 1;
+        END WHILE;
+        SET p VALUE = value;
+      END;
+
+      DECLARE data BLOB CAST(CAST(FIELDVALUE(p) AS CHAR) AS BLOB CCSID cp);
+
+    END FOR;
+
+  END; -- PROCEDURE substitute(IN REFERENCE, IN CHAR)
+                                                                                         -- @P17A end
+
+CREATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+
+-- This node inserts the requested information into the database. No explicit
+-- parameter checking is performed. This is done by the DBMS.
+
+
+-- Currently defined fields in ...Request.MessageField:
+--    Amount               DECIAML(18,5)     MWH_AMOUNT
+--    Currency             CHAR(3)           MWH_CURRENCY
+--    ValueDate            DATE              MWH_VALUE_DATE
+--    ISN                  INTEGER           MWH_ISN
+--    OSN                  INTEGER           MWH_OSN
+--    MessageType          CHAR(30)          MWH_MSG_TYPE         -- @P04C
+--    Quantity             INTEGER           MWH_QUANTITY
+--    Priority             CHAR(1)           MWH_PRIORITY
+--    AuthenticationStatus CHAR(8)           MWH_AUTH_STATUS
+--    PDIndicator          CHAR(1)           MWH_PD_INDICATOR
+--    SessionID            INTEGER           MWH_SESSION
+--    Sender               VARCHAR(128)      MWH_SENDER
+--    Receiver             VARCHAR(128)      MWH_RECEIVER
+--    Identification       VARCHAR(16)       MWH_IDENTIFICATION
+--    TransactionReference VARCHAR(16)       MWH_TRAN_REFERENCE
+--    ApplicationReference VARCHAR(32)       MWH_APPL_REFERENCE
+--    MessageReference     VARCHAR(64)       MWH_MSG_REFERENCE
+--    Item                 VARCHAR(16)       MWH_ITEM
+--    ExtensionIdentifier  VARCHAR(16)       MWH_EXT_IDENTIFIER
+--    ExtensionDefined1    VARCHAR(128)      MWH_EXTENSION_DEF1
+--    ExtensionDefined2    VARCHAR(128)      MWH_EXTENSION_DEF2
+--    ExtensionDefined3    VARCHAR(128)      MWH_EXTENSION_DEF3
+--    Application          VARCHAR(100)      MWH_APPL_NAME
+--    User                 VARCHAR(100)      MWH_USER_ID
+--    UserDefined1         VARCHAR(128)      MWH_USER_DEF1
+--    UserDefined2         VARCHAR(128)      MWH_USER_DEF2
+--    UserDefined3         VARCHAR(128)      MWH_USER_DEF3
+                                                                -- @P04A begin
+--    MsgDomain            CHAR(16)          MWH_MSG_DOMAIN
+--    TrafficType          CHAR(3)           MWH_TRAFFIC_TYPE
+--    BodyRep              CHAR(3)           MWH_BODY_REP
+--    RoutDest             VARCHAR(30)       MWH_ROUT_DEST
+--    ParentMsgId          CHAR(24)          MWH_PARENT_MSG_ID
+--    Direction            CHAR(1)           MWH_DIRECTION
+                                                                  -- @P04A end
+--    RecordType           CHAR(1)           MWH_RECORD_TYPE      -- @P08A
+
+DECLARE refComIbmDni REFERENCE TO InputRoot.MQRFH2.ComIbmDni;
+
+DECLARE refRequest   REFERENCE TO refComIbmDni.Function.DniWarehouse.Insert.Request;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refRequest TO InputLocalEnvironment.ComIbmDni.Function.DniWarehouse.Insert.Request;
+END IF;
+
+DECLARE chInsertMode CHARACTER; SET chInsertMode = UPPER(refRequest.InsertMode);
+
+-- Get the current timestamp.
+DECLARE dtTimeStamp GMTTIMESTAMP CURRENT_GMTTIMESTAMP;                              -- @P02A
+
+-- Initialize the status field.
+DECLARE chStatus CHARACTER refRequest.Status;
+IF (UPPER(chStatus) IN ('FINISHED','ERROR','PROCESS')) THEN
+   SET chStatus = UPPER(chStatus);
+END IF;
+
+-- Initialize the header fields according to the setting of InsertMode and Headerfields
+DECLARE chMsgGroup      CHARACTER;
+DECLARE chBusinessGroup CHARACTER;
+DECLARE chExternalMsgId CHARACTER;
+
+IF chInsertMode = 'MODE1' OR (chInsertMode = 'MODE2' AND UPPER(refRequest.HeaderFields) = 'ALL') THEN
+   SET chMsgGroup      = refComIbmDni.MessageGroup;
+   SET chBusinessGroup = refComIbmDni.BusinessGroup;
+   SET chExternalMsgId = refComIbmDni.ExternalMessageId;
+-- ELSE
+--    Nothing to do, because elements are already initialized with NULL as
+--    required for HeaderFields = NONE
+END IF;
+
+
+-- Initialize the message fields according to the setting of InsertMode and MessageFields
+--DECLARE chTimeStamp            CHARACTER;                                              -- @P02D
+DECLARE ndAmount               DECIMAL;
+DECLARE chCurrency             CHARACTER;
+DECLARE ddValueDate            DATE;
+DECLARE chISN                  CHARACTER;   -- INTEGER-values exceeding the limits of 32 bit integers,
+DECLARE chOSN                  CHARACTER;   -- result in overflows instead of errors during database storage.
+DECLARE chMessageType          CHARACTER;
+DECLARE chQuantity             CHARACTER;   -- Using CHARACTER as data type circumvents the problem.
+DECLARE chPriority             CHARACTER;
+DECLARE chAuthenticationStatus CHARACTER;
+DECLARE chPdIndicator          CHARACTER;
+DECLARE chSessionID            CHARACTER;   -- INTEGER!
+DECLARE chSender               CHARACTER;
+DECLARE chReceiver             CHARACTER;
+DECLARE chIdentification       CHARACTER;
+DECLARE chTransactionReference CHARACTER;
+DECLARE chApplicationReference CHARACTER;
+DECLARE chMessageReference     CHARACTER;
+DECLARE chItem                 CHARACTER;
+DECLARE chExtensionIdentifier  CHARACTER;
+DECLARE chExtensionDefined1    CHARACTER;
+DECLARE chExtensionDefined2    CHARACTER;
+DECLARE chExtensionDefined3    CHARACTER;
+DECLARE chApplicationName      CHARACTER;
+DECLARE chUserId               CHARACTER;
+DECLARE chUserDefined1         CHARACTER;
+DECLARE chUserDefined2         CHARACTER;
+DECLARE chUserDefined3         CHARACTER;
+                                                                -- @P04A begin
+DECLARE chMsgDomain            CHARACTER;
+DECLARE chTrafficType          CHARACTER;
+DECLARE chBodyRep              CHARACTER;
+DECLARE chRoutDest             CHARACTER;
+DECLARE chParentMsgId          BLOB;
+DECLARE chDirection            CHARACTER;
+                                                                -- @P04A end
+DECLARE chRecordType           CHARACTER;                       -- @P08A
+
+IF chInsertMode = 'MODE2' AND UPPER(refRequest.MessageFields) = 'ALL' THEN
+
+   DECLARE refData     REFERENCE TO InputLocalEnvironment.Variables.DniWarehouse.Data;   -- @P05A
+   DECLARE refMsgField REFERENCE TO refRequest.MessageField;
+
+   -- Get a DB2-compliant timestamp.
+-- SET chTimeStamp = SUBSTRING(refMsgField.TimeStamp FROM 1 FOR 10) || '-' ||            -- @P02D
+--                   SUBSTRING(refMsgField.TimeStamp FROM 12 FOR 2) || '.' ||            -- @P02D
+--                   SUBSTRING(refMsgField.TimeStamp FROM 15 FOR 2) || '.' ||            -- @P02D
+--                   SUBSTRING(refMsgField.TimeStamp FROM 18);                           -- @P02D
+
+   -- Get the value for the PD indicator.
+   SET chPdIndicator = CASE refMsgField.PDIndicator WHEN TRUE  THEN 'Y'
+                                                    WHEN FALSE THEN 'N'
+                       END;
+
+   -- Retrieve the remaining message fields.
+   SET ndAmount               = refMsgField.Amount;
+   SET chCurrency             = refMsgField.Currency;
+   SET ddValueDate            = refMsgField.ValueDate;
+   SET chISN                  = refMsgField.ISN;
+   SET chOSN                  = refMsgField.OSN;
+   SET chMessageType          = refMsgField.MessageType;
+   SET chQuantity             = refMsgField.Quantity;
+   SET chPriority             = refMsgField.Priority;
+   SET chAuthenticationStatus = refMsgField.AuthenticationStatus;
+   SET chSessionID            = refMsgField.SessionID;
+   SET chSender               = refMsgField.Sender;
+   SET chReceiver             = refMsgField.Receiver;
+   SET chIdentification       = refMsgField.Identification;
+   SET chTransactionReference = refMsgField.TransactionReference;
+   SET chApplicationReference = refMsgField.ApplicationReference;
+   SET chMessageReference     = refMsgField.MessageReference;
+   SET chItem                 = refMsgField.Item;
+   SET chExtensionIdentifier  = refMsgField.ExtensionIdentifier;
+   SET chExtensionDefined1    = refMsgField.ExtensionDefined1;
+   SET chExtensionDefined2    = refMsgField.ExtensionDefined2;
+   SET chExtensionDefined3    = refMsgField.ExtensionDefined3;
+   SET chApplicationName      = refMsgField.Application;
+   SET chUserId               = refMsgField.User;
+                                                                 -- begin @P15A
+   /*------------------------*\
+   |  check for long user ID  |
+   \*------------------------*/
+   DECLARE rLongUserId REFERENCE TO InputRoot.MQRFH2.ComIbmDni.UserIdentifier;
+
+   IF LASTMOVE(rLongUserId) AND (LENGTH(rLongUserId) > 0) THEN
+      SET chUserId = DecryptSecVal(rLongUserId);
+   END IF;
+                                                                   -- end @P15A
+   SET chUserDefined1         = refMsgField.UserDefined1;
+   SET chUserDefined2         = refMsgField.UserDefined2;
+   SET chUserDefined3         = refMsgField.UserDefined3;
+                                                                -- begin @P04A
+   SET chMsgDomain            = refMsgField.MsgDomain;
+   SET chTrafficType          = refMsgField.TrafficType;
+   SET chBodyRep              = refData.BodyRep;                      -- @P05C
+   SET chRoutDest             = refMsgField.RoutDest;
+   SET chParentMsgId          = CAST(refMsgField.ParentMsgId AS BLOB);
+   SET chDirection            = refMsgField.Direction;
+                                                                -- end   @P04A
+   SET chRecordType           = refMsgField.RecordType;                                  -- @P08A
+-- ELSE
+--    Nothing to do, because elements are already initialized with NULL as
+--    required for MessageFields = NONE
+END IF;
+
+
+-- Flatten XML message body created by the ConvertMessage node
+DECLARE chMsgBody CHARACTER;
+IF InputRoot.XMLNS IS NOT NULL THEN
+                                                                                         -- @P07C begin
+   DECLARE cp  INT 1208;
+   DECLARE enc INT MQENC_NATIVE;
+
+   DECLARE message BLOB ASBITSTREAM(InputRoot.XMLNS CCSID cp ENCODING enc);
+   SET chMsgBody = CAST(message AS CHAR CCSID cp ENCODING enc);
+                                                                                         -- @P07C end
+END IF;
+
+
+-- Insert the generic information in the base MWH database table.
+DECLARE chSqlStmnt CHARACTER;
+DECLARE pInFunction REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE pInFunction TO InputLocalEnvironment.ComIbmDni.Function;
+END IF;
+SET chSqlStmnt = 'INSERT INTO '
+   || pInFunction.DniWarehouse.FullTableName
+   || '(MWH_OU_NAME,MWH_WMQI_MSG_ID,GMT_TMSTMP,MWH_MSG_STATUS,MWH_GMT_TS,MWH_AMOUNT,MWH_CURRENCY,MWH_VALUE_DATE,MWH_ISN,MWH_OSN,MWH_MSG_TYPE,MWH_QUANTITY,'
+   || 'MWH_PRIORITY,MWH_AUTH_STATUS,MWH_PD_INDICATOR,MWH_SESSION,MWH_MSG_GRP,MWH_BUSINESS_GRP,MWH_EXT_MSG_ID,MWH_SENDER,MWH_RECEIVER,MWH_IDENTIFICATION,'
+   || 'MWH_TRAN_REFERENCE,MWH_APPL_REFERENCE,MWH_MSG_REFERENCE,MWH_ITEM,MWH_EXT_IDENTIFIER,MWH_EXTENSION_DEF1,MWH_EXTENSION_DEF2,MWH_EXTENSION_DEF3,'
+   || 'MWH_APPL_NAME,MWH_USER_ID,MWH_USER_DEF1,MWH_USER_DEF2,MWH_USER_DEF3';             -- @P04C
+SET chSqlStmnt = chSqlStmnt                                                                                             -- @P04C
+   || ',MWH_MSG_DOMAIN,MWH_TRAFFIC_TYPE,MWH_BODY_REP,MWH_ROUT_DEST,MWH_PARENT_MSG_ID,MWH_DIRECTION,MWH_RECORD_TYPE'     -- @P04C @P08C
+   || ',MWH_XML_MSG) '                                                                                                  -- @P04C
+   || 'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';                  -- @P02C @P04C @P08C
+
+                                                                                         -- @P17C begin
+CREATE FIELD OutputLocalEnvironment.Variables.DniWarehouse.Insert;
+DECLARE refLE REFERENCE TO OutputLocalEnvironment.Variables.DniWarehouse.Insert;
+
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE refComIbmDni.OU;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE CAST(InputRoot.MQMD.MsgId AS BLOB);
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE dtTimeStamp;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chStatus;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE dtTimeStamp;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE ndAmount;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chCurrency;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE ddValueDate;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chISN;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chOSN;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chMessageType;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chQuantity;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chPriority;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE UPPER(chAuthenticationStatus);
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chPdIndicator;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chSessionID;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chMsgGroup;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chBusinessGroup;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chExternalMsgId;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chSender;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chReceiver;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chIdentification;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chTransactionReference;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chApplicationReference;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chMessageReference;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chItem;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chExtensionIdentifier;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chExtensionDefined1;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chExtensionDefined2;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chExtensionDefined3;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chApplicationName;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chUserId;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chUserDefined1;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chUserDefined2;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chUserDefined3;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chMsgDomain;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chTrafficType;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chBodyRep;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chRoutDest;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chParentMsgId;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chDirection;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chRecordType;
+CREATE LASTCHILD OF refLE NAME 'Value' VALUE chMsgBody;
+
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+    -- If the exception is not a database exception, check all parameters, substitute
+    -- characters that cause conversion errors, and re-execute the PASSTHRU statement
+    IF (SQLCODE = 0) THEN
+      CALL substitute(refLE, 'Value');
+      PASSTHRU(chSqlStmnt, refLE.Value[]);
+    END IF;
+    -- If an SQL error occurred, store the error information in the local environment
+    -- and pass the message to the out terminal to throw an appropriate database
+    -- exception
+    IF SQLCODE <> 0 THEN
+      SET OutputLocalEnvironment.Variables.DatabaseError.Statement = chSqlStmnt;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlCode   = SQLCODE;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlState  = SQLSTATE;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlNative = SQLNATIVEERROR;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlText   = SQLERRORTEXT;
+      RETURN TRUE;
+    END IF;
+  END;
+  PASSTHRU(chSqlStmnt, refLE.Value[]);
+END;
+                                                                                         -- @P17C end
+                                                                            /* begin @P01A @P02C */
+-- If requested, insert the adjunct information in the adjunct MWH database table.
+CREATE FIELD OutputLocalEnvironment.Variables.DniWarehouse.Insert; --@P14A
+DECLARE refAdjunct REFERENCE TO refRequest.Adjunct[>]; --@P14C
+WHILE LASTMOVE(refAdjunct) DO --@P13C
+
+   -- Clear parameter list
+   DELETE FIELD OutputLocalEnvironment.Variables.DniWarehouse.Insert;                    -- @P17C
+   CREATE FIELD OutputLocalEnvironment.Variables.DniWarehouse.Insert AS refLE;           -- @P17C
+                                                                                         -- @P17D begin
+   -- DECLARE refLE REFERENCE TO Environment;
+   -- CREATE LASTCHILD OF OutputLocalEnvironment.Variables.DniWarehouse.Insert AS refLE NAME refAdjunct.FullAdjunctTableName; --@P14C
+                                                                                         -- @P17D end
+   DECLARE chColumns CHAR 'MWH_WMQI_MSG_ID';
+   DECLARE chValues  CHAR '?';
+
+   -- Initialize the message ID.
+   SET refLE.Value = CAST(InputRoot.MQMD.MsgId AS BLOB);
+
+   -- Initialize the adjunct fields.
+   IF Environment.ComIbmDni.ConfigDataLoc = 'env' THEN
+      FOR p AS refAdjunct.MessageField.(NameValue)*[] DO
+         CREATE LASTCHILD OF refLE NAME 'Value' VALUE FIELDVALUE(p);
+         SET chColumns = chColumns || ',MWH_' || UPPER(FIELDNAME(p));
+         SET chValues  = chValues || ',?';
+      END FOR;
+   ELSE
+      FOR p AS refAdjunct.MessageField.(Name)*[] DO
+         CREATE LASTCHILD OF refLE NAME 'Value' VALUE FIELDVALUE(p);
+         SET chColumns = chColumns || ',MWH_' || UPPER(FIELDNAME(p));
+         SET chValues  = chValues || ',?';
+      END FOR;
+   END IF;
+
+   -- Prepare and execute the INSERT statement.
+   SET chSqlStmnt =    'INSERT INTO '
+                    || refAdjunct.FullAdjunctTableName --@P13C
+                    || '('
+                    || chColumns
+                    || ') VALUES ('
+                    || chValues
+                    || ')';
+                                                                                         -- @P17C begin
+  BEGIN
+    DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+      -- If the exception is not a database exception, check all parameters, substitute
+      -- characters that cause conversion errors, and re-execute the PASSTHRU statement
+      IF (SQLCODE = 0) THEN
+        CALL substitute(refLE, 'Value');
+        PASSTHRU(chSqlStmnt, refLE.Value[]);
+      END IF;
+      -- If an SQL error occurred, store the error information in the local environment
+      -- and pass the message to the out terminal to throw an appropriate database
+      -- exception
+      IF (SQLCODE <> 0) THEN
+        SET OutputLocalEnvironment.Variables.DatabaseError.Statement = chSqlStmnt;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlCode   = SQLCODE;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlState  = SQLSTATE;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlNative = SQLNATIVEERROR;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlText   = SQLERRORTEXT;
+        RETURN TRUE;
+      END IF;
+    END;
+    PASSTHRU(chSqlStmnt, refLE.Value[]);
+  END;
+                                                                                         -- @P17C end
+  MOVE refAdjunct NEXTSIBLING NAME 'Adjunct'; --@P13A
+
+END WHILE; --@P13C
+                                                                              /* end @P01A @P02C */
+
+RETURN FALSE;                                                                            -- @P12C
+END;
+                                                                 -- begin @P16A
+CREATE FUNCTION DecryptSecVal(IN encsecval CHAR)
+    RETURNS CHAR
+    LANGUAGE JAVA
+    EXTERNAL NAME "com.ibm.dni.sec.SecurityImplementation.decryptSecVal";
+                                                                   -- end @P16A

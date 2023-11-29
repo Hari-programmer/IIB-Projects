@@ -1,0 +1,17 @@
+CREATE COMPUTE MODULE DnqErCommon_TplSetTargetValErr -- @P01A
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rTargetQ REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.TargetMerQueue;
+		-- Note: Existence of this element is ensured by compute module DnqErCommon_TplCheckInput.
+		SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueName = rTargetQ;
+		SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueType = 'TEMPLATE';
+		SET OutputLocalEnvironment.Destination.Dnq.DestinationData.NextProcessingType = 'APPLICATION';
+
+		SET OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.Code = 'Ok';
+		-- Do NOT provide MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.ReasonList!
+		RETURN TRUE;
+	END;
+END MODULE;

@@ -1,0 +1,14 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueType = 'TEMPLATE';
+		SET OutputLocalEnvironment.Destination.Dnq.DestinationData.NextProcessingType = 'APPLICATION';
+
+		DECLARE rTargetQ REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.TargetMerQueue;
+		-- Note: Existence of this element is ensured by compute module DnqErCommon_TplCheckInput.
+		SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueName = rTargetQ;
+		SET OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.Code = 'Ok';
+		RETURN TRUE;
+	END;

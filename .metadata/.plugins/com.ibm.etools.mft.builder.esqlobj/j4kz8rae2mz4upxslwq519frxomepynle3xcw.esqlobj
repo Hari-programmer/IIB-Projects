@@ -1,0 +1,19 @@
+CREATE FUNCTION DnqUtil_GetRelevantCompletionCode(chNewCompCode CHAR, chExistingCompCode CHAR) RETURNS CHAR
+BEGIN
+	DECLARE chRelevantCompCode         CHAR '';
+	DECLARE chCompCodeList             CHAR 'Ok,PartialOk,Failed';
+	DECLARE iNewCompCodeHierarchy      INT POSITION(chNewCompCode IN chCompCodeList);
+	DECLARE iExistingCompCodeHierarchy INT POSITION(chExistingCompCode IN chCompCodeList);
+
+	IF chExistingCompCode IS NULL THEN
+		SET chExistingCompCode = '';
+	END IF;
+
+	IF iNewCompCodeHierarchy > iExistingCompCodeHierarchy THEN
+		SET chRelevantCompCode = chNewCompCode;
+	ELSE
+		SET chRelevantCompCode = chExistingCompCode;
+	END IF;
+
+	RETURN chRelevantCompCode;
+END;

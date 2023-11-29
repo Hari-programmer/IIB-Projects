@@ -1,0 +1,17 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_AddEniAdjunctRequest(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT rOutputLocalEnvironment REFERENCE, IN bUpdateMsg BOOLEAN)
+BEGIN
+	DECLARE rElementCheck REFERENCE TO rEnvironment;
+	DECLARE rDnqProps     REFERENCE TO rEnvironment."ComIbmDni"."Dnq"."Properties";
+	DECLARE rDnqPropsEni  REFERENCE TO rDnqProps."DNIENI";
+	DECLARE refRequest    REFERENCE TO rOutputLocalEnvironment."ComIbmDni"."Function"."DniWarehouse".
+										{ComIbmDnqMwhUpdateInsert_GetRequestPath(bUpdateMsg)}."Request";
+	DECLARE refAdjunct    REFERENCE TO rInputRoot;
+	CREATE LASTCHILD OF refRequest AS refAdjunct NAME 'Adjunct';
+	SET refAdjunct."Name" = 'DnfMwhMsgEni'; -- EnI specific adjunct table
+	CREATE FIELD refAdjunct."MessageField" AS refAdjunct;
+
+	SET refAdjunct."Case_Id" = rDnqPropsEni."CaseId";
+	SET refAdjunct."Case_Id".(NameValue)max = '35';
+	SET refAdjunct."Case_Creator" = rDnqPropsEni."CaseCreator";
+	SET refAdjunct."Case_Creator".(NameValue)max = '11'; --@P27C: length changed from 8 to 11
+END;

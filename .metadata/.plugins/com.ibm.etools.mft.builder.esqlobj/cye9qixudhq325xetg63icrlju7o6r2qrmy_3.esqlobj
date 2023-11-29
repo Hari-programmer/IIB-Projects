@@ -1,0 +1,12 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+SET OutputRoot = InputRoot;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  SET OutputLocalEnvironment.ComIbmDni.Function.DniAuditUser = NULL;
+ELSE
+  SET OutputRoot.MQRFH2.ComIbmDni.Function.DniAuditUser = NULL;
+END IF;  
+RETURN true;
+END;
+

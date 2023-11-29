@@ -1,0 +1,18 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE rEnv REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		
+		IF (rEnv."chConfigDataLoc" IS NOT NULL) AND (LENGTH(rEnv."chConfigDataLoc") > 0) THEN
+			SET Environment."ComIbmDni"."ConfigDataLoc" = rEnv."chConfigDataLoc";
+		ELSE
+			DELETE FIELD Environment."ComIbmDni"."ConfigDataLoc";
+		END IF;
+
+		DELETE FIELD Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		DELETE FIELD OutputLocalEnvironment."ComIbmDni"."Function";
+		
+		RETURN TRUE;
+	END;

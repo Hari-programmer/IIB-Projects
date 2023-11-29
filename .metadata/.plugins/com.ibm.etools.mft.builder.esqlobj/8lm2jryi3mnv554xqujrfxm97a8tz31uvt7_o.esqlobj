@@ -1,0 +1,7 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		DELETE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store;
+		RETURN TRUE;
+	END;
+

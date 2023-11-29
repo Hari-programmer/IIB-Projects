@@ -1,0 +1,82 @@
+CREATE COMPUTE MODULE ComIbmDniAccessControl_Compute
+  CREATE FUNCTION Main() RETURNS BOOLEAN
+  BEGIN
+
+    SET OutputRoot = InputRoot;
+
+    IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+    THEN
+      SET OutputLocalEnvironment.ComIbmDni.Function.DniAuditUser = NULL;
+    ELSE
+      SET OutputRoot.MQRFH2.ComIbmDni.Function.DniAuditUser = NULL;
+    END IF;  
+      
+    CALL Rethrow();
+    RETURN TRUE;
+  END;
+      
+
+  CREATE PROCEDURE Rethrow( ) 
+  BEGIN
+    Set OutputExceptionList = InputExceptionList;
+    
+    DECLARE pRef REFERENCE TO OutputExceptionList.*[1];
+    DECLARE chStmt CHARACTER;
+    DECLARE i INTEGER 1;    
+    DECLARE POS INTEGER 1;    
+    DECLARE POSOLD INTEGER 1;        
+    DECLARE LEN INTEGER 1;    
+    DECLARE STR CHARACTER;
+    DECLARE STR2 CHARACTER;
+
+
+    /* get last exception in the list */
+X:  WHILE (LASTMOVE(pRef) = TRUE ) DO
+      IF (pRef.Number IS NOT NULL) THEN
+        MOVE pRef LASTCHILD; /* jump to next exception in the list */
+      ELSE
+        MOVE pRef PARENT;    /* jump to last exception */
+        LEAVE X;             /* break the loop         */
+      END IF;
+    END WHILE X;
+
+
+    SET chStmt = 'THROW USER EXCEPTION SEVERITY ' || CAST( pRef.Severity AS CHARACTER ) || ' CATALOG ''' || pRef.Catalog || ''' MESSAGE ' || CAST( pRef.Number AS CHARACTER ) || ' VALUES( ';
+  
+    WHILE pRef."Insert"[ i ].Text IS NOT NULL DO
+		SET STR = pRef."Insert"[ i ].Text;
+		SET LEN = LENGTH( STR );
+		IF (LEN = 0) THEN
+			SET chStmt = chStmt || ''''' , ' ; /* add empty parameter */
+		ELSE
+			SET STR2 = '';
+			SET POSOLD = 1;
+			SET POS = POSITION( '''' IN SUBSTRING( STR FROM POSOLD FOR LEN - POSOLD ) );
+			IF POS = 0 THEN
+				SET STR2 = STR;
+			ELSE 
+				WHILE POS <> 0 DO
+					SET STR2 = STR2 || SUBSTRING( STR FROM POSOLD FOR POS ) || '''';
+					SET POSOLD = POSOLD + POS;
+					SET POS = POSITION( '''' IN SUBSTRING( STR FROM POSOLD FOR LEN - POSOLD ) );
+		    	END WHILE;
+    			SET STR2 = STR2 || SUBSTRING( STR FROM POSOLD FOR LEN - POSOLD );
+	       	END IF;
+		    Set chStmt = chStmt || '''' || STR2 || ''' , ' ;
+        END IF;
+		SET i = i + 1;
+    END WHILE;
+  
+    IF i > 1 THEN 
+  	  SET chStmt = SUBSTRING( chStmt FROM 1 FOR LENGTH( chStmt ) - 2 );
+    END IF;
+  
+    Set chStmt = chStmt || ');';
+
+    DETACH pRef;		
+
+    EVAL(chStmt);
+
+  END;
+
+END MODULE;

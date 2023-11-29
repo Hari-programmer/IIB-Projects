@@ -1,0 +1,7 @@
+CREATE FILTER MODULE ComIbmDnqAttributeExtraction_PropsAvailable
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		RETURN (CARDINALITY(Environment."ComIbmDni"."Dnq"."Properties".*[]) > 0);
+	END;
+
+END MODULE;

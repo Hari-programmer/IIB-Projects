@@ -1,0 +1,46 @@
+CREATE COMPUTE MODULE ComIbmDnqFinInput_Cleanup
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment; --@P04A
+		
+		DECLARE rMqrfh2       REFERENCE TO OutputRoot.MQRFH2; --@P04A
+		DECLARE rElementCheck REFERENCE TO InputRoot.MQMD.ReplyToQ;
+                                                                 -- begin @P26A
+		-- must be performed before the original environment is restored
+		DECLARE rDniSpnCompletion REFERENCE TO InputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Response"."Completion";
+		IF (LASTMOVE(rDniSpnCompletion) AND
+			(CARDINALITY(rDniSpnCompletion."Code"[]) > 0)) THEN --@P26C: Always create Completion folder
+			DECLARE rDnq REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnq" AS rDnq;
+			CALL DnqUtil_CompletionFolder(rDniSpnCompletion, rDnq);
+		END IF;
+                                                                   -- end @P26A
+                                                                 -- begin @P22A
+		-- restore original InputLocalEnvironment
+		IF (CARDINALITY(Environment."Variables"."ComIbmDni"."DnqFinInput"."OriginalLocalEnv"[]) > 0) THEN
+			SET OutputLocalEnvironment = Environment."Variables"."ComIbmDni"."DnqFinInput"."OriginalLocalEnv";
+			DELETE FIELD Environment."Variables"."ComIbmDni"."DnqFinInput"."OriginalLocalEnv";
+		END IF;
+                                                                   -- end @P22A
+                                                                 -- begin @P05A
+		IF LASTMOVE(rElementCheck) THEN --@P17A
+			SET OutputRoot.MQRFH2."ComIbmDni"."Dnq"."OriginalMessageInformation"."ReplyToQueue"        = TRIM(rElementCheck); --@P17C
+			SET OutputRoot.MQRFH2."ComIbmDni"."Dnq"."OriginalMessageInformation"."ReplyToQueueManager" = TRIM(InputRoot.MQMD.ReplyToQMgr); --@P17C
+		END IF; --@P17A
+                                                                   -- end @P05A
+		DELETE FIELD Environment.Variables."ComIbmDni"."DnqFinInput";
+		CALL DnqUtil_CreateDefaultElements(rMqrfh2); --@P10A @P21C
+		CALL DnqUtil_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."MessageValid"', 'No'); --@P04A @P07C @P21C
+                                                                 /* begin @P19A @P26D
+		DECLARE rDniSpnCompletion REFERENCE TO InputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Response"."Completion";
+		IF (LASTMOVE(rDniSpnCompletion) AND
+			(CARDINALITY(rDniSpnCompletion."Code"[]) > 0)) THEN --@P26C: Always create Completion folder
+			DECLARE rDnq REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnq" AS rDnq;
+			CALL DnqUtil_CompletionFolder(rDniSpnCompletion, rDnq);
+		END IF;
+*/                                                                 -- end @P19A @P26D
+		RETURN TRUE;
+	END;
+END MODULE;

@@ -1,0 +1,123 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		IF InputRoot.JSON.Data.Input.EMP_ID ='1001'  THEN
+			
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.Input.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Hari';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =99585756;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =24;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='M';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='Yanam';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Hari@gamil.com';
+		
+		
+		
+		ELSEIF InputRoot.JSON.Data.Input.EMP_ID ='1002' THEN
+		
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Gnaneswar';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =785758574;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =24;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='M';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='Kurnool';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Gnane@gamil.com';
+		
+			
+		
+		ELSEIF InputRoot.JSON.Data.Input.EMP_ID ='1003' THEN
+			
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Pravallika';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =9585756453;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =23;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='F';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='Ongole';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Paravalli@gamil.com';
+		
+		
+		
+		ELSEIF InputRoot.JSON.Data.Input.EMP_ID ='1004' THEN
+		
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Sudisna';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =645537373;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =25;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='F';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='Karnataka';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Sudisna@gamil.com';	
+		
+		
+		
+		ELSEIF InputRoot.JSON.Data.Input.EMP_ID ='1005' THEN
+		
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Amit';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =99585756;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =26;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='M';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='Karnataka';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Amit@gamil.com';	
+		
+		
+		
+		ELSEIF InputRoot.JSON.Data.Input.EMP_ID ='1006' THEN
+		
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Pavan';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =756454733;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =25;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='M';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='Hyderabad';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Pavan@gamil.com';
+		
+		
+		
+		ELSEIF InputRoot.JSON.Data.Input.EMP_ID ='1007' THEN
+		
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Akshay';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =6754353435;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =27;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='M';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='North_India';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Akshay@gamil.com';	
+		
+		
+		
+		ELSEIF InputRoot.JSON.Data.Input.EMP_ID = '1008' THEN
+		
+		SET OutputRoot.JSON.Data.Output.EMP_ID      = InputRoot.JSON.Data.EMP_ID;
+		SET OutputRoot.JSON.Data.Output.EMP_Name    ='Akash';	
+		SET OutputRoot.JSON.Data.Output.EMP_Phn     =74545334;
+		SET OutputRoot.JSON.Data.Output.EMP_Age     =26;
+		SET OutputRoot.JSON.Data.Output.EMP_Gender  ='M';
+		SET OutputRoot.JSON.Data.Output.EMP_Location ='South_India';
+		SET OutputRoot.JSON.Data.Output.EMP_Mail     ='Akash@gamil.com';
+		
+						
+			
+		ELSE 
+			
+			SET OutputRoot.JSON.Data.EMP_ID = 'Invalid Id, Please Enter correct Id...';
+			
+		END IF;
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;

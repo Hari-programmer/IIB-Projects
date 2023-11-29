@@ -1,0 +1,8 @@
+CREATE COMPUTE MODULE ComIbmDnqMsifInput_ClearSpnRequest
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		DELETE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing";
+		RETURN TRUE;
+	END;
+END MODULE;

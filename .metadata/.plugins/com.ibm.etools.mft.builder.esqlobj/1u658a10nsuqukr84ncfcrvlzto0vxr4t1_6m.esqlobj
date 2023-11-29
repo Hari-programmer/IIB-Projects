@@ -1,0 +1,191 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_CreateMwhRequestFin(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT rOutputLocalEnvironment REFERENCE, IN bUpdateMsg BOOLEAN)
+BEGIN
+
+	DECLARE rEnv                 REFERENCE TO rEnvironment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+	DECLARE rElementCheck        REFERENCE TO rEnvironment;
+	DECLARE rTimestampCheck      REFERENCE TO rEnvironment;
+	DECLARE rDnq                 REFERENCE TO rEnvironment."ComIbmDni"."Dnq";
+	DECLARE rDnqProps            REFERENCE TO rEnvironment."ComIbmDni"."Dnq"."Properties";
+	DECLARE rDnqPropsDnifin      REFERENCE TO rDnqProps."DNIFIN"; --@P10A
+	DECLARE chExtensionId        CHAR rEnv."chExtensionId";
+	DECLARE chStatus             CHAR rEnv."chStatus";
+	DECLARE chOu                 CHAR rInputRoot.MQRFH2.ComIbmDni.OU;
+	DECLARE chMwhContent         CHAR '';
+	DECLARE chContent            CHAR ''; --@P25C
+--	DECLARE chAdjunctTableCoName CHAR rEnv."chAdjunctTableCoName"; @P26D
+                                                                 -- begin @P04A
+	DECLARE chMessageDirection   CHAR 'I'; --@P05C @P10C
+	DECLARE chSender             CHAR '';
+	DECLARE chReceiver           CHAR '';
+                                                                   -- end @P04A
+                                                                 -- begin @P14A
+	DECLARE chRoutDestination    CHAR 'FIN';
+	DECLARE chAuthStatus         CHAR ComIbmDnqMwhUpdateInsert_GetAuthenticationStatus(rInputRoot, rEnvironment);
+                                                                   -- end @P14A
+	-- code parts moved to following function call
+	SET chContent = ComIbmDnqMwhUpdateInsert_GetContentFlag(chOu, rEnvironment); --@P25A
+	SET rEnv."chContent" = chContent;
+		
+	/* create warehouse request */
+                                                                 /* begin @P02D
+	DECLARE chMwhPath CHAR 'Insert';
+	IF bUpdateMsg THEN
+		SET chMwhPath = 'Update';
+	END IF;
+*/                                                                 -- end @P02D
+	DECLARE refRequest REFERENCE TO rInputRoot; --dummy initialization
+	CREATE FIELD rOutputLocalEnvironment."ComIbmDni"."Function"."DniWarehouse".{ComIbmDnqMwhUpdateInsert_GetRequestPath(bUpdateMsg)}."Request" AS refRequest; --@P02C
+                                                                 -- begin @P17A
+	DECLARE chFieldHandling CHAR 'All';
+                                                                   -- end @P17A
+	SET refRequest."Status" = chStatus;
+	IF bUpdateMsg THEN
+		SET refRequest."UpdateMode" = 'Mode3';
+		SET chFieldHandling = 'Defined';
+	ELSE
+		SET refRequest."InsertMode" = 'Mode2';
+	END IF;
+	SET refRequest."Message"       = chContent;
+	SET refRequest."HeaderFields"  = chFieldHandling; --@P17C
+	SET refRequest."MessageFields" = chFieldHandling; --@P17C
+	
+	/* setup message fields */
+                                                                 -- begin @P04A
+	IF (rDnqProps."MessageDirection" IS NOT NULL) AND (LENGTH(rDnqProps."MessageDirection") > 0) THEN
+		SET chMessageDirection = rDnqProps."MessageDirection";
+	END IF;
+	
+	IF chMessageDirection = 'O' THEN --@P05C @P10C
+		SET chSender   = rDnqProps."RemoteAddress";
+		SET chReceiver = rDnqProps."LocalAddress";
+	ELSE
+		SET chSender   = rDnqProps."LocalAddress";
+		SET chReceiver = rDnqProps."RemoteAddress";
+	END IF;
+                                                                   -- end @P04A
+	SET refRequest."MessageField"."Sender" = chSender; --@P04C
+	SET refRequest."MessageField"."Sender".(NameValue)max = '12';
+	SET refRequest."MessageField"."Receiver" = chReceiver; --@P04C
+	SET refRequest."MessageField"."Receiver".(NameValue)max = '12';
+	SET refRequest."MessageField"."ISN" = rDnqPropsDnifin."SessionISN"; --@P10C
+	SET refRequest."MessageField"."ISN".(NameValue)dt = 'int';
+	SET refRequest."MessageField"."ISN".(NameValue)max = '999999';
+	SET refRequest."MessageField"."OSN" = rDnqPropsDnifin."SessionOSN"; --@P10C
+	SET refRequest."MessageField"."OSN".(NameValue)dt = 'int';
+	SET refRequest."MessageField"."OSN".(NameValue)max = '999999';
+	SET refRequest."MessageField"."SessionID" = rDnqPropsDnifin."SessionId"; --@P10C
+	SET refRequest."MessageField"."SessionID".(NameValue)dt = 'int';
+	SET refRequest."MessageField"."SessionID".(NameValue)max = '9999';
+	SET refRequest."MessageField"."ExtensionIdentifier" = chExtensionId;
+	SET refRequest."MessageField"."ExtensionIdentifier".(NameValue)max = '16';
+
+    MOVE rElementCheck TO rDnq."ER"."CurrentAction"."Printed";
+    MOVE rTimestampCheck TO rDnq."ER"."CurrentAction"."TimeStamp";
+    IF LASTMOVE(rElementCheck) AND UPPER(rElementCheck) = 'TRUE' AND LASTMOVE(rTimestampCheck) AND (LENGTH(rTimestampCheck) > 0) THEN
+	    SET refRequest."MessageField"."ExtensionDefined1" = rDnq."ER"."CurrentAction"."TimeStamp"; -- add browser print timestamp
+    END IF;
+                                                                 -- begin @P29A
+	DECLARE chMsgType CHAR rInputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Type";
+	DECLARE rAck      REFERENCE TO rInputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MergedAcknowledgment";
+	
+	IF LASTMOVE(rAck) AND (LENGTH(rAck) > 0) THEN
+		DECLARE iAckPosition INT;
+		DECLARE chAck  CHAR 'ACK';
+		SET iAckPosition = POSITION('{451:' IN rAck) + 5;
+		IF SUBSTRING(rAck FROM iAckPosition FOR 1) <> '0' THEN
+			SET chAck = 'NAK';
+		END IF;
+		SET chMsgType = chAck;
+	END IF;
+                                                                   -- end @P29A
+	SET refRequest."MessageField"."MessageType" = chMsgType; --@P29C
+	SET refRequest."MessageField"."MessageType".(NameValue)min = '3'; --@P29C
+	SET refRequest."MessageField"."MessageType".(NameValue)max = '8';
+	SET refRequest."MessageField"."Priority" = rDnqProps."Priority";
+	SET refRequest."MessageField"."Priority".(NameValue)min = '1';
+	SET refRequest."MessageField"."Priority".(NameValue)max = '1';
+	SET refRequest."MessageField"."ApplicationReference" = rDnqPropsDnifin."ApplicationReference"; --@P10C
+	SET refRequest."MessageField"."ApplicationReference".(NameValue)min = '1'; --@P14A
+	SET refRequest."MessageField"."ApplicationReference".(NameValue)max = '32';
+	SET refRequest."MessageField"."ValueDate" = rDnqPropsDnifin."ValueDate"; --@P10C
+	SET refRequest."MessageField"."ValueDate".(NameValue)dnidt = 'date';
+	SET refRequest."MessageField"."Amount" = rDnqPropsDnifin."Amount"; --@P10C
+	SET refRequest."MessageField"."Amount".(NameValue)dt = 'r4';
+	SET refRequest."MessageField"."Currency" = rDnqPropsDnifin."Currency"; --@P10C
+	SET refRequest."MessageField"."Currency".(NameValue)min = '3';
+	SET refRequest."MessageField"."Currency".(NameValue)max = '3';
+
+	MOVE rElementCheck TO rDnqProps."PossibleDuplicate"; --@P04C
+	IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    DECLARE chPdIndicator CHAR UPPER(rElementCheck);
+		IF (UPPER(chPdIndicator) = 'TRUE') THEN
+			SET refRequest."MessageField"."PDIndicator" = TRUE;
+		ELSE
+			SET refRequest."MessageField"."PDIndicator" = FALSE;
+		END IF;
+		SET refRequest."MessageField"."PDIndicator".(NameValue)dt = 'boolean';
+	END IF;
+
+	SET refRequest."MessageField"."TransactionReference" = rDnqPropsDnifin."TransactionReference"; --@P10C
+	SET refRequest."MessageField"."TransactionReference".(NameValue)max = '16';
+    SET refRequest."MessageField"."Application" = rDnqProps."ApplicationInformation"."Application";
+	SET refRequest."MessageField"."Application".(NameValue)max = '100';
+	DECLARE chUser CHAR COALESCE(rDnqProps."ApplicationInformation"."UserId", TRIM(rInputRoot.MQMD.UserIdentifier)); --@P17A
+    SET refRequest."MessageField"."User" = chUser; --@P04C @P17C
+	SET refRequest."MessageField"."User".(NameValue)max = '100'; --@P30C
+    SET refRequest."MessageField"."UserDefined1" = rDnqProps."ApplicationInformation"."UserDefined1";
+	SET refRequest."MessageField"."UserDefined1".(NameValue)max = '128';
+    SET refRequest."MessageField"."UserDefined2" = rDnqProps."ApplicationInformation"."UserDefined2";
+	SET refRequest."MessageField"."UserDefined2".(NameValue)max = '128';
+    SET refRequest."MessageField"."UserDefined3" = rDnqProps."ApplicationInformation"."UserDefined3";
+	SET refRequest."MessageField"."UserDefined3".(NameValue)max = '128';
+                                                                 -- begin @P14A
+    SET refRequest."MessageField"."MsgDomain" = rInputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain";
+	SET refRequest."MessageField"."MsgDomain".(NameValue)max = '16';
+    SET refRequest."MessageField"."TrafficType" = 'FIN';
+    MOVE rElementCheck TO rEnv."chDestination";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+    	SET chRoutDestination = rEnv."chDestination";
+    END IF;
+    SET refRequest."MessageField"."RoutDest" = chRoutDestination;
+	SET refRequest."MessageField"."RoutDest".(NameValue)max = '30';
+    MOVE rElementCheck TO rInputRoot.MQRFH2."ComIbmDni"."ParentMessageId";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    SET refRequest."MessageField"."ParentMsgId" = rElementCheck;
+    END IF;
+    SET refRequest."MessageField"."Direction" = chMessageDirection;
+    IF chAuthStatus <> '' THEN
+		SET refRequest."MessageField"."AuthenticationStatus" = chAuthStatus;
+		SET refRequest."MessageField"."AuthenticationStatus".(NameValue)max = '8';
+    END IF;
+                                                                   -- end @P14A
+	-- fill extension specific table
+	DECLARE chDelMon     CHAR;
+	DECLARE chObsPer     CHAR;
+	DECLARE refAdjunct REFERENCE TO rInputRoot;
+	CREATE FIELD refRequest."Adjunct"."MessageField" AS refAdjunct;
+	SET refRequest."Adjunct"."Name" = 'DnfMwhFin'; --@P26C
+
+	SET refAdjunct."DelMon"  = rDnqPropsDnifin."DeliveryMonitoring"; --@P04C @P10C
+	SET refAdjunct."DelMon".(NameValue)max = '1';
+	SET refAdjunct."ObsPer"  = rDnqPropsDnifin."ObsolescencePeriod"; --@P04C @P10C
+	SET refAdjunct."ObsPer".(NameValue)max = '3';
+	SET refAdjunct."Service" = rDnqPropsDnifin."Service"; --@P10C
+	SET refAdjunct."Service".(NameValue)min = '3';
+	SET refAdjunct."Service".(NameValue)max = '3';
+	SET refAdjunct."RelRef"  = rDnqPropsDnifin."RelatedReference"; --@P04C @P10C
+	SET refAdjunct."RelRef".(NameValue)max = '16'; --@P22C
+	SET refAdjunct."Sender_ISN" = rDnqPropsDnifin."RemoteISN"; --@P04C @P10C
+	SET refAdjunct."Sender_ISN".(NameValue)max = '6';
+	SET refAdjunct."Except_Type" = rEnvironment."Variables"."ComIbmDni"."DnfIlsAck"."ExceptionType";
+	SET refAdjunct."Except_Type".(NameValue)max = '32';
+                                                                 -- begin @P14A
+    MOVE rElementCheck TO rDnqPropsDnifin."InputTimeStamp";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+		SET refAdjunct."Date" = SUBSTRING(rElementCheck FROM 1 FOR 10);
+	    SET refAdjunct."Date".(NameValue)dnidt = 'date';
+		SET refAdjunct."Time" = SUBSTRING(rElementCheck FROM 12 FOR 8);
+	    SET refAdjunct."Time".(NameValue)dnidt = 'time';
+    END IF;
+                                                                   -- end @P14A
+END;

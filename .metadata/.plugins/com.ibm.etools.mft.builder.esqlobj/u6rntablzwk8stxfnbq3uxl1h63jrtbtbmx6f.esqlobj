@@ -1,0 +1,14 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		
+		
+		--SET OutputRoot.BLOB.BLOB.data = InputRoot.BLOB;
+        DECLARE chrRef CHARACTER CAST(OutputRoot.BLOB.BLOB AS CHARACTER CCSID 1208);
+        --SET OutputRoot.DFDL.mtxml.record[i].COMIBMDNI = chr_COMIBMDNI;
+	
+		
+		RETURN TRUE;
+	END;
+
+	

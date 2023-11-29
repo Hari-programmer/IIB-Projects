@@ -1,0 +1,42 @@
+CREATE COMPUTE MODULE ComIbmDnqFillExplanation_Fill
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		
+		DECLARE iPosition     INTEGER;
+		DECLARE refResponse   REFERENCE TO InputRoot.MQRFH2."ComIbmDni"."Function"."DniUMG"."Transform"."Response";
+		DECLARE refReasonList REFERENCE TO OutputRoot.MQRFH2."ComIbmDni"."Dnq"."Completion"."ReasonList";
+		
+		/* fill explanations of reasons in completion folder */		
+		MOVE refResponse TO refResponse."MessageText";
+		WHILE (LASTMOVE(refResponse)) DO
+			SET iPosition = CAST(refResponse.(NameValue)"Position" AS INTEGER);
+			IF CARDINALITY(refReasonList."Reason"[iPosition]."Explanation"[]) = 0 THEN --@P06A
+				-- Create Explanation element as next sibling of Value element                                                     @P05A
+				CREATE NEXTSIBLING OF refReasonList."Reason"[iPosition].Value NAME 'Explanation' VALUE FIELDVALUE(refResponse); -- @P05C
+                                                                 -- begin @P06A
+			ELSE
+				-- Replace possible existing Explanation element
+				SET refReasonList."Reason"[iPosition]."Explanation" = FIELDVALUE(refResponse);
+			END IF;
+                                                                   -- end @P06A
+			MOVE refResponse NEXTSIBLING;
+		END WHILE;
+		DELETE FIELD OutputRoot.MQRFH2."ComIbmDni"."Function"."DniUMG";
+		
+		/* Restore the ConfigDataLoc property and clean up. */
+		DECLARE refBackup REFERENCE TO Environment.Variables.ComIbmDni.DnqFillExplanation;
+		IF LASTMOVE(refBackup) THEN
+			SET Environment.ComIbmDni.ConfigDataLoc = refBackup.ConfigDataLoc;
+			DELETE FIELD refBackup.ConfigDataLoc;
+		END IF;
+                                                                 -- begin @P04A
+		-- remove Function folder, if it was not present before invoking the message formatter
+		IF NOT Environment.Variables.ComIbmDni.DnqFillExplanation.bFunctionFolderPresent THEN
+			DELETE FIELD OutputRoot.MQRFH2."ComIbmDni"."Function";
+		END IF;
+                                                                   -- end @P04A
+		RETURN TRUE;
+	END;
+
+END MODULE;

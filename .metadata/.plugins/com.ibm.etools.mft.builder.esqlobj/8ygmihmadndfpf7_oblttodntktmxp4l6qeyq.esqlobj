@@ -1,0 +1,44 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE chMpu                   CHAR Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig"."chMpu";
+                                                                 -- begin @P01A
+		DECLARE rEnv                    REFERENCE TO Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig";
+		DECLARE rElementCheck           REFERENCE TO Environment;
+		DECLARE rScpnResponse           REFERENCE TO InputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"."Response".*[>];
+		DECLARE bRequestFound           BOOLEAN rEnv."bRequestFound";
+--		DECLARE bWorksForErInput        BOOLEAN rEnv."bWorksForErInput"; @P02D
+		DECLARE chLocalAddress          CHAR '';
+		DECLARE chTransferOptionSetName CHAR '';
+
+		IF bRequestFound THEN
+			SET chTransferOptionSetName = rEnv."chTransferOptionSetName";
+		END IF;
+
+--		IF bWorksForErInput THEN @P02D
+		IF bRequestFound THEN
+			MOVE rElementCheck TO rScpnResponse."DnfEfaTransferOptionSet".{chTransferOptionSetName}."LocalDN";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET chLocalAddress = TRIM(rElementCheck);
+			END IF;
+		END IF;
+		IF (chLocalAddress = '') THEN
+			MOVE rElementCheck TO rScpnResponse."DnfEfaTransferOptionSet"."default"."LocalDN";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET chLocalAddress = TRIM(rElementCheck);
+			END IF;
+		END IF;
+		IF (chLocalAddress <> '') THEN
+			SET Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig"."ConfiguredLocalAddress" = chLocalAddress; --@P02C
+		END IF;
+--		END IF; @P02D
+
+--		DELETE FIELD Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig"; @P02C
+                                                                   -- end @P01A
+		IF bRequestFound AND (CARDINALITY(rScpnResponse."DnfEfaTransferOptionSet".{chTransferOptionSetName}[]) = 0) THEN --@P01C @P02C
+--			SET chTransferOptionSetName = rEnv."TransferOptionSetName"; @P01D
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE CAST(SUBSTRING(chMpu FROM 5 FOR 4) AS INT)
+			VALUES (chTransferOptionSetName, chMpu);
+		END IF;
+		
+		RETURN FALSE;
+	END;

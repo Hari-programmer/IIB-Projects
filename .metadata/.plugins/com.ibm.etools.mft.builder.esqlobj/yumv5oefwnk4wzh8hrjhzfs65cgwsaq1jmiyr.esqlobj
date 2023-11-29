@@ -1,0 +1,20 @@
+CREATE FILTER MODULE ComIbmDnqMsifInput_PayloadExists
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE bPayloadExists BOOLEAN (UPPER(SUBSTRING(FIELDNAME(Root.*[<]) FROM 1 FOR 2)) <> 'MQ');
+		DECLARE rElementCheck  REFERENCE TO Root.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg";
+		
+		IF NOT bPayloadExists THEN
+			IF (LASTMOVE(rElementCheck) AND
+				(CARDINALITY(rElementCheck."Request"[]) > 0) AND
+				(CARDINALITY(rElementCheck."Response"[]) = 0)) THEN
+				-- SendMsg request must have a payload
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1253
+				VALUES ('DNQO1253E');
+			END IF;
+		END IF;
+		
+		RETURN bPayloadExists;
+	END;
+
+END MODULE;

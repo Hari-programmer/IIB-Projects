@@ -1,0 +1,82 @@
+CREATE COMPUTE MODULE DnqErCommon_TplSetTargetParseErr -- @P01A
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE bIgnore BOOLEAN TRUE; -- Default: Ignore parsing error
+		DECLARE rIgnore REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.IgnoreParsingError;
+
+		IF (   (    LASTMOVE(rIgnore)
+		        AND UPPER(rIgnore) = 'NO')
+		    OR Environment.Variables.ComIbmDni.Dnq.NodeType = chNodeTypeMsif -- @P18A
+		   )
+		THEN
+			SET bIgnore = FALSE;
+		END IF;
+
+		IF bIgnore THEN
+			/*--------------------------------------------------------------*\
+			|  Ignore parsing errors (i.e., continue processing of message)  |
+			\*--------------------------------------------------------------*/
+			SET OutputRoot = InputRoot;
+			SET OutputLocalEnvironment = InputLocalEnvironment;
+
+			DECLARE rTargetQ REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request.TargetMerQueue;
+			-- Note: Existence of rTargetQ is ensured by compute module DnqErCommon_TplCheckInput.
+			SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueName = rTargetQ;
+			SET OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueType = 'TEMPLATE';
+			SET OutputLocalEnvironment.Destination.Dnq.DestinationData.NextProcessingType = 'APPLICATION';
+
+			SET OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.Code = 'PartialOk';
+			-- SET OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.ReasonList =  -- @P06D
+			--     InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList;                                   -- @P06D
+
+			DECLARE rReasonList REFERENCE TO OutputRoot; -- Dummy for declaration only                        @P06A begin
+			DECLARE rReason     REFERENCE TO OutputRoot; -- Dummy for declaration only
+
+			-- First reason must provide informational message
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.ReasonList AS rReasonList;
+			CREATE FIRSTCHILD OF rReasonList AS rReason NAME 'Reason';
+			SET rReason.Code  = 'PartialOk';
+			SET rReason.Value = 'DNQK1126I';
+
+			-- Take over Dnq reasons, but replace completion codes 'Failed' with 'PartialOk'
+			DECLARE rDnqReason REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList.*[1];
+			WHILE (LASTMOVE(rDnqReason)) DO
+				CREATE NEXTSIBLING OF rReason AS rReason FROM rDnqReason;
+				IF (rDnqReason.Code = 'Failed') THEN
+					SET rReason.Code = 'PartialOk';
+				END IF;
+				MOVE rDnqReason NEXTSIBLING;
+			END WHILE; -- end looping InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList                    @P06A end
+		ELSE
+			/*-----------------------------*\
+			|  Don't ignore parsing errors  |
+			\*-----------------------------*/
+			-- Use Environment to pass reason list here because changes of OutputRoot are rolled back!
+
+			/** NOTE (@P09):
+			 **   Next statement doesn't work because it maps XML attributes, e.g. attribute MPU in
+			 **      <Reason MPU="DNIY0091E">
+			 **   on XML tags, e.g.
+			 **      <Reason>
+			 **        <MPU>DNIY0091E</MPU>
+			 **        ...
+			 **      </Reason>
+			 **/
+			-- SET Environment.Variables.ComIbmDni.DnqTplImport.Completion.ReasonList =        @P09D
+			--     InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList;                       @P09D
+
+			DECLARE rReasonList REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList; -- @P11A
+			IF LASTMOVE(rReasonList) THEN
+				DECLARE xReasonList BLOB;                                                          -- @P09A begin
+				SET xReasonList =
+			    	ASBITSTREAM( rReasonList OPTIONS FolderBitStream CCSID 1208 ); -- @P11C: InputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList replaced with rReasonList
+				CREATE LASTCHILD OF Environment.Variables.ComIbmDni.DnqTplImport.Completion
+				       DOMAIN('XMLNS') PARSE( xReasonList CCSID 1208 OPTIONS FolderBitStream );    -- @P09A end
+			END IF;                                                                                -- @P11A
+
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1125 VALUES('DNQK1125E');
+		END IF;
+
+		RETURN TRUE;
+	END;
+END MODULE;

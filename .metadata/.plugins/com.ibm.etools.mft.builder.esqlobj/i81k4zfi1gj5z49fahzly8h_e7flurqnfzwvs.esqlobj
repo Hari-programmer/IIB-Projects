@@ -1,0 +1,82 @@
+CREATE COMPUTE MODULE PROVIDER_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		DECLARE EV REFERENCE TO Environment.Variable;
+       CREATE LASTCHILD OF EV.Req DOMAIN 'XMLNSC' PARSE (InputRoot.BLOB.BLOB);
+
+			IF EV.Req.XMLNSC.root.name='Gnaneshwar' Then
+			SET OutputRoot.JSON.Data.root.pn='9874521200';
+			SET OutputRoot.JSON.Data.root.maidid='gnane@gmail.com';
+			SET OutputRoot.JSON.Data.root.address='kurnool';
+			SET OutputRoot.JSON.Data.root.empid=EV.Req.XMLNSC.root.empid;
+			SET OutputRoot.JSON.Data.root.name=EV.Req.XMLNSC.root.name;
+			
+			ELSEIF EV.Req.XMLNSC.root.name='hari' Then
+			SET OutputRoot.JSON.Data.root.pn='9874521201';
+			SET OutputRoot.JSON.Data.root.maidid='hari@gmail.com';
+			SET OutputRoot.JSON.Data.root.address='yanam';
+			SET OutputRoot.JSON.Data.root.empid=EV.Req.XMLNSC.root.empid;
+			SET OutputRoot.JSON.Data.root.name=EV.Req.XMLNSC.root.name;
+			
+			ELSEIF EV.Req.XMLNSC.root.name='pavan' Then
+			SET OutputRoot.JSON.Data.root.pn='9874521202';
+			SET OutputRoot.JSON.Data.root.maidid='pavan@gmail.com';
+			SET OutputRoot.JSON.Data.root.address='nizam';
+			SET OutputRoot.JSON.Data.root.empid=EV.Req.XMLNSC.root.empid;
+			SET OutputRoot.JSON.Data.root.name=EV.Req.XMLNSC.root.name;
+			
+			ELSEIF EV.Req.XMLNSC.root.name='akshay' Then
+			SET OutputRoot.JSON.Data.root.pn='9874521203';
+			SET OutputRoot.JSON.Data.root.maidid='akshay@gmail.com';
+			SET OutputRoot.JSON.Data.root.address='hyderabad';
+			SET OutputRoot.JSON.Data.root.empid=EV.Req.XMLNSC.root.empid;
+			SET OutputRoot.JSON.Data.root.name=EV.Req.XMLNSC.root.name;
+			
+			ELSEIF EV.Req.XMLNSC.root.name='akash' Then
+			SET OutputRoot.JSON.Data.root.pn='9874521204';
+			SET OutputRoot.JSON.Data.root.maidid='akash@gmail.com';
+			SET OutputRoot.JSON.Data.root.address='mumbai';
+			SET OutputRoot.JSON.Data.root.empid=EV.Req.JSON.Data.root.empid;
+			SET OutputRoot.JSON.Data.root.name=EV.Req.XMLNSC.root.name;
+			
+			ELSEIF EV.Req.XMLNSC.root.name='sudisna' Then
+			SET OutputRoot.JSON.Data.root.pn='9874521205';
+			SET OutputRoot.JSON.Data.root.maidid='sudisna@gmail.com';
+			SET OutputRoot.JSON.Data.root.address='odisha';
+			SET OutputRoot.JSON.Data.root.empid=EV.Req.XMLNSC.root.empid;
+			SET OutputRoot.JSON.Data.root.name=EV.Req.XMLNSC.root.name;
+			
+			ELSEIF EV.Req.XMLNSC.root.name='pravalika' Then
+			SET OutputRoot.JSON.Data.root.pn='9874521206';
+			SET OutputRoot.JSON.Data.root.maidid='pravalika@gmail.com';
+			SET OutputRoot.JSON.Data.root.address='ongole';
+			SET OutputRoot.JSON.Data.root.empid=EV.Req.XMLNSC.root.empid;
+			SET OutputRoot.JSON.Data.root.name=EV.Req.XMLNSC.root.name;
+			
+			ELSE
+			SET OutputRoot.JSON.Data.MESSAGE='No match found';
+			
+			
+			
+			RETURN TRUE;
+			END IF;
+				
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;

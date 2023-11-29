@@ -1,0 +1,21 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+DECLARE chRAuditFlag CHARACTER;
+
+SET chRAuditFlag = LocalEnvironment.Variables.ComIbmDni.Function.DniAccessControl.DoRemoteAudit;
+
+
+-- if nothing is specified, default is "do no remote audit"
+If chRAuditFlag IS NULL THEN
+	RETURN FALSE;
+END IF;
+
+-- find out, if remote audit flag is set to true
+If (TRIM(UPPER(chRAuditFlag)) <> 'TRUE' AND TRIM(UPPER(chRAuditFlag)) <> 'YES' ) THEN
+	RETURN FALSE;
+ELSE
+	-- do remote audit
+	RETURN TRUE;
+END IF;
+RETURN true;
+END;
+

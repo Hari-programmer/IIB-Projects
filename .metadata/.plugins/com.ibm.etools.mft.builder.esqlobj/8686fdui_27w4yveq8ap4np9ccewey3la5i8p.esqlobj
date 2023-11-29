@@ -1,0 +1,12 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		SET OutputRoot = InputRoot;
+		IF CARDINALITY(OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Validate"."Request"."Required"[]) > 0 THEN
+			-- No 2nd validation is required. Rather Delete "Validate" Block instead of setting "Validate"."Request"."Required" = 'No'
+			-- SET OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Validate"."Request"."Required" = 'No';
+			DELETE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniStandardsProcessing"."Validate";
+		END IF;
+		
+		RETURN TRUE;
+	END;

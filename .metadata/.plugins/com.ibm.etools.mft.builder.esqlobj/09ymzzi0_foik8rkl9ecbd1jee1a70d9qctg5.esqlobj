@@ -1,0 +1,190 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE SN REFERENCE TO Environment.Variables.ComIbmDnqPrint.SN;
+		DECLARE defaultPrintQueue REFERENCE TO Environment.Variables.ComIbmDnqPrint.DefaultPrintQueue;
+
+		DECLARE iSqlCode		INT 0;
+		DECLARE chStmt			CHAR '';
+		DECLARE refPayload		REFERENCE TO InputRoot.MQRFH2;
+		MOVE refPayload NEXTSIBLING;
+		DECLARE PayloadExists	BOOLEAN LASTMOVE(refPayload);
+
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		/*----------------*\
+		|  Check for MQMD  |
+		\*----------------*/
+		DECLARE msgId BLOB InputRoot.MQMD.MsgId;
+		IF (msgId IS NULL) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_MISSING_MQMD) VALUES (MSG_PIA_MISSING_MQMD);
+		END IF;
+
+		/*--------------------------*\
+		|  Check for OU Information  |
+		\*--------------------------*/
+		DECLARE dni REFERENCE TO InputRoot.MQRFH2.ComIbmDni;
+		DECLARE ou CHARACTER dni.OU;
+		IF (ou IS NULL) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_MISSING_OU) VALUES (msgId, MSG_PIA_MISSING_OU);
+		END IF;
+
+		/*------------------------------*\
+		|  Check for Domain Information  |
+		\*------------------------------*/
+		DECLARE di_domain CHARACTER dni.MsgStandardInfo.Domain;
+		IF (    di_domain IS NULL
+		    AND PayloadExists    )
+		THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_MISSING_DOMAIN) VALUES (msgId, MSG_PIA_MISSING_DOMAIN);
+		END IF;
+
+		DECLARE di_defset CHARACTER dni.MsgStandardInfo.DefinitionSet;
+		IF (    di_defset IS NULL
+		    AND PayloadExists    )
+		THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_MISSING_DEFSET) VALUES (msgId, MSG_PIA_MISSING_DEFSET);
+		END IF;
+
+		/*--------------------------------------*\
+		|  Check for valid format (MTXML or MX)  |
+		\*--------------------------------------*/
+		-- TODO: check for valid format (MTXML or MX)?
+
+		/*-----------------------------------------*\
+		|  Check for print queue in request folder  |
+		\*-----------------------------------------*/
+		DECLARE fDefaultQueueUsed BOOLEAN FALSE;                  -- @P08A
+		DECLARE printQ CHARACTER dni.Function.DnqPrint.Print.Request.PrintQueue;
+		IF (   printQ IS NULL
+		    OR LENGTH(printQ) = 0)
+		THEN
+			-- Use default print queue from properties
+			IF (LENGTH(defaultPrintQueue) = 0) THEN               -- @P09A begin
+				/*----------------------------------------*\
+				|  No default print queue set as property  |
+				|  --> Prepare appropriate exception       |
+				\*----------------------------------------*/
+				-- Get name of current DnqPrintInputAdapter node
+				DECLARE chNodeName CHAR NodeLabel;
+				-- Cut off extension '.Prepare'
+				DECLARE iPosPeriod INT
+					POSITION(
+						'.'
+						IN chNodeName
+						REPEAT -1 -- Search for first period from the end
+					);
+				SET chNodeName =
+					SUBSTRING(chNodeName FROM 1 FOR (iPosPeriod - 1));
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg'
+					MESSAGE MsgNo(MSG_PIA_Q_DEFAULT_NOT_SET)
+					VALUES (chNodeName,
+					        msgId,
+					        MSG_PIA_Q_DEFAULT_NOT_SET);
+			END IF; -- Default print queue is configured ?        -- @P09A end
+			SET printQ = defaultPrintQueue;
+			SET fDefaultQueueUsed = TRUE;                         -- @P08A
+--			LOG EVENT CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_DEFAULT_USED) VALUES (msgId, defaultPrintQueue, MSG_PIA_Q_DEFAULT_USED);
+		END IF;
+
+		/* ------------------------------ @P08D begin ------------------------------ *\
+		-- Check print queue in db
+		-- @P01C begin: Do not call SQL directly
+		-- SET chStmt = 'SELECT ITEM QUEUE_NAME FROM '||SN||'.DNQP_QUEUE WHERE OU = '||ou||' AND QUEUE_NAME = '||printQ;
+		-- DECLARE queueExists BOOLEAN EXISTS (SELECT ITEM Q.QUEUE_NAME FROM Database.{SN}.DNQP_QUEUE AS Q WHERE Q.OU = ou AND Q.QUEUE_NAME = printQ);		
+		DECLARE db2env REFERENCE TO Environment;
+		CREATE FIELD Environment."Variables"."ComIbmDnqPrint"."Db2" AS db2env;
+		DECLARE queueExists BOOLEAN false;
+
+		SET chStmt = 'SELECT QUEUE_NAME FROM '||SN||'.DNQP_QUEUE WHERE OU = ? AND QUEUE_NAME = ?';
+		SET db2env."SelectQN"."chStmt"     = chStmt;
+		SET db2env."SelectQN"."OU"         = ou;
+		SET db2env."SelectQN"."QUEUE_NAME" = printQ;
+		SET db2env."SelectQN"."Result"[] = PASSTHRU(chStmt, ou, printQ);
+		SET iSqlCode = SQLCODE;
+		IF (iSqlCode < 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_DB_ERROR)
+				VALUES ('DNQP_QUEUE', CAST (iSqlCode AS CHAR), SQLSTATE, SQLERRORTEXT, CAST( SQLNATIVEERROR AS CHAR), chStmt, MSG_PIA_DB_ERROR);
+		END IF;
+
+		IF CARDINALITY(db2env."SelectQN"."Result"[]) > 0 THEN
+			SET queueExists = true;
+		END IF;
+		-- @P01C end
+
+		IF NOT queueExists THEN
+			THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_INVALID) VALUES (msgId, printQ, MSG_PIA_INVALID_Q);
+		END IF;
+		\* ------------------------------ @P08D end -------------------------------- */
+
+		/*-------------------------------*\
+		|  Check queue name for validity  |                          @P08A begin
+		\*-------------------------------*/
+		DECLARE iRC INT
+			checkQueueName(
+				printQ,
+				FALSE, -- Wildcards are NOT allowed
+				FALSE  -- Do NOT process queue name in CLI mode (i.e.,
+			);         -- do not accept escape characters)
+
+		IF (iRC < 0) THEN
+			-- -------------------------------
+			-- Max. queue name length exceeded
+			-- -------------------------------
+			IF (fDefaultQueueUsed) THEN
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_DEFAULT_INVALID_LEN)
+					VALUES(printQ, msgId, MSG_PIA_Q_DEFAULT_INVALID_LEN);
+			ELSE
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_REQUEST_INVALID_LEN)
+					VALUES(printQ, msgId, MSG_PIA_Q_REQUEST_INVALID_LEN);
+			END IF;
+		ELSEIF (iRC > 0) THEN
+			-- -----------------------
+			-- Invalid character found
+			-- -----------------------
+			IF (fDefaultQueueUsed) THEN
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_DEFAULT_INVALID_CHAR)
+					VALUES(SUBSTRING(printQ FROM iRC for 1), printQ, msgId, MSG_PIA_Q_DEFAULT_INVALID_CHAR);
+			ELSE
+				THROW USER EXCEPTION CATALOG 'dnqcpmsg' MESSAGE MsgNo(MSG_PIA_Q_REQUEST_INVALID_CHAR)
+					VALUES(SUBSTRING(printQ FROM iRC for 1), printQ, msgId, MSG_PIA_Q_REQUEST_INVALID_CHAR);
+			END IF;
+		END IF; -- Switch on iRC                                     @P08A end
+
+		DECLARE ref REFERENCE TO OutputLocalEnvironment;
+		/*----------------------------------------------------*\
+		|  Store fields for later insert in local environment  |
+		\*----------------------------------------------------*/
+		CREATE FIELD OutputLocalEnvironment.Variables.ComIbmDnqPrint AS ref;
+		SET ref.OU = ou;
+		SET ref.msgId = msgId;
+		SET ref.printQ = printQ;
+
+		/*-------------------------------------------------------------------------*\
+		|  Create a Configuration Retrieve request to retrieve the Options for ...  |
+		\*-------------------------------------------------------------------------*/
+		CREATE FIELD OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve AS ref;
+		SET ref.Request.OU.Name = ou;
+		CREATE FIELD ref.Request.OU.ConfigObjectList.ConfigObject AS ref;
+
+		-- ... Mwh Configuration and ...
+		SET ref.Type = CT_OPTIONS_MWH;
+		SET ref.Name = CO_MWH_OPTIONS_PRINT;
+
+		-- ... DnqPrintQueue (to check InputEnabled attribute)
+		CREATE NEXTSIBLING OF ref AS ref NAME 'ConfigObject';
+		SET ref.Type = CT_PRINT_QUEUE;
+		SET ref.Name = printQ;
+
+		IF (NOT PayloadExists) THEN
+			CREATE NEXTSIBLING OF OutputRoot.MQRFH2 DOMAIN 'XMLNSC' NAME 'XMLNSC';
+--			SET OutputRoot.MQRFH2.(MQRFH2.Field)NameValueCCSID = 1208;
+		END IF;
+
+		IF PayloadExists THEN
+			PROPAGATE;
+		ELSE
+			PROPAGATE TO TERMINAL 1;
+		END IF;
+		RETURN FALSE;
+	END;

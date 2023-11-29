@@ -1,0 +1,57 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE rElementCheck           REFERENCE TO InputLocalEnvironment."ComIbmDni"."Function"."CheckTransferOptionSetConfig".
+			"CheckConfig"."Request"."TransferOptionSetName";
+		DECLARE chTransferOptionSetName CHAR '';
+		DECLARE bRequestFound           BOOLEAN FALSE;
+                                                                 -- begin @P01A
+		DECLARE rEnv                    REFERENCE TO Environment;
+		CREATE FIELD Environment."Variables"."ComIbmDni"."DnqCheckTransferOptionSetConfig" AS rEnv;
+                                                                 /* begin @P02D
+		DECLARE bWorksForErInput        BOOLEAN FALSE;
+
+		IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."ER"[]) > 0) AND
+			(CARDINALITY(Environment."Variables"."ComIbmDni"."DnqMsifInput"[]) > 0) THEN
+			SET bWorksForErInput = TRUE;
+		END IF;
+		SET rEnv."bWorksForErInput" = bWorksForErInput;
+*/                                                                 -- end @P02D
+                                                                   -- end @P01A
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET chTransferOptionSetName = rElementCheck;
+                                                                 -- begin @P01A
+			SET rEnv."chTransferOptionSetName" = chTransferOptionSetName;
+			SET bRequestFound = TRUE;
+		END IF;
+                                                                   -- end @P01A
+--		IF bRequestFound OR bWorksForErInput THEN --@P01A @P02D
+		DECLARE rScpnRequest  REFERENCE TO Environment;
+		DECLARE rConfigObject REFERENCE TO Environment;
+
+		CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request"."OU" AS rScpnRequest;
+		SET rScpnRequest."Name" = OutputRoot.MQRFH2."ComIbmDni"."OU";
+		CREATE FIELD rScpnRequest."ConfigObjectList" AS rScpnRequest NAME 'ConfigObjectList';
+		IF bRequestFound THEN --@P01A
+			CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+			SET rConfigObject."Type" = 'DnfEfaTransferOptionSet';
+			SET rConfigObject."Name" = chTransferOptionSetName;
+                                                             -- begin @P01A
+		END IF;
+--		IF bWorksForErInput THEN @P02D
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DnfEfaTransferOptionSet';
+		SET rConfigObject."Name" = 'default';
+--		END IF; @P02D
+
+		SET rEnv."bRequestFound" = bRequestFound;
+--		SET rEnv."bWorksForErInput" = bWorksForErInput; @P02D
+                                                                   -- end @P01A
+--			SET bRequestFound = TRUE; @P01D
+--		END IF; @P02D
+
+		RETURN TRUE; --@P01C @P02C
+	END;

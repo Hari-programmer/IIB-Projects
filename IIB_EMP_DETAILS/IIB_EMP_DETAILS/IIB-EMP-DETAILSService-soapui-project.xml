@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<con:soapui-project id="6e746179-8483-4f46-b394-11f7dcdb2a39" activeEnvironment="Default" name="IIB_EMP_DETAILSService" resourceRoot="${projectDir}" soapui-version="5.7.0" abortOnError="false" runType="SEQUENTIAL" xmlns:con="http://eviware.com/soapui/config"><con:settings/><con:interface xsi:type="con:WsdlInterface" id="b852e0f7-e801-446a-9fba-f0755adfa43a" wsaVersion="NONE" name="IIB_EMP_DETAILSSOAP_HTTP_Binding" type="wsdl" bindingName="{http://tempuri.org/IIB_EMP_DETAILS}IIB_EMP_DETAILSSOAP_HTTP_Binding" soapVersion="1_1" anonymous="optional" definition="Service.wsdl" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><con:settings/><con:definitionCache type="TEXT" rootPart="file:\C:\Users\hari\IBM\IIBT10\workspace\IIB_EMP_DETAILS\IIB_EMP_DETAILSService.wsdl"><con:part><con:url>file:\C:\Users\hari\IBM\IIBT10\workspace\IIB_EMP_DETAILS\IIB_EMP_DETAILSService.wsdl</con:url><con:content><![CDATA[<wsdl:definitions name="IIB_EMP_DETAILS" targetNamespace="http://tempuri.org/IIB_EMP_DETAILS" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns="http://tempuri.org/IIB_EMP_DETAILS" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tns="http://tempuri.org/IIB_EMP_DETAILS" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <wsdl:types>
+    <xsd:schema targetNamespace="http://tempuri.org/IIB_EMP_DETAILS" xmlns:mrm="http://tempuri.org/IIB_EMP_DETAILS">
+      <xsd:complexType name="GET_EMP_REQUEST">
+        <xsd:sequence>
+          <xsd:element ref="Emp_Id"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:complexType name="GET_EMP_RESPONSE">
+        <xsd:sequence>
+          <xsd:element ref="Emp_Id"/>
+          <xsd:element ref="Emp_Name"/>
+          <xsd:element ref="Emp_DOB"/>
+          <xsd:element ref="Emp_Phone"/>
+          <xsd:element ref="Emp_Mail"/>
+          <xsd:element ref="Emp_Address"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:complexType name="FAULT">
+        <xsd:sequence>
+          <xsd:element ref="Fault"/>
+          <xsd:element ref="Fstring"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:element name="Emp_Id" type="xsd:int"/>
+      <xsd:element name="Emp_Name" type="xsd:string"/>
+      <xsd:element name="Emp_Phone" type="xsd:int"/>
+      <xsd:element name="Emp_Address" type="xsd:string"/>
+      <xsd:element name="Emp_Mail" type="xsd:string"/>
+      <xsd:element name="Emp_DOB" type="xsd:date"/>
+      <xsd:element name="Fault" type="xsd:int"/>
+      <xsd:element name="Fstring" type="xsd:string"/>
+      <xsd:element name="GET_EMP_REQUEST" type="GET_EMP_REQUEST"/>
+      <xsd:element name="GET_EMP_RESPONSE" type="GET_EMP_RESPONSE"/>
+      <xsd:element name="FAULT" type="FAULT"/>
+    </xsd:schema>
+  </wsdl:types>
+  <wsdl:message name="GetEmpDetails_in">
+    <wsdl:part element="GET_EMP_REQUEST" name="GET_EMP_REQUEST"/>
+  </wsdl:message>
+  <wsdl:message name="GetEmpDetails_out">
+    <wsdl:part element="GET_EMP_RESPONSE" name="GET_EMP_RESPONSE"/>
+  </wsdl:message>
+  <wsdl:message name="GetEmpDetails_fault1">
+    <wsdl:part element="GET_EMP_RESPONSE" name="GET_EMP_RESPONSE"/>
+  </wsdl:message>
+  <wsdl:portType name="IIB_EMP_DETAILSPortType">
+    <wsdl:operation name="GetEmpDetails">
+      <wsdl:input message="GetEmpDetails_in" name="GetEmpDetails_Input"/>
+      <wsdl:output message="GetEmpDetails_out" name="GetEmpDetails_Output"/>
+      <wsdl:fault message="GetEmpDetails_fault1" name="GetEmpDetails_Fault"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="IIB_EMP_DETAILSSOAP_HTTP_Binding" type="IIB_EMP_DETAILSPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="GetEmpDetails">
+      <soap:operation soapAction=""/>
+      <wsdl:input name="GetEmpDetails_Input">
+        <soap:body parts="GET_EMP_REQUEST" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="GetEmpDetails_Output">
+        <soap:body parts="GET_EMP_RESPONSE" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="GetEmpDetails_Fault">
+        <soap:fault name="GetEmpDetails_Fault" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="IIB_EMP_DETAILS_Service">
+    <wsdl:port binding="IIB_EMP_DETAILSSOAP_HTTP_Binding" name="IIB_EMP_DETAILSSOAP_HTTP_Port">
+      <soap:address location="http://localhost:7801/IIB_EMP_DETAILS_Service"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>]]></con:content><con:type>http://schemas.xmlsoap.org/wsdl/</con:type></con:part></con:definitionCache><con:endpoints><con:endpoint>http://localhost:7801/IIB_EMP_DETAILS_Service</con:endpoint></con:endpoints><con:operation id="b0312c72-64ce-4b1d-8c51-2f999043eab8" isOneWay="false" action="" name="GetEmpDetails" bindingOperationName="GetEmpDetails" type="Request-Response" outputName="GetEmpDetails_Output" inputName="GetEmpDetails_Input" receivesAttachments="false" sendsAttachments="false" anonymous="optional"><con:settings/><con:call id="6e5a950e-0123-4012-8d62-f71a2387a4db" name="Request 1"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.WsdlRequest@request-headers">&lt;xml-fragment/></con:setting></con:settings><con:encoding>UTF-8</con:encoding><con:endpoint>http://localhost:7801/IIB_EMP_DETAILS_Service</con:endpoint><con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:iib="http://tempuri.org/IIB_EMP_DETAILS">\r
+   <soapenv:Header/>\r
+   <soapenv:Body>\r
+      <iib:GET_EMP_REQUEST>\r
+         <iib:Emp_Id>001</iib:Emp_Id>\r
+      </iib:GET_EMP_REQUEST>\r
+   </soapenv:Body>\r
+</soapenv:Envelope>]]></con:request><con:credentials><con:authType>No Authorization</con:authType></con:credentials><con:jmsConfig JMSDeliveryMode="PERSISTENT"/><con:jmsPropertyConfig/><con:wsaConfig mustUnderstand="NONE" version="200508" action="http://tempuri.org/IIB_EMP_DETAILS/IIB_EMP_DETAILSPortType/GetEmpDetails_Input"/><con:wsrmConfig version="1.2"/></con:call></con:operation></con:interface><con:mockService id="4af39938-5003-4552-851d-faa8b7a72db7" port="8080" path="/" host="LAPTOP-NJCVL958" name="MockService 1"><con:settings><con:setting id="com.eviware.soapui.impl.wsdl.mock.WsdlMockService@require-soap-action">false</con:setting></con:settings><con:properties/><con:mockOperation name="GetEmpDetails" id="2e52ecca-8a24-4322-8ded-9902c639e79a" interface="IIB_EMP_DETAILSSOAP_HTTP_Binding" operation="GetEmpDetails"><con:settings/><con:defaultResponse>Response 1</con:defaultResponse><con:dispatchStyle>SEQUENCE</con:dispatchStyle><con:response name="Response 1" id="8dbe22f9-69a1-4d9f-a675-4f2368484b58" httpResponseStatus="200" encoding="UTF-8"><con:settings/><con:responseContent><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:iib="http://tempuri.org/IIB_EMP_DETAILS">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <iib:GET_EMP_RESPONSE>
+         <iib:Emp_Id>?</iib:Emp_Id>
+         <iib:Emp_Name>?</iib:Emp_Name>
+         <iib:Emp_DOB>?</iib:Emp_DOB>
+         <iib:Emp_Phone>?</iib:Emp_Phone>
+         <iib:Emp_Mail>?</iib:Emp_Mail>
+         <iib:Emp_Address>?</iib:Emp_Address>
+      </iib:GET_EMP_RESPONSE>
+   </soapenv:Body>
+</soapenv:Envelope>]]></con:responseContent><con:wsaConfig mustUnderstand="NONE" version="200508" action="http://tempuri.org/IIB_EMP_DETAILS/IIB_EMP_DETAILSPortType/GetEmpDetails_Output"/></con:response><con:dispatchConfig/></con:mockOperation></con:mockService><con:properties/><con:wssContainer/><con:oAuth2ProfileContainer/><con:oAuth1ProfileContainer/><con:sensitiveInformation/></con:soapui-project>

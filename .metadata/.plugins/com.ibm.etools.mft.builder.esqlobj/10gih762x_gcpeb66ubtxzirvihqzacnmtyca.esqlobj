@@ -1,0 +1,29 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+
+		SET OutputRoot = InputRoot;
+
+		DECLARE FIN_SERVICE_CCSID  CONSTANT INT 1208;
+		DECLARE rEnv               REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinServiceOutput";
+		DECLARE rMtfin             REFERENCE TO OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN";
+		DECLARE rMqrfh2            REFERENCE TO OutputRoot.MQRFH2[<]; --@P19A
+		DECLARE bTransformation    BOOLEAN TRUE;
+
+		IF LASTMOVE(rMtfin) AND (LENGTH(rMtfin) > 0) THEN
+			SET OutputRoot.*[<] = NULL;
+			SET OutputRoot.BLOB.BLOB = CAST(rMtfin AS BLOB CCSID FIN_SERVICE_CCSID);
+			SET OutputRoot.*[<2].CodedCharSetId = FIN_SERVICE_CCSID;
+			SET rMtfin = NULL;
+			SET bTransformation = FALSE;
+		END IF;
+		
+		SET rEnv."bTransformation" = bTransformation;
+
+		CALL DnqUtil_CreateDefaultElements(rMqrfh2); --@P19A
+		
+		DELETE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN";
+		DELETE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."Completion"; --@P15A
+
+		RETURN TRUE;
+	END;
+

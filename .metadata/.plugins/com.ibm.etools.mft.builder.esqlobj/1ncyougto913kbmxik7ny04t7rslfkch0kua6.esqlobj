@@ -1,0 +1,85 @@
+CREATE COMPUTE MODULE Functions_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		CREATE LASTCHILD OF EV.Req DOMAIN 'JSON' PARSE(InputRoot.BLOB.BLOB);
+		
+		
+     	SET OutputRoot.JSON.Data.card_id    = SUBSTRING(EV.Req.JSON.Data.card_id BEFORE '#a1l7F00000H0YOLQA3' );
+		
+		SET OutputRoot.JSON.Data.card_sf_id = COALESCE(EV.Req.JSON.Data.card_sf_id,'1'); 
+		
+		SET OutputRoot.JSON.Data.first_name = LOWER(EV.Req.JSON.Data.first_name);
+		
+		SET OutputRoot.JSON.Data.last_name  =  UPPER(EV.Req.JSON.Data.last_name);
+		
+		SET OutputRoot.JSON.Data.dob        = CAST(CAST(EV.Req.JSON.Data.dob AS  DATE  FORMAT  'yyyy-MM-dd' ) AS  char FORMAT 'dd-MM-yyyy') ;
+		
+		SET OutputRoot.JSON.Data.mobile_no  = REPLACE(EV.Req.JSON.Data.mobile_no,'269202','******');
+		
+	    SET OutputRoot.JSON.Data.current_pincode =  REPLACE(EV.Req.JSON.Data.current_pincode,'""','521226'); 
+	    
+	    --SET OutputRoot.JSON.Data.current_pincode=CAST(CAST(EV.Req.JSON.Data.current_pincode AS  BLOB FORMAT  '' ) AS CHARACTER    FORMAT '521226');
+	    
+	    --COALESCE(EV.Req.JSON.Data.current_pincode,'521226'); 
+	    
+	  --  SET OutputRoot.JSON.Data.current_pincode = OVERLAY(EV.Req.JSON.Data.current_pincode PLACING '521226' FROM 1 FOR 1); 
+	    
+		SET OutputRoot.JSON.Data.pan_number         = EV.Req.JSON.Data.pan_number;
+		
+		SET OutputRoot.JSON.Data.employment_type    =  POSITION('d' IN EV.Req.JSON.Data.employment_type FROM 1);
+		
+		SET OutputRoot.JSON.Data.dhani_product      = REPLACE(EV.Req.JSON.Data.dhani_product,'DHANILINE','INDIABULLS');
+		
+		SET OutputRoot.JSON.Data.is_preapproved     = EV.Req.JSON.Data.is_preapproved;
+		
+		SET OutputRoot.JSON.Data.preapproved_amount = EV.Req.JSON.Data.preapproved_amount;
+		
+		SET OutputRoot.JSON.Data.preapproved_segment = EV.Req.JSON.Data.preapproved_segment;
+		
+		SET OutputRoot.JSON.Data.filler3              = EV.Req.JSON.Data.filler3;
+		
+		SET OutputRoot.JSON.Data.product_type         = EV.Req.JSON.Data.product_type;
+		
+
+	
+		
+	
+		
+		
+			
+		/*
+		SET OutputRoot.JSON.Data.Check= CONTAINS(InputRoot.JSON.Data.dhani_product,'DHAN');
+		
+		SET OutputRoot.JSON.Data.Start =STARTSWITH(InputRoot.JSON.Data.dhani_product,'HAri');
+		
+		
+		SET OutputRoot.JSON.Data. PO= POSITION(InputRoot.JSON.Data.dhani_product IN 'DHANI');
+		
+		SET OutputRoot.JSON.Data. trim= TRIM( TRAILING 'DHANI' FROM InputRoot.JSON.Data.dhani_product); 
+		
+		  
+		 */
+		
+		
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;

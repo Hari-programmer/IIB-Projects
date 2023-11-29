@@ -1,0 +1,138 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+ 
+    DECLARE ref          REFERENCE TO InputExceptionList.*[1];
+
+    DECLARE fBreak       BOOLEAN FALSE;
+    DECLARE chThrowStmt  CHAR;
+
+    -- Get the original exception from the exception list.
+
+    WHILE (LASTMOVE(ref) = TRUE AND fBreak = FALSE) DO
+
+      IF (ref.Number IS NOT NULL) THEN
+        MOVE ref LASTCHILD;
+      ELSE
+      	MOVE ref PARENT;
+        SET fBreak = TRUE;
+      END IF;
+
+    END WHILE; -- (LASTMOVE(pRef) = TRUE AND fBreak = FALSE)
+
+    -- Create the exception to throw.
+
+    IF (ref."Catalog" = 'dniccmsg') THEN
+
+      /* The original exception is a WBI-FN exception.
+       */
+
+      SET chThrowStmt =    'THROW USER EXCEPTION SEVERITY '
+                        ||  CAST (ref.Severity AS CHAR)
+                        || ' CATALOG '
+                        || '''' || ref."Catalog" || ''''
+                        || ' MESSAGE '
+                        ||  CAST (ref.Number AS CHAR);
+     
+      DECLARE chParamList CHAR createParamList(ref, 10);
+      IF (LENGTH(chParamList) > 1) THEN
+        SET chThrowStmt = chThrowStmt || ' VALUES (' || chParamList || ');';
+      END IF;
+
+    ELSE
+
+      /* The original exception is no (!) WBI-FN exception.
+       */
+
+      SET chThrowStmt  = 'THROW USER EXCEPTION SEVERITY 3 CATALOG ''dniccmsg''
+                          MESSAGE 2105 VALUES (' || CAST(ref.Number AS CHAR);
+
+      DECLARE chParamList CHAR createParamList(ref, 10);
+      IF (LENGTH(chParamList) > 1) THEN
+        SET chThrowStmt = chThrowStmt || ', ' || chParamList;
+      END IF;
+
+      SET chThrowStmt = chThrowStmt || ', ''DNIX2105E'');';
+
+    END IF; -- (ref."Catalog" = 'dniccmsg')
+
+    -- Finally, throw the exception.
+
+    EVAL(chThrowStmt);
+
+    RETURN TRUE; -- will never be executed since an exception is thrown before
+
+  END; -- main()
+
+  /* --------------------------------------------------------------------------
+   *
+   * DESCRIPTION
+   *
+   *  Creates the string representation of the parameters of a WBI-MB
+   *  exception.
+   *
+   * PARAMETERS
+   *
+   *  exc   the root element of the WBI-MB exception.
+   *  iMax  the maximum number of parameters to include.
+   *
+   * RETURNS
+   *
+   *  The string representation of the parameters of a WBI-MB exception.
+   *
+   * ------------------------------------------------------------------------ */
+
+  CREATE FUNCTION createParamList(exc REFERENCE, iMax INT) RETURNS CHAR BEGIN
+
+    DECLARE chParameter CHAR '';
+    DECLARE chParamList CHAR '';
+    DECLARE chSep       CHAR '';
+
+    DECLARE i           INT 1;
+    DECLARE iLength     INT;
+    DECLARE iPos        INT;
+
+    FOR param AS exc."Insert"[] DO
+
+      IF (i < iMax) THEN
+
+        SET chParameter = CAST(param.Text AS CHAR);
+
+        -- Add escape character ' before single quotes ' because otherwise
+        -- they are interpreted as end of the string chThrowStmt.
+
+        SET iLength = LENGTH(chParameter);
+        SET iPos    = 1;
+
+        WHILE (iPos <= iLength) DO
+
+          IF (SUBSTRING(chParameter FROM iPos FOR 1) = '''' ) THEN
+
+            -- The vast quantity of single quotes is confusing, but required.
+
+            SET chParameter = OVERLAY(chParameter PLACING '''''' FROM iPos
+                                                                  FOR 1);
+              
+            -- Attention: Inserting a new character has impact on iPos as well
+            --            as on iLength.
+               
+            SET iPos    = iPos + 1;
+            SET iLength = LENGTH(chParameter);
+              
+          END IF; -- (SUBSTRING(chParameter FROM iPos FOR 1) = '''')
+            
+          SET iPos = iPos + 1;
+
+        END WHILE; -- (iPos <= iLength)
+
+        SET chParamList = chParamList || chSep || '''' || chParameter || '''';
+        SET chSep       = ', ';
+
+      END IF; -- (i < iMax)
+
+      SET i = i + 1;
+      
+    END FOR; -- param AS ref."Insert"[]
+
+    RETURN chParamList;
+
+  END; -- createParamList()
+

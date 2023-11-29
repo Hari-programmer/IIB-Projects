@@ -1,0 +1,12 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		SET OutputRoot.MQRFH2."Format" = MQFMT_STRING;
+		SET OutputRoot.MQMD."MsgType" = MQMT_REQUEST; --@P18A
+		
+		-- remove old completion if available
+		DELETE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."Completion"; -- @P20A
+
+		RETURN TRUE;
+	END;

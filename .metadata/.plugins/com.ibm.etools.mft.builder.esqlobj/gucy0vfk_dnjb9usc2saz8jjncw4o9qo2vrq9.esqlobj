@@ -1,0 +1,237 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+SET OutputRoot = InputRoot;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+
+SET OutputLocalEnvironment = InputLocalEnvironment;
+-- This node transforms the requested message parts into XML and stores the
+-- XML part as the new message body of the message.
+
+
+-- Check whether the last folder in the Root is a MQ header or a body
+DECLARE isBodyAvailable BOOLEAN; SET isBodyAvailable = FALSE;
+
+IF UPPER(SUBSTRING(FIELDNAME(InputRoot.*[<]) FROM 1 FOR 2)) <> 'MQ' THEN
+   -- Found a message body, delete it from OutputRoot. A new body is built later.
+   DECLARE refBody REFERENCE TO OutputRoot.*[<];
+   DETACH refBody;
+   SET isBodyAvailable = TRUE;
+END IF;
+
+
+-- Convert message to XML according to the settings of InsertMode and Message
+DECLARE chInsertMode CHARACTER;
+DECLARE chMessage    CHARACTER;
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  SET chInsertMode = UPPER(InputLocalEnvironment.ComIbmDni.Function.DniWarehouse.Insert.Request.InsertMode);
+  SET chMessage    = UPPER(InputLocalEnvironment.ComIbmDni.Function.DniWarehouse.Insert.Request.Message);
+ELSE
+  SET chInsertMode = UPPER(InputRoot.MQRFH2.ComIbmDni.Function.DniWarehouse.Insert.Request.InsertMode);
+  SET chMessage    = UPPER(InputRoot.MQRFH2.ComIbmDni.Function.DniWarehouse.Insert.Request.Message);
+END IF;
+
+
+IF chInsertMode = 'MODE2' AND chMessage = 'NONE' THEN
+   -- In case of InsertMode = MODE2 and Message = NONE the message must not to be stored
+   SET OutputRoot.XMLNS = NULL;                                                          -- @P03C
+ELSE
+                                                                                         -- @P03C begin
+   IF chInsertMode = 'MODE2' AND chMessage = 'BODY' THEN
+
+      -- In case of InsertMode = MODE2 and Message = BODY only the body has to be stored
+
+      IF isBodyAvailable = TRUE THEN
+
+         DECLARE name CHAR FIELDNAME(InputRoot.*[<]);
+         IF (name = 'BLOB') THEN
+
+            -- For a BLOB payload, add the entire structure (for backward
+            -- compatibility), except for the UnknownParserName element.
+
+            SET OutputRoot.XMLNS.Msg.{name} = InputRoot.*[<];
+            IF (CARDINALITY(InputRoot.*[<].UnknownParserName[]) > 0) THEN
+              DELETE FIELD OutputRoot.XMLNS.Msg.BLOB.UnknownParserName;
+            END IF;
+                                                                                         -- @P05C begin
+--       ELSEIF (name = 'XMLNSC') THEN
+
+            -- Due to differences between the XMLNSC parser and the XMLNS parser,
+            -- namespaces within an XMLNSC payload will be "recreated" when the
+            -- payload is copied in an XMLNS domain. Thus, serialize the payload
+            -- and recreate the payload in the XMLNS domain in a temporary tree.
+
+--          DECLARE body BLOB ASBITSTREAM(InputRoot.*[<]);
+--          CREATE LASTCHILD OF OutputRoot.XMLNS.TEMP PARSE(body);
+
+            -- Add the content of the payload (ignoring the domain element),
+            -- and clean up.
+
+--          SET OutputRoot.XMLNS.Msg.BODY = OutputRoot.XMLNS.TEMP.*[<].*[1];
+--          DELETE FIELD OutputRoot.XMLNS.TEMP;
+
+         ELSE
+
+            -- For any payload that is neither a BLOB payload nor a XMLNSC payload,
+            -- add the content of the payload (ignoring the domain element).
+
+--          SET OutputRoot.XMLNS.Msg.BODY = InputRoot.*[<].{name};
+
+            -- To avoid codepage conversion problems, store any payload that is not
+            -- a BLOB payload as BLOB payload in UTF-8.
+                                                                                         -- @P10C begin
+            DECLARE payload BLOB;
+            IF (name = 'MRM') THEN
+              DECLARE set  CHAR InputRoot.MQRFH2.mcd.Set;
+              DECLARE type CHAR InputRoot.MQRFH2.mcd.Type;
+              DECLARE fmt  CHAR InputRoot.MQRFH2.mcd.Fmt;
+              SET payload = ASBITSTREAM(InputRoot.*[<],,1208,set,type,fmt);
+            ELSE
+              SET payload = ASBITSTREAM(InputRoot.*[<] CCSID 1208);
+            END IF;
+
+            SET OutputRoot.XMLNS.Msg.BLOB.BLOB = payload;
+                                                                                         -- @P10C end
+         END IF;                                                                         -- @P05C end
+                                                                                         -- @P05A begin
+         IF (name IN ('XML','XMLNS','XMLNSC')) THEN
+            SET OutputLocalEnvironment.Variables.DniWarehouse.Data.BodyRep = 'XML';
+         ELSE
+            SET OutputLocalEnvironment.Variables.DniWarehouse.Data.BodyRep = 'HEX';
+         END IF;
+                                                                                         -- @P05A end
+      ELSE
+         SET OutputRoot.XMLNS = NULL;
+      END IF;
+
+   ELSE
+
+      -- Add all children of the root, except for the internal Properties header.
+
+      FOR p AS InputRoot.*[] DO
+
+        DECLARE name CHAR FIELDNAME(p);
+        IF (name LIKE 'MQ%') THEN
+                                                                                         -- @P06C begin
+          IF (name <> 'MQRFH2') THEN
+
+            -- For an MQ header that is not an MQRFH2 copy the entire header.
+            -- structure.
+
+            SET OutputRoot.XMLNS.Msg.{name} = p;
+
+          ELSE
+
+            -- For an MQRFH2, due to the differences between the MQRFH2 parser
+            -- and the XMLNS parser, the NameValueData folders of the MQRFH2
+            -- will not be created properly if the entire header structure is
+            -- copied. Thus, create the MQRFH2 'manually'.
+
+            DECLARE rfh2 REFERENCE TO OutputRoot;
+            CREATE FIELD OutputRoot.XMLNS.Msg.MQRFH2 AS rfh2;
+
+            -- Copy the fields of the MQRFH2.
+
+            FOR f AS InputRoot.MQRFH2.(MQRFH2.Field)*[] DO
+              SET rfh2.{FIELDNAME(f)} VALUE = f;
+            END FOR;
+
+            -- Serialize the NameValueData folders and recreate them in
+            -- the XMLNS domain.
+
+            FOR nv AS InputRoot.MQRFH2.(Name)*[] DO
+
+              DECLARE data BLOB;
+              SET data = ASBITSTREAM(nv CCSID 1208 OPTIONS FolderBitStream);
+
+              CREATE LASTCHILD OF rfh2 DOMAIN('XMLNS')
+              PARSE(data CCSID 1208 OPTIONS FolderBitStream);
+
+            END FOR;
+
+            -- Remove the MWH request.
+
+            DELETE FIELD rfh2.ComIbmDni.Function.DniWarehouse;
+
+          END IF;
+                                                                                         -- @P06C end
+        ELSEIF (name <> 'Properties') THEN
+
+          IF (name = 'BLOB') THEN
+
+            -- For a BLOB payload, add the entire structure (for backward
+            -- compatibility), except for the UnknownParserName element.
+
+            SET OutputRoot.XMLNS.Msg.{name} = InputRoot.*[<];
+            IF (CARDINALITY(InputRoot.*[<].UnknownParserName[]) > 0) THEN
+              DELETE FIELD OutputRoot.XMLNS.Msg.BLOB.UnknownParserName;
+            END IF;
+                                                                                         -- @P05C begin
+--        ELSEIF (name = 'XMLNSC') THEN
+
+            -- Due to differences between the XMLNSC parser and the XMLNS parser,
+            -- namespaces within an XMLNSC payload will be "recreated" when the
+            -- payload is copied in an XMLNS domain. Thus, serialize the payload
+            -- and recreate the payload in the XMLNS domain in a temporary tree.
+
+--          DECLARE body BLOB ASBITSTREAM(InputRoot.*[<]);
+--          CREATE LASTCHILD OF OutputRoot.XMLNS.TEMP PARSE(body);
+
+            -- Add the content of the payload (ignoring the domain element), and
+            -- clean up.
+
+--          SET OutputRoot.XMLNS.Msg.BODY = OutputRoot.XMLNS.TEMP.*[<].*[1];
+--          DELETE FIELD OutputRoot.XMLNS.TEMP;
+
+          ELSE
+
+            -- For any payload that is neither a BLOB payload nor a XMLNSC payload,
+            -- add the content of the payload (not including the domain element).
+
+--          SET OutputRoot.XMLNS.Msg.BODY = InputRoot.*[<].{name};
+
+            -- To avoid codepage conversion problems, store any payload that is not
+            -- a BLOB payload as BLOB payload in UTF-8.
+                                                                                         -- @P10C begin
+            DECLARE payload BLOB;
+            IF (name = 'MRM') THEN
+              DECLARE set  CHAR InputRoot.MQRFH2.mcd.Set;
+              DECLARE type CHAR InputRoot.MQRFH2.mcd.Type;
+              DECLARE fmt  CHAR InputRoot.MQRFH2.mcd.Fmt;
+              SET payload = ASBITSTREAM(InputRoot.*[<],,1208,set,type,fmt);
+            ELSE
+              SET payload = ASBITSTREAM(InputRoot.*[<] CCSID 1208);
+            END IF;
+
+            SET OutputRoot.XMLNS.Msg.BLOB.BLOB = payload;
+
+            -- If existing, update the mcd folder in the MQRFH2 as the payload has
+            -- been converted to a BLOB payload.
+
+            IF (CARDINALITY(InputRoot.MQRFH2.mcd[]) > 0) THEN
+              DELETE FIELD OutputRoot.XMLNS.Msg.MQRFH2.mcd;
+            END IF;
+            SET OutputRoot.XMLNS.Msg.MQRFH2.mcd.Msd = 'none';
+                                                                                         -- @P10C end
+          END IF;                                                                        -- @P05C end
+                                                                                         -- @P05A begin
+          IF (name IN ('XML','XMLNS','XMLNSC')) THEN
+            SET OutputLocalEnvironment.Variables.DniWarehouse.Data.BodyRep = 'XML';
+          ELSE
+            SET OutputLocalEnvironment.Variables.DniWarehouse.Data.BodyRep = 'HEX';
+          END IF;
+                                                                                         -- @P05A end
+        END IF; -- IF (name LIKE 'MQ%') ELSEIF (name <> 'Properties)
+
+      END FOR; -- FOR p AS InputRoot.*[] DO
+
+      -- Set the message domain for further processing
+
+      SET OutputRoot.MQRFH2.mcd.Msd = 'xmlns';
+                                                                                         -- @P03C end
+   END IF;
+END IF;
+
+RETURN true;
+END;
+

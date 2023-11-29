@@ -1,0 +1,167 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+	  SET OutputRoot = InputRoot;
+	  
+	  DECLARE chSchema         CHAR Environment.Variables.ComIbmDni.Dnq.Properties.SchemaName;
+	  DECLARE chQueues         CHAR Environment.Variables.ComIbmDni.Dnq.Properties.Queues;
+	  DECLARE chDomains        CHAR Environment.Variables.ComIbmDni.Dnq.Properties.Domains;
+	  DECLARE chProcessingType CHAR Environment.Variables.ComIbmDni.Dnq.Properties.ProcessingType;
+	  
+	  DECLARE rDnqInput        REFERENCE TO Environment;
+	  
+	  CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Properties.DnqInput AS rDnqInput;
+	  
+--	  SET Environment.Variables.ComIbmDni.Dnq.Properties.ExternalSystem = NULL;
+      SET OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.Code = 'Ok';	  
+      SET Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.Dnq.Completion.Reason = '';	    
+      	  
+	  -- Check WQM HLQ property	not needed any more
+/*	  IF Environment.ComIbmDni.Dnq.Properties.WMQHLQ = ''
+	  THEN
+        THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1001 VALUES( 'DNQK1001E' );
+      END IF;*/
+      
+      -- Check SchemaName property
+   	  IF chSchema = '' THEN
+   	    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1002 VALUES( 'DNQK1002E' );
+      END IF;	
+	  IF ( UPPER( chProcessingType ) = 'USERACTION' ) THEN
+	  	SET chProcessingType = 'U';
+	  ELSEIF ( UPPER( chProcessingType ) = 'BUSINESS' ) THEN
+	  	SET chProcessingType = 'B';
+	  ELSEIF (( UPPER( chProcessingType ) = 'ANY' ) OR
+			  ( TRIM( chProcessingType )  = ''))  THEN
+        SET chProcessingType = 'U'',''B'; -- beginning and trailing ' are added by SELECT statement
+	  ELSEIF ( TRIM( chProcessingType ) = '') THEN
+	  ELSE
+	  	THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1016 VALUES( chProcessingType, 'DNQK1016E' );
+   	  END IF;
+   	  
+   	  IF chQueues = '' THEN
+   	    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1003 VALUES( 'DNQK1003E' );
+      END IF;
+      
+	  --- US ------ Parse domain list e.g. DNIFIN; DNIFUNDS --------------------
+	  
+	  IF LENGTH( chDomains ) <> 0 THEN
+	  	
+	  	-- domains can be separated by commas or semicolons, internally by semicolons
+	  	Set chDomains = REPLACE( chDomains, ',', ';');
+	  	
+	  	IF SUBSTRING( chDomains FROM LENGTH( chDomains ) FOR 1 ) = ';' THEN
+	      -- remove tailing ';' if available
+    	  Set chDomains = LEFT( chDomains, LENGTH( chDomains ) - 1 );
+      	END IF;
+	        
+        DECLARE ID1 INTEGER;
+        DECLARE ID2 INTEGER;
+        DECLARE ID INTEGER;
+      
+        Set ID = 1;
+        Set ID1 = 1;
+        Set ID2 = POSITION( ';' IN chDomains FROM ID1 );
+      
+        WHILE ID2 <> 0 DO
+          -- get domain name terminated with ';'
+       	  Set Environment.Variables.ComIbmDni.Dnq.Properties.DnqInput.Domain[ ID ] = TRIM(SUBSTRING( chDomains FROM ID1 FOR ID2 - ID1 ));
+          Set ID1 = ID2 + 1;
+	      Set ID2 = POSITION( ';' IN chDomains FROM ID1 );
+      	  Set ID = ID + 1;
+        END WHILE;
+      
+        -- get last (or only) domain name
+       	Set Environment.Variables.ComIbmDni.Dnq.Properties.DnqInput.Domain[ ID ] = TRIM(SUBSTRING( chDomains FROM ID1 ));
+
+	  END IF;
+      	
+	  -----------------------------
+
+      -- Parse Input Queue list      
+      DECLARE I1 INTEGER;
+      DECLARE I2 INTEGER;
+      DECLARE I  INTEGER;
+      DECLARE J  INTEGER;
+      DECLARE J1 INTEGER;
+      DECLARE J2 INTEGER;
+      DECLARE chTmp CHARACTER;
+      DECLARE bWildcards BOOLEAN;
+
+      IF SUBSTRING( chQueues FROM LENGTH( chQueues ) FOR 1 ) = ';'
+      THEN
+      	Set chQueues = LEFT( chQueues, LENGTH( chQueues ) - 1 );
+      END IF;
+      
+      Set I1 = 1;
+      Set I = 1;
+      X : LOOP
+      	Set I2 = POSITION( ';' IN chQueues FROM I1 );
+        IF I2 <> 0
+        THEN
+          Set chTmp = SUBSTRING( chQueues FROM I1 FOR I2 - I1 );
+        ELSE
+       	  Set chTmp = SUBSTRING( chQueues FROM I1 FOR LENGTH( chQueues ) - I1 + 1 );
+        END IF;
+        
+        Set J1 = POSITION( '(' IN chTmp );
+        IF J1 = 0
+        THEN
+          THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1004 VALUES( chTmp, 'DNQK1004E' );
+        END IF;
+        Set rDnqInput.Queue[ I ].Name = SUBSTRING( chTmp FROM 1 FOR J1 - 1 );
+        Set J1 = J1 + 1;
+        Set J = 1;
+        Set bWildcards = false;
+        Y : LOOP
+          Set J2 = POSITION( ',' IN chTmp FROM J1 );
+          IF J2 <> 0
+          THEN
+          	Set rDnqInput.Queue[ I ].OU[ J ] = TRIM(SUBSTRING( chTmp FROM J1 FOR J2 - J1 ));
+          	IF POSITION( '*' IN rDnqInput.Queue[ I ].OU[ J ] ) <> 0 OR
+         	   POSITION( '?' IN rDnqInput.Queue[ I ].OU[ J ] ) <> 0
+         	THEN
+         	  Set bWildcards = true;
+         	  Set rDnqInput.Queue[ I ].OU[ J ] = REPLACE( rDnqInput.Queue[ I ].OU[ J ], '*', '%' );
+         	  Set rDnqInput.Queue[ I ].OU[ J ] = REPLACE( rDnqInput.Queue[ I ].OU[ J ], '?', '_' );         	  
+          	END IF;
+          ELSE
+            Set J2 = POSITION( ')' IN chTmp FROM J1 );	
+            IF J2 = 0
+            THEN
+              THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1005 VALUES( chTmp, 'DNQK1005E' );
+            END IF;
+          	Set rDnqInput.Queue[ I ].OU[ J ] = TRIM(SUBSTRING( chTmp FROM J1 FOR J2 - J1 ));
+          	IF POSITION( '*' IN rDnqInput.Queue[ I ].OU[ J ] ) <> 0 OR
+         	   POSITION( '?' IN rDnqInput.Queue[ I ].OU[ J ] ) <> 0
+         	THEN
+         	  Set bWildcards = true;
+          	END IF;
+            LEAVE Y;
+          END IF;	         
+
+      	  Set J1 = J2 + 1;
+          Set J = J + 1;
+        END LOOP Y;
+        Set rDnqInput.Queue[ I ].NumberOfOUs = J ;
+        IF bWildcards = true
+        THEN
+          Set rDnqInput.Queue[ I ].OUWithWC = 'Yes';
+        END IF;
+        IF I2 = 0
+        THEN
+          LEAVE X;
+        END IF;
+        
+      	Set I1 = I2 + 1;
+        
+      	
+      	Set I = I + 1;
+      END LOOP X;
+      Set rDnqInput.NumberOfQueues = I ;
+      
+	  SET Environment.Variables.ComIbmDni.Dnq.Properties.Queues = chQueues;
+	  SET Environment.Variables.ComIbmDni.Dnq.Properties.Domains = chDomains;
+	  SET Environment.Variables.ComIbmDni.Dnq.Properties.ProcessingType = chProcessingType;
+      
+      RETURN TRUE;
+	END;
+

@@ -1,0 +1,10 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+		DECLARE rEnvironment           REFERENCE TO Environment;
+		CALL DnqUtil_CopyScpnToEnv(rInputLocalEnvironment, rEnvironment);
+		SET Environment.ComIbmDni.Properties.Common.LastUpdate = InputLocalEnvironment.ComIbmDni.Properties.Common.LastUpdate;
+		RETURN TRUE;
+	END;

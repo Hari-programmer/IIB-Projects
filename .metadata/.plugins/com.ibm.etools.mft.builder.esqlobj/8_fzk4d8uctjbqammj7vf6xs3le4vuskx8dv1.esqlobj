@@ -1,0 +1,16 @@
+CREATE FUNCTION ComIbmDnqMwhUpdateInsert_GetContentFlag(chOu CHAR, rEnvironment REFERENCE) RETURNS CHAR
+BEGIN
+	DECLARE chContent    CHAR 'Complete';
+	DECLARE chMwhContent CHAR '';
+
+	SET chMwhContent = rEnvironment."ComIbmDni"."Properties".{chOu}."DnqOptionsMwh".*[>]."DnqContentMwh";
+	SET chMwhContent = COALESCE(UPPER(chMwhContent), '');
+	IF chMwhContent = 'INDEX' THEN -- Index only
+		SET chContent = 'None';
+		ELSE IF chMwhContent = 'INDEXANDBODY' THEN -- IndexAndBody
+			SET chContent = 'Body';
+		END IF;
+	END IF;
+
+	RETURN chContent;
+END;

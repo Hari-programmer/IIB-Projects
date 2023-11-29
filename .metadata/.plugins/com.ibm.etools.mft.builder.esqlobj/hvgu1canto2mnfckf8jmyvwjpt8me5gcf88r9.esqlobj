@@ -1,0 +1,18 @@
+CREATE COMPUTE MODULE ComIbmDnqErFinInput_BuildSCPNRequest
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.Name = COALESCE(InputRoot.MQRFH2.ComIbmDni.OU,'DNFSYSOU');
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Type = 'DniMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Name = 'DniMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Type = 'DniOptionsMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Name = 'DnqER';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[3].Type = 'DnqEROUOptions';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[3].Name = 'DnqEROUOptions';
+
+		RETURN TRUE;
+	END;
+END MODULE;

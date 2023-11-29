@@ -1,0 +1,631 @@
+CREATE COMPUTE MODULE "ComIbmDniMwhUpdate_UpdateMessage"
+
+                                                                                         -- @P19A begin
+  CREATE PROCEDURE substitute(IN ref REFERENCE, IN name CHAR) BEGIN
+
+    -- Retrieve the expected application encoding scheme
+
+    DECLARE stmt CHAR 'SELECT CURRENT APPLICATION ENCODING SCHEME FROM SYSIBM.SYSDUMMY1';
+    SET OutputLocalEnvironment.Variables.Result[] = PASSTHRU(stmt);
+
+    -- Check all parameters, and substitute any characters that cannot be converted to
+    -- the expected application encoding scheme with a '?' character
+
+    DECLARE cp INT OutputLocalEnvironment.Variables.Result.*[1];
+    FOR p AS ref.{name}[] DO
+
+      DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+        DECLARE value CHAR FIELDVALUE(p);
+        DECLARE i     INT 1;
+        DECLARE max   INT LENGTH(value) + 1;
+        WHILE (i < max) DO
+          DECLARE CONTINUE HANDLER FOR SQLSTATE LIKE '%' BEGIN
+            SET value = OVERLAY(value PLACING '?' FROM i);
+          END;
+          DECLARE data BLOB CAST(SUBSTRING(value FROM i FOR 1) AS BLOB CCSID cp);
+          SET i = i + 1;
+        END WHILE;
+        SET p VALUE = value;
+      END;
+
+      DECLARE data BLOB CAST(CAST(FIELDVALUE(p) AS CHAR) AS BLOB CCSID cp);
+
+    END FOR;
+
+  END; -- PROCEDURE substitute(IN REFERENCE, IN CHAR)
+                                                                                         -- @P19A end
+
+CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+
+-- This node updates the requested information in the database. No explicit
+-- parameter checking is performed. This is done by the DBMS.
+
+-- Currently defined fields in ...Request.MessageField:
+--    Amount               DECIAML(18,5)     MWH_AMOUNT
+--    Currency             CHAR(3)           MWH_CURRENCY
+--    ValueDate            DATE              MWH_VALUE_DATE
+--    ISN                  INTEGER           MWH_ISN
+--    OSN                  INTEGER           MWH_OSN
+--    MessageType          CHAR(30)          MWH_MSG_TYPE         -- @P05C
+--    Quantity             INTEGER           MWH_QUANTITY
+--    Priority             CHAR(1)           MWH_PRIORITY
+--    AuthenticationStatus CHAR(8)           MWH_AUTH_STATUS
+--    PDIndicator          CHAR(1)           MWH_PD_INDICATOR
+--    SessionID            INTEGER           MWH_SESSION
+--    Sender               VARCHAR(128)      MWH_SENDER
+--    Receiver             VARCHAR(128)      MWH_RECEIVER
+--    Identification       VARCHAR(16)       MWH_IDENTIFICATION
+--    TransactionReference VARCHAR(16)       MWH_TRAN_REFERENCE
+--    ApplicationReference VARCHAR(32)       MWH_APPL_REFERENCE
+--    MessageReference     VARCHAR(64)       MWH_MSG_REFERENCE
+--    Item                 VARCHAR(16)       MWH_ITEM
+--    ExtensionIdentifier  VARCHAR(16)       MWH_EXT_IDENTIFIER
+--    ExtensionDefined1    VARCHAR(128)      MWH_EXTENSION_DEF1
+--    ExtensionDefined2    VARCHAR(128)      MWH_EXTENSION_DEF2
+--    ExtensionDefined3    VARCHAR(128)      MWH_EXTENSION_DEF3
+--    Application          VARCHAR(100)      MWH_APPL_NAME
+--    User                 VARCHAR(100)      MWH_USER_ID
+--    UserDefined1         VARCHAR(128)      MWH_USER_DEF1
+--    UserDefined2         VARCHAR(128)      MWH_USER_DEF2
+--    UserDefined3         VARCHAR(128)      MWH_USER_DEF3
+                                                                -- @P05A begin
+--    MsgDomain            CHAR(16)          MWH_MSG_DOMAIN
+--    TrafficType          CHAR(3)           MWH_TRAFFIC_TYPE
+--    BodyRep              CHAR(3)           MWH_BODY_REP
+--    RoutDest             VARCHAR(30)       MWH_ROUT_DEST
+--    ParentMsgId          CHAR(24)          MWH_PARENT_MSG_ID
+--    Direction            CHAR(1)           MWH_DIRECTION
+                                                                -- @P05A end
+--    RecordType           CHAR(1)           MWH_RECORD_TYPE    -- @P09A
+
+CREATE FIELD OutputLocalEnvironment.Variables.DniWarehouse.Update;
+DECLARE refLE         REFERENCE TO OutputLocalEnvironment.Variables.DniWarehouse.Update;
+DECLARE refData       REFERENCE TO InputLocalEnvironment.Variables.DniWarehouse.Data;    -- @P06A
+DECLARE refComIbmDni  REFERENCE TO InputRoot.MQRFH2.ComIbmDni;
+DECLARE refRequest    REFERENCE TO refComIbmDni.Function.DniWarehouse.Update.Request;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refRequest TO InputLocalEnvironment.ComIbmDni.Function.DniWarehouse.Update.Request;
+END IF;
+DECLARE chUpdateMode  CHARACTER; SET chUpdateMode  = UPPER(refRequest.UpdateMode);
+DECLARE chSetClause   CHARACTER;                                                         -- @P02C
+DECLARE chWhereClause CHARACTER; SET chWhereClause = ' WHERE MWH_WMQI_MSG_ID=?';
+DECLARE iSetParmIndex INTEGER;   SET iSetParmIndex = 1;
+
+-- Initialize the set-clause.
+SET chSetClause = ' SET GMT_TMSTMP=?';                                                   -- @P02A
+SET refLE.SetParm[iSetParmIndex] VALUE = CURRENT_GMTTIMESTAMP;                           -- @P02A
+SET iSetParmIndex = iSetParmIndex + 1;                                                   -- @P02A
+
+-- Initialize the status field
+IF refRequest.Status IS NOT NULL THEN
+   SET chSetClause = chSetClause || ',MWH_MSG_STATUS=?';
+                                                                 /* begin @P18D
+   -- status values from request are not to be manipulated
+   IF (UPPER(refRequest.Status) IN ('FINISHED','ERROR','PROCESS','DELETED')) THEN
+      SET refLE.SetParm[iSetParmIndex] VALUE = UPPER(refRequest.Status);
+   ELSE
+*/                                                                 -- end @P18D
+      SET refLE.SetParm[iSetParmIndex] VALUE = refRequest.Status;
+--   END IF; @P18D
+   SET iSetParmIndex = iSetParmIndex + 1;
+END IF;
+
+-- Initialize the header fields according to the setting of UpdateMode and HeaderFields
+IF chUpdateMode IN ('MODE1', 'BODYANDHEADER') OR (chUpdateMode = 'MODE3' AND UPPER(refRequest.HeaderFields) = 'ALL') THEN
+   -- All header fields have to be updated. Columns for non-existing fields will be set to NULL.
+   SET chSetClause = chSetClause || ',MWH_MSG_GRP=?,MWH_BUSINESS_GRP=?,MWH_EXT_MSG_ID=?';
+   SET refLE.SetParm[iSetParmIndex]   VALUE = refComIbmDni.MessageGroup;
+   SET refLE.SetParm[iSetParmIndex+1] VALUE = refComIbmDni.BusinessGroup;
+   SET refLE.SetParm[iSetParmIndex+2] VALUE = refComIbmDni.ExternalMessageId;
+   SET iSetParmIndex = iSetParmIndex + 3;
+ELSE
+   IF chUpdateMode = 'MODE3' AND UPPER(refRequest.HeaderFields) = 'DEFINED' THEN
+      -- Only the existing header fields have to be updated
+      IF refComIbmDni.MessageGroup IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_MSG_GRP=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refComIbmDni.MessageGroup;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refComIbmDni.BusinessGroup IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_BUSINESS_GRP=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refComIbmDni.BusinessGroup;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refComIbmDni.ExternalMessageId IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_EXT_MSG_ID=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refComIbmDni.ExternalMessageId;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      -- ELSE
+      --    Nothing to do, because the header fields must not be updated
+   END IF;
+END IF;
+                                                                 -- begin @P16A
+/*------------------------*\
+|  check for long user ID  |
+\*------------------------*/
+DECLARE refMsgField REFERENCE TO refRequest.MessageField;
+DECLARE chUserId    CHAR refMsgField.User;
+
+DECLARE rLongUserId REFERENCE TO InputRoot.MQRFH2.ComIbmDni.UserIdentifier;
+
+IF LASTMOVE(rLongUserId) AND (LENGTH(rLongUserId) > 0) THEN
+   SET chUserId = DecryptSecVal(rLongUserId);
+END IF;
+                                                                   -- end @P16A
+-- Initialize the message fields according to the setting of UpdateMode and MessageFields
+IF chUpdateMode = 'MODE3' AND UPPER(refRequest.MessageFields) = 'ALL' THEN
+
+--   DECLARE refMsgField   REFERENCE TO refRequest.MessageField; @P16D
+   DECLARE chPdIndicator CHARACTER;
+
+   -- Get the value for the PD indicator.
+   SET chPdIndicator = CASE refMsgField.PDIndicator WHEN TRUE  THEN 'Y'
+                                                    WHEN FALSE THEN 'N'
+                       END;
+
+   -- All message fields have to be updated. Columns for non-existing fields will be set to NULL.
+   SET chSetClause = chSetClause
+      || ',MWH_AMOUNT=?,MWH_CURRENCY=?,MWH_VALUE_DATE=?,MWH_ISN=?,MWH_OSN=?,MWH_MSG_TYPE=?,MWH_QUANTITY=?,MWH_PRIORITY=?,'
+      || 'MWH_AUTH_STATUS=?,MWH_PD_INDICATOR=?,MWH_SESSION=?,MWH_SENDER=?,MWH_RECEIVER=?,MWH_IDENTIFICATION=?,'
+      || 'MWH_TRAN_REFERENCE=?,MWH_APPL_REFERENCE=?,MWH_MSG_REFERENCE=?,MWH_ITEM=?,MWH_EXT_IDENTIFIER=?,MWH_EXTENSION_DEF1=?,'
+      || 'MWH_EXTENSION_DEF2=?,MWH_EXTENSION_DEF3=?,MWH_APPL_NAME=?,MWH_USER_ID=?,MWH_USER_DEF1=?,MWH_USER_DEF2=?,MWH_USER_DEF3=?';
+   SET chSetClause = chSetClause
+      || ',MWH_MSG_DOMAIN=?,MWH_TRAFFIC_TYPE=?,MWH_BODY_REP=?,MWH_ROUT_DEST=?,MWH_PARENT_MSG_ID=?,MWH_DIRECTION=?' -- @P05A
+      || ',MWH_RECORD_TYPE=?';                                                                                     -- @P09A
+                                                                                         -- @P09C begin
+   SET refLE.SetParm[iSetParmIndex]    VALUE = refMsgField.Amount;
+   SET refLE.SetParm[iSetParmIndex+ 1] VALUE = refMsgField.Currency;
+   SET refLE.SetParm[iSetParmIndex+ 2] VALUE = refMsgField.ValueDate;
+   SET refLE.SetParm[iSetParmIndex+ 3] VALUE = refMsgField.ISN;
+   SET refLE.SetParm[iSetParmIndex+ 4] VALUE = refMsgField.OSN;
+   SET refLE.SetParm[iSetParmIndex+ 5] VALUE = refMsgField.MessageType;
+   SET refLE.SetParm[iSetParmIndex+ 6] VALUE = refMsgField.Quantity;
+   SET refLE.SetParm[iSetParmIndex+ 7] VALUE = refMsgField.Priority;
+   SET refLE.SetParm[iSetParmIndex+ 8] VALUE = refMsgField.AuthenticationStatus;
+   SET refLE.SetParm[iSetParmIndex+ 9] VALUE = chPdIndicator;
+   SET refLE.SetParm[iSetParmIndex+10] VALUE = refMsgField.SessionID;
+   SET refLE.SetParm[iSetParmIndex+11] VALUE = refMsgField.Sender;
+   SET refLE.SetParm[iSetParmIndex+12] VALUE = refMsgField.Receiver;
+   SET refLE.SetParm[iSetParmIndex+13] VALUE = refMsgField.Identification;
+   SET refLE.SetParm[iSetParmIndex+14] VALUE = refMsgField.TransactionReference;
+   SET refLE.SetParm[iSetParmIndex+15] VALUE = refMsgField.ApplicationReference;
+   SET refLE.SetParm[iSetParmIndex+16] VALUE = refMsgField.MessageReference;
+   SET refLE.SetParm[iSetParmIndex+17] VALUE = refMsgField.Item;
+   SET refLE.SetParm[iSetParmIndex+18] VALUE = refMsgField.ExtensionIdentifier;
+   SET refLE.SetParm[iSetParmIndex+19] VALUE = refMsgField.ExtensionDefined1;
+   SET refLE.SetParm[iSetParmIndex+20] VALUE = refMsgField.ExtensionDefined2;
+   SET refLE.SetParm[iSetParmIndex+21] VALUE = refMsgField.ExtensionDefined3;
+   SET refLE.SetParm[iSetParmIndex+22] VALUE = refMsgField.Application;
+   SET refLE.SetParm[iSetParmIndex+23] VALUE = chUserId; --@P16C
+   SET refLE.SetParm[iSetParmIndex+24] VALUE = refMsgField.UserDefined1;
+   SET refLE.SetParm[iSetParmIndex+25] VALUE = refMsgField.UserDefined2;
+   SET refLE.SetParm[iSetParmIndex+26] VALUE = refMsgField.UserDefined3;
+                                                                -- begin @P05A
+   SET refLE.SetParm[iSetParmIndex+27] VALUE = refMsgField.MsgDomain;
+   SET refLE.SetParm[iSetParmIndex+28] VALUE = refMsgField.TrafficType;
+   SET refLE.SetParm[iSetParmIndex+29] VALUE = refData.BodyRep;       -- @P06C
+   SET refLE.SetParm[iSetParmIndex+30] VALUE = refMsgField.RoutDest;
+   SET refLE.SetParm[iSetParmIndex+31] VALUE = CAST(refMsgField.ParentMsgId AS BLOB);
+   SET refLE.SetParm[iSetParmIndex+32] VALUE = refMsgField.Direction;
+                                                                -- end   @P05A
+   SET refLE.SetParm[iSetParmIndex+33] VALUE = refMsgField.RecordType;                   -- @P09A
+
+   SET iSetParmIndex = iSetParmIndex + 34;                                               -- @P05C
+
+ELSE
+   IF chUpdateMode = 'MODE3' AND UPPER(refRequest.MessageFields) = 'DEFINED' THEN
+      -- Only the existing message fields have to be updated
+--      DECLARE refMsgField REFERENCE TO refRequest.MessageField; @P16D
+      IF refMsgField.Amount IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_AMOUNT=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Amount;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Currency IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_CURRENCY=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Currency;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ValueDate IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_VALUE_DATE=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.ValueDate;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ISN IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_ISN=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.ISN;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.OSN IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_OSN=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.OSN;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.MessageType IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_MSG_TYPE=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.MessageType;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Quantity IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_QUANTITY=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Quantity;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Priority IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_PRIORITY=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Priority;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.AuthenticationStatus IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_AUTH_STATUS=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.AuthenticationStatus;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.PDIndicator IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_PD_INDICATOR=?';
+         IF (refMsgField.PDIndicator = TRUE) THEN
+           SET refLE.SetParm[iSetParmIndex] VALUE = 'Y';
+         ELSE
+           SET refLE.SetParm[iSetParmIndex] VALUE = 'N';
+         END IF;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.SessionID IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_SESSION=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.SessionID;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Sender IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_SENDER=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Sender;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Receiver IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_RECEIVER=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Receiver;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Identification IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_IDENTIFICATION=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Identification;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.TransactionReference IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_TRAN_REFERENCE=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.TransactionReference;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ApplicationReference IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_APPL_REFERENCE=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.ApplicationReference;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.MessageReference IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_MSG_REFERENCE=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.MessageReference;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Item IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_ITEM=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Item;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ExtensionIdentifier IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_EXT_IDENTIFIER=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.ExtensionIdentifier;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ExtensionDefined1 IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_EXTENSION_DEF1=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.ExtensionDefined1;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ExtensionDefined2 IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_EXTENSION_DEF2=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.ExtensionDefined2;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ExtensionDefined3 IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_EXTENSION_DEF3=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.ExtensionDefined3;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Application IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_APPL_NAME=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Application;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF chUserId IS NOT NULL AND (LENGTH(chUserId) > 0) THEN --@P16C
+         SET chSetClause = chSetClause || ',MWH_USER_ID=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = chUserId; --@P16C
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.UserDefined1 IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_USER_DEF1=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.UserDefined1;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.UserDefined2 IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_USER_DEF2=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.UserDefined2;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.UserDefined3 IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_USER_DEF3=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.UserDefined3;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+                                                                                         -- @P05A begin
+      IF refMsgField.MsgDomain IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_MSG_DOMAIN=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.MsgDomain;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.TrafficType IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_TRAFFIC_TYPE=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.TrafficType;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refData.BodyRep IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_BODY_REP=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refData.BodyRep;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.RoutDest IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_ROUT_DEST=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.RoutDest;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.ParentMsgId IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_PARENT_MSG_ID=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = CAST(refMsgField.ParentMsgId AS BLOB);
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+      IF refMsgField.Direction IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_DIRECTION=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.Direction;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;                                                                            -- @P05A end
+                                                                                         -- @P09A begin
+      IF refMsgField.Direction IS NOT NULL THEN
+         SET chSetClause = chSetClause || ',MWH_RECORD_TYPE=?';
+         SET refLE.SetParm[iSetParmIndex] VALUE = refMsgField.RecordType;
+         SET iSetParmIndex = iSetParmIndex + 1;
+      END IF;
+                                                                                         -- @P09A end
+   -- ELSE
+   --    Nothing to do, because the message fields must not be updated
+   END IF;
+END IF;
+
+
+-- Initialize the message body according to the setting of UpdateMode and Message
+IF chUpdateMode IN ('HEADER', 'MODE2') OR (chUpdateMode = 'MODE3' AND UPPER(refRequest.Message) = 'NONE') THEN
+   -- The message must not be updated
+ELSE
+
+   -- The message have to be updated
+   SET chSetClause = chSetClause || ',MWH_XML_MSG=?';
+
+   -- Flatten XML message body created by the ConvertMessage node
+   IF InputRoot.XMLNS IS NOT NULL THEN
+                                                                                         -- @P08C begin
+      DECLARE cp  INT 1208;
+      DECLARE enc INT MQENC_NATIVE;
+
+      DECLARE message BLOB ASBITSTREAM(InputRoot.XMLNS CCSID cp ENCODING enc);
+      SET refLE.SetParm[iSetParmIndex] VALUE = CAST(message AS CHAR CCSID cp ENCODING enc);
+                                                                                         -- @P08C end
+   ELSE
+      -- Message body is not available, therefore, update the column with NULL.
+      SET refLE.SetParm[iSetParmIndex] VALUE = NULL;
+   END IF;
+
+   SET iSetParmIndex = iSetParmIndex + 1;
+END IF;
+
+
+-- Initialize the message id parameter of the WHERE-clause. This must be done as the last step.
+IF refRequest.MsgId IS NOT NULL THEN
+   SET refLE.SetParm[iSetParmIndex] VALUE = CAST(refRequest.MsgId AS BLOB);
+ELSE
+   SET refLE.SetParm[iSetParmIndex] VALUE = CAST(InputRoot.MQMD.MsgId AS BLOB);
+END IF;
+
+
+-- Update the generic information in the base MWH database table.
+DECLARE pInFunction REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE pInFunction TO InputLocalEnvironment.ComIbmDni.Function;
+END IF;
+                                                                                         -- @P19C begin
+DECLARE chSqlStmnt CHAR    'UPDATE '
+                        || pInFunction.DniWarehouse.FullTableName
+                        || chSetClause
+                        || chWhereClause;
+
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+    -- If the exception is not a database exception, check all parameters, substitute
+    -- characters that cause conversion errors, and re-execute the PASSTHRU statement
+    IF (SQLCODE = 0) THEN
+      CALL substitute(refLE, 'SetParm');
+      PASSTHRU(chSqlStmnt, refLE.SetParm[]);
+    END IF;
+    -- If an SQL error occurred, store the error information in the local environment
+    -- and pass the message to the out terminal to throw an appropriate database
+    -- exception
+    IF SQLCODE <> 0 THEN
+      SET OutputLocalEnvironment.Variables.DatabaseError.Statement = chSqlStmnt;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlCode   = SQLCODE;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlState  = SQLSTATE;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlNative = SQLNATIVEERROR;
+      SET OutputLocalEnvironment.Variables.DatabaseError.SqlText   = SQLERRORTEXT;
+      RETURN TRUE;
+    END IF;
+  END;
+  PASSTHRU(chSqlStmnt, refLE.SetParm[]);
+END;
+                                                                                         -- @P19C end
+                                                                            /* begin @P01A @P02C */
+-- Clear parameter list.
+DELETE FIELD OutputLocalEnvironment.Variables.DniWarehouse.Update; --@P15A
+CREATE FIELD OutputLocalEnvironment.Variables.DniWarehouse.Update; --@P15A
+-- If requested, store the adjunct information in the adjunct MWH database table.
+DECLARE refAdjunct REFERENCE TO refRequest.Adjunct[>]; --@P15C
+WHILE LASTMOVE(refAdjunct) DO --@P14C
+
+   DECLARE chSqlStmnt CHARACTER;
+
+   -- Initialize SET clause and WHERE clause.
+   SET chSetClause   = ' SET   MWH_WMQI_MSG_ID=?';                                      /* @P03C */
+   SET chWhereClause = ' WHERE MWH_WMQI_MSG_ID=?';
+
+   -- Set parameter list.
+   CREATE LASTCHILD OF OutputLocalEnvironment.Variables.DniWarehouse.Update AS refLE NAME refAdjunct.FullAdjunctTableName; --@P15C
+                                                                                  /* begin @P03A */
+   -- Initialize the message ID parameter of the SET-clause. This must be done as the first step.
+   IF refRequest.MsgId IS NOT NULL THEN
+          CREATE LASTCHILD OF refLE NAME 'SetParm' VALUE CAST(refRequest.MsgId AS BLOB);
+   ELSE
+          CREATE LASTCHILD OF refLE NAME 'SetParm' VALUE CAST(InputRoot.MQMD.MsgId AS BLOB);
+   END IF;
+                                                                                    /* end @P03A */
+   -- Initialize the adjunct fields.
+-- DECLARE chPrefix CHARACTER ' MWH_';                                                  /* @P03D */
+   IF Environment.ComIbmDni.ConfigDataLoc = 'env' THEN
+      FOR p AS refAdjunct.MessageField.(NameValue)*[] DO
+         CREATE LASTCHILD OF refLE NAME 'SetParm' VALUE FIELDVALUE(p);
+         SET chSetClause = chSetClause || ',MWH_' || UPPER(FIELDNAME(p)) || '=?';       /* @P03C */
+--       SET chPrefix = ',MWH_';                                                        /* @P03D */
+      END FOR;
+   ELSE
+      FOR p AS refAdjunct.MessageField.(Name)*[] DO
+         CREATE LASTCHILD OF refLE NAME 'SetParm' VALUE FIELDVALUE(p);
+         SET chSetClause = chSetClause || ',MWH_' || UPPER(FIELDNAME(p)) || '=?';       /* @P03C */
+--       SET chPrefix = ',MWH_';                                                        /* @P03D */
+      END FOR;
+   END IF;
+
+   -- Initialize the message ID parameter of the WHERE-clause. This must be done as the last step.
+   IF refRequest.MsgId IS NOT NULL THEN
+          CREATE LASTCHILD OF refLE NAME 'SetParm' VALUE CAST(refRequest.MsgId AS BLOB);
+   ELSE
+          CREATE LASTCHILD OF refLE NAME 'SetParm' VALUE CAST(InputRoot.MQMD.MsgId AS BLOB);
+   END IF;
+
+   -- Prepare and execute the UPDATE statement.
+   SET chSqlStmnt =    'UPDATE '
+                    || refAdjunct.FullAdjunctTableName --@P15C
+                    || chSetClause
+                    || chWhereClause;
+                                                                                         -- @P19C begin
+  DECLARE isNoDataFound BOOLEAN FALSE;
+  BEGIN
+    DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+      -- If the exception is not a database exception, check all parameters, substitute
+      -- characters that cause conversion errors, and re-execute the PASSTHRU statement
+      IF (SQLCODE = 0) THEN
+        CALL substitute(refLE, 'SetParm');
+        PASSTHRU(chSqlStmnt, refLE.SetParm[]);
+      END IF;
+      -- If the UPDATE statement failed because of "no data found", set the 'isNoDataFound'
+      -- flag and ignore the exception
+      IF (SQLCODE = 100) THEN
+        SET isNoDataFound = TRUE;
+      -- Otherwise, if the UPDATE statement failed because of a database exception,
+      -- store the error information in the local environment and pass the message
+      -- to the out terminal to throw an appropriate database exception
+      ELSEIF (SQLCODE <> 0) THEN
+        SET OutputLocalEnvironment.Variables.DatabaseError.Statement = chSqlStmnt;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlCode   = SQLCODE;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlState  = SQLSTATE;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlNative = SQLNATIVEERROR;
+        SET OutputLocalEnvironment.Variables.DatabaseError.SqlText   = SQLERRORTEXT;
+        RETURN TRUE;
+      END IF;
+    END;
+    PASSTHRU(chSqlStmnt, refLE.SetParm[]);
+  END;
+                                                                                         -- @P19C end
+   -- If the UPDATE statement failed because of "no data found", insert the adjunct
+   -- information in the adjunct MWH database table.
+
+   IF (isNoDataFound IS TRUE) THEN                                                       -- @P19C
+
+      DECLARE chColumns CHAR 'MWH_WMQI_MSG_ID';
+      DECLARE chValues  CHAR '?';
+
+      -- Initialize the message ID.
+      IF refRequest.MsgId IS NOT NULL THEN
+         CREATE LASTCHILD OF refLE NAME 'Value' VALUE CAST(refRequest.MsgId AS BLOB);
+      ELSE
+         CREATE LASTCHILD OF refLE NAME 'Value' VALUE CAST(InputRoot.MQMD.MsgId AS BLOB);
+      END IF;
+
+      -- Initialize the adjunct fields.
+      IF Environment.ComIbmDni.ConfigDataLoc = 'env' THEN
+         FOR p AS refAdjunct.MessageField.(NameValue)*[] DO
+            CREATE LASTCHILD OF refLE NAME 'Value' VALUE FIELDVALUE(p);
+            SET chColumns = chColumns || ',MWH_' || UPPER(FIELDNAME(p));
+            SET chValues  = chValues || ',?';
+         END FOR;
+      ELSE
+         FOR p AS refAdjunct.MessageField.(Name)*[] DO
+            CREATE LASTCHILD OF refLE NAME 'Value' VALUE FIELDVALUE(p);
+            SET chColumns = chColumns || ',MWH_' || UPPER(FIELDNAME(p));
+            SET chValues  = chValues || ',?';
+         END FOR;
+      END IF;
+
+      -- Prepare and execute the INSERT statement.
+      SET chSqlStmnt =    'INSERT INTO '
+                       || refAdjunct.FullAdjunctTableName --@P14C
+                       || '('
+                       || chColumns
+                       || ') VALUES ('
+                       || chValues
+                       || ')';
+                                                                                         -- @P19C begin
+      BEGIN
+        DECLARE EXIT HANDLER FOR SQLSTATE LIKE '%' BEGIN
+          -- If the exception is not a database exception, check all parameters, substitute
+          -- characters that cause conversion errors, and re-execute the PASSTHRU statement
+          IF (SQLCODE = 0) THEN
+            CALL substitute(refLE, 'Value');
+            PASSTHRU(chSqlStmnt, refLE.Value[]);
+          END IF;
+          -- If an SQL error occurred, store the error information in the local environment
+          -- and pass the message to the out terminal to throw an appropriate database
+          -- exception
+          IF (SQLCODE <> 0) THEN
+            SET OutputLocalEnvironment.Variables.DatabaseError.Statement = chSqlStmnt;
+            SET OutputLocalEnvironment.Variables.DatabaseError.SqlCode   = SQLCODE;
+            SET OutputLocalEnvironment.Variables.DatabaseError.SqlState  = SQLSTATE;
+            SET OutputLocalEnvironment.Variables.DatabaseError.SqlNative = SQLNATIVEERROR;
+            SET OutputLocalEnvironment.Variables.DatabaseError.SqlText   = SQLERRORTEXT;
+            RETURN TRUE;
+          END IF;
+        END;
+        PASSTHRU(chSqlStmnt, refLE.Value[]);
+      END;
+                                                                                         -- @P19C end
+   END IF;
+
+   MOVE refAdjunct NEXTSIBLING NAME 'Adjunct'; --@P14A
+
+END WHILE; --@P14C
+                                                                        /* end @P01A @P02C */
+
+RETURN FALSE;                                                                            -- @P13C
+END;
+                                                                 -- begin @P17A
+CREATE FUNCTION DecryptSecVal(IN encsecval CHAR)
+    RETURNS CHAR
+    LANGUAGE JAVA
+    EXTERNAL NAME "com.ibm.dni.sec.SecurityImplementation.decryptSecVal";
+                                                                   -- end @P17A
+END MODULE;

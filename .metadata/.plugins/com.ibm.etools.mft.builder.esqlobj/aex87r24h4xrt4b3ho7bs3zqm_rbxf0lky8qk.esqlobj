@@ -1,0 +1,106 @@
+CREATE COMPUTE MODULE ComIbmDniStandardsProcessing_CreateScpnRequest
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		DECLARE rEnv             REFERENCE TO Environment;
+		DECLARE rElementCheck    REFERENCE TO Environment; -- used for Cleanup
+		DECLARE iCcsid           INT  InputRoot.*[<2].CodedCharSetId;
+		DECLARE rInputPayload    REFERENCE TO InputRoot.*[<];
+		DECLARE chPayloadDomain  CHAR FIELDNAME(InputRoot.*[<]);
+		DECLARE bVariablesExists BOOLEAN FALSE;
+		DECLARE bComIbmDniExists BOOLEAN FALSE;
+		DECLARE bVarComExists    BOOLEAN FALSE;
+		DECLARE bBouExists       BOOLEAN FALSE; --@P02A
+		DECLARE chConfigDataLoc  CHAR '';
+
+		MOVE rElementCheck TO Environment.Variables;
+		IF LASTMOVE(rElementCheck) THEN
+			SET bVariablesExists = TRUE;
+		END IF;
+
+		MOVE rElementCheck TO Environment.Variables."ComIbmDni";
+		IF LASTMOVE(rElementCheck) THEN
+			SET bVarComExists = TRUE;
+		END IF;
+		
+		MOVE rElementCheck TO Environment."ComIbmDni";
+		IF LASTMOVE(rElementCheck) THEN
+			SET bComIbmDniExists = TRUE;
+		END IF;
+		
+		MOVE rElementCheck TO Environment."ComIbmDni"."ConfigDataLoc";
+		IF LASTMOVE(rElementCheck) THEN
+			SET chConfigDataLoc = rElementCheck;
+		END IF;
+
+		CREATE FIELD Environment.Variables."ComIbmDni"."DniStandardsProcessing" AS rEnv;
+
+		SET rEnv."bVariablesExists" = bVariablesExists;
+		SET rEnv."bVarComExists" = bVarComExists;
+		SET rEnv."bComIbmDniExists" = bComIbmDniExists;
+		SET rEnv."chConfigDataLoc" = chConfigDataLoc;
+
+		-- @P02C: MQRFH2 check moved from below
+		MOVE rElementCheck TO OutputRoot.MQRFH2;
+		IF NOT LASTMOVE(rElementCheck) THEN
+			DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+			DECLARE rPreMqrfh2Header  REFERENCE To Environment;
+			CREATE NEXTSIBLING OF rPrePayloadHeader AS rElementCheck DOMAIN 'MQRFH2' NAME 'MQRFH2';
+			MOVE rPreMqrfh2Header TO OutputRoot.*[<3];
+			SET rElementCheck.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+			SET rElementCheck.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+			SET rElementCheck.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+			SET rElementCheck.(MQRFH2.Field)"NameValueCCSID" = 1208;
+		END IF;
+
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+		IF NOT LASTMOVE(rElementCheck) OR (LENGTH(rElementCheck) = 0) THEN
+			SET OutputRoot.MQRFH2."ComIbmDni"."OU" = 'SYSOU';
+		ELSE
+			SET bBouExists = TRUE;
+		END IF;
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."Version";
+		IF NOT LASTMOVE(rElementCheck) OR (LENGTH(rElementCheck) = 0) THEN
+			SET OutputRoot.MQRFH2."ComIbmDni"."Version" = '1.0';
+		END IF;
+
+		DECLARE rScpnRequest     REFERENCE TO Environment;
+		DECLARE rConfigObject    REFERENCE TO Environment;
+		CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request"."OU" AS rScpnRequest;
+
+		SET rScpnRequest."Name" = 'SYSOU';
+		CREATE FIELD rScpnRequest."ConfigObjectList" AS rScpnRequest NAME 'ConfigObjectList';
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DniLevelsTrace';
+		SET rConfigObject."Name" = 'DNIYS';
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DniLevelsTrace';
+		SET rConfigObject."Name" = 'DNIY';
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DniLevelsTrace';
+		SET rConfigObject."Name" = 'DNI';
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DniLevelsTrace';
+		SET rConfigObject."Name" = 'DNIYF';
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DniLevelsTrace';
+		SET rConfigObject."Name" = 'DNIYV';
+
+		IF bBouExists THEN --@P02A
+			CREATE LASTCHILD OF OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"."Request" AS rScpnRequest NAME 'OU';
+	
+			SET rScpnRequest."Name" = InputRoot.MQRFH2."ComIbmDni"."OU";
+			CREATE FIELD rScpnRequest."ConfigObjectList" AS rScpnRequest NAME 'ConfigObjectList';
+		END IF; --@P02A
+
+		CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+		SET rConfigObject."Type" = 'DniMsgDomain';
+		
+		SET Environment."ComIbmDni"."ConfigDataLoc" = 'env';
+
+		RETURN TRUE;
+	END;
+END MODULE;

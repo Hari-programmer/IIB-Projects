@@ -1,0 +1,46 @@
+CREATE COMPUTE MODULE ComIbmDnqFinInput_SCPNRequest_BOU
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rEnvironment           REFERENCE TO Environment;
+		DECLARE rEnv                   REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinInput";
+		DECLARE rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+		DECLARE rConfig                REFERENCE TO Environment."ComIbmDni"."Properties";
+		DECLARE rElementCheck          REFERENCE TO Environment;
+		DECLARE chLtName               CHAR rEnv."chLtName";
+		DECLARE chOu                   CHAR rEnv."chOu";
+
+		CALL DnqUtil_CopyScpnToEnv(rInputLocalEnvironment, rEnvironment);
+
+		-- check, whether LT is a synonym LT
+		MOVE rElementCheck TO rConfig."DNFSYSOU"."DnfSynonymLT".{chLtName}."Master";
+		IF LASTMOVE(rElementCheck) THEN
+			SET chLtName = rElementCheck;
+		END IF;
+		SET rEnv."chLtName" = chLtName;
+
+		-- retrieve BOU from DnfLTMap
+		MOVE rElementCheck TO rConfig."DNFSYSOU"."DnfLTMap".{chLtName}."OU";
+		IF LASTMOVE(rElementCheck) THEN
+			SET chOu = rElementCheck;
+		ELSE
+			-- BOU can not be determined
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1001
+			VALUES (chLtName, 'DNQO1001E');
+		END IF;
+
+		-- prepare SCPN request for LT specific config of BOU
+		DECLARE rScpnRequest REFERENCE TO Environment;
+		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request" = NULL;
+		CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request"."OU" AS rScpnRequest;
+		SET rScpnRequest."Name" = chOu;
+		SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Type" = 'DnfLT';
+		SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Name" = chLtName;
+
+		RETURN TRUE;
+	END;
+END MODULE;

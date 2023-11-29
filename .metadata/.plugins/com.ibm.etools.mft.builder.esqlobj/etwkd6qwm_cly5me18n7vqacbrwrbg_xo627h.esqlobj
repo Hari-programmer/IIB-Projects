@@ -1,0 +1,127 @@
+CREATE COMPUTE MODULE ComIbmDnqErFinOutput_CheckParms
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		IF Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.NewId IS NULL THEN
+	      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 2051 VALUES( 'DNQK2051E' );		  		
+		END IF;
+		
+		IF CARDINALITY( InputRoot.MQMD[] ) = 0 THEN
+		  -- message was created within ER GUI
+		  IF CARDINALITY( InputRoot.MQRFH2[] ) = 0 THEN
+  		    DECLARE chTmp CHARACTER;
+            CREATE PREVIOUSSIBLING OF OutputRoot.*[<] DOMAIN 'MQMD';  		  
+            SET OutputRoot.MQMD.UserIdentifier = '';            
+            SET OutputRoot.MQMD.PutDate = LEFT( chTmp, LENGTH( chTmp ) - 1 );
+            SET chTmp = REPLACE( SUBSTRING( CAST( CURRENT_TIME AS CHARACTER ) FROM 7 ), ':', '' );
+            SET chTmp = REPLACE( chTmp, '.', '' );
+            SET OutputRoot.MQMD.PutTime = LEFT( chTmp, LENGTH( chTmp ) - 2 );            
+            SET OutputRoot.MQMD.ApplIdentityData = '';
+            SET OutputRoot.MQMD.PutApplType = '';
+            SET OutputRoot.MQMD.PutApplName = '';            
+            SET OutputRoot.MQMD.ApplOriginData = '';            
+            CREATE NEXTSIBLING OF OutputRoot.MQMD DOMAIN 'MQRFH2';          
+	        SET OutputRoot.MQRFH2.(MQRFH2.Field)NameValueCCSID = 1208;
+	        SET OutputRoot.MQRFH2.(MQRFH2.Field)CodedCharSetId = 1208;            
+		  ELSE
+		  	CREATE PREVIOUSSIBLING OF OutputRoot.MQRFH2 DOMAIN 'MQMD';
+		  END IF;
+		END IF;
+		
+		DECLARE chValidate CHAR UPPER( Environment.Variables.ComIbmDni.Dnq.Properties.ValidateByWBIFN );
+		IF (chValidate IN ('YES','')) THEN
+  		  SET OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.MessageValid = 'No';
+		ELSEIF (chValidate = 'NO') THEN
+  		  SET OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.MessageValid = 'Yes';
+		ELSE
+	      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 2053 VALUES(chValidate ,'DNQK2053E' );
+		END IF;
+		
+		IF (CARDINALITY(OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN[]) = 0) THEN
+			SET OutputRoot.MQRFH2.ComIbmDni.Dnf.Version = '1.0';
+			SET OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.AcknowledgmentMode = 'Merged';
+			SET OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.ErrorMode = 'CopyBody';
+		END IF;
+                                                                 -- begin @P02A @P04C
+		-- update ApplicationInformation, if message was created in MER
+		DECLARE rHistoryEntry REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.History.HistoryEntry[>];
+
+		DECLARE rTmp REFERENCE TO rHistoryEntry;
+		WHILE LASTMOVE(rTmp) DO
+			IF (rTmp.TimeStamp < rHistoryEntry.TimeStamp) THEN
+				MOVE rHistoryEntry TO rTmp;
+			END IF;
+			MOVE rTmp NEXTSIBLING REPEAT NAME;
+		END WHILE;
+
+		IF  LASTMOVE(rHistoryEntry) AND
+			(rHistoryEntry.Component = 'DNQ') AND
+			(rHistoryEntry.Service   = 'ER') AND
+			(rHistoryEntry.Function  = 'CREATE')
+			THEN
+			IF OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.ApplicationInformation.Application IS NULL THEN
+				SET OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.ApplicationInformation.Application = 'DNQMER';
+			END IF;
+			IF OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.ApplicationInformation.User IS NULL THEN
+				SET OutputRoot.MQRFH2.ComIbmDni.Dnf.FIN.ApplicationInformation.User = rHistoryEntry.UserId;
+			END IF;
+		END IF;
+                                                                   -- end @P02A @P04C
+		IF (OutputRoot.MQMD.MsgType = MQMT_REPLY) THEN
+			-- message is a reply => use the original msgId (stoerwd in correlId), so replys will have the correct correlId
+			SET OutputRoot.MQMD.MsgId = OutputRoot.MQMD.CorrelId;
+			SET OutputRoot.MQMD.CorrelId = NULL;
+		END IF;
+	
+		DECLARE chReplyToSource CHAR COALESCE(UPPER(TRIM(Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToSource)),'');
+		IF (chReplyToSource='') OR (chReplyToSource='MSG') THEN
+			IF (CARDINALITY(OutputRoot.MQMD.ReplyToQ[]) = 0) OR 
+				(LENGTH(TRIM(OutputRoot.MQMD.ReplyToQ)) = 0) THEN --@P03C
+				IF Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ IS NOT NULL AND 
+				   TRIM(Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ) <> '' THEN --@P03C
+		          -- set REQUEST		
+				  SET OutputRoot.MQMD.MsgType = 1;
+				  SET OutputRoot.MQMD.ReplyToQ = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ;
+				  SET OutputRoot.MQMD.ReplyToQMgr = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQMgr;		  
+				END IF;
+			END IF;
+		ELSEIF (chReplyToSource='NODE') THEN
+			IF (Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ IS NOT NULL) AND
+			   (TRIM(Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ) <> '') THEN --@P03C
+				SET OutputRoot.MQMD.MsgType = 1;
+				SET OutputRoot.MQMD.ReplyToQ = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQ;
+				SET OutputRoot.MQMD.ReplyToQMgr = Environment.Variables.ComIbmDni.Dnq.Properties.ReplyToQMgr;		  
+			END IF;
+		ELSE
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 2054 VALUES(chReplyToSource ,'DNQK2054E' );
+		END IF;
+		
+		IF OutputRoot.MQRFH2.ComIbmDni.OU IS NULL OR OutputRoot.MQRFH2.ComIbmDni.OU = '' THEN
+		  -- Set WBI-FN OU
+		  SET OutputRoot.MQRFH2.ComIbmDni.OU = InputRoot.MQRFH2.ComIbmDni.Dnq.Properties.ExternalSystem.OU;
+		END IF;
+		
+		SET OutputRoot.MQRFH2.(MQRFH2.Field)CodedCharSetId = 1208;
+		
+		-- use MQOutput with setIdentity property if needed
+		IF (InputRoot.MQMD.UserIdentifier <> Environment.ComIbmDni.Properties.Common.BrokerUID) THEN
+			SET Environment.Variables.ComIbmDni.DnqFinMsifServiceOutput.bSetIdentity = TRUE;
+		END IF;
+		
+		-- Retrieve Audit configuration
+		SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.Name = COALESCE(InputRoot.MQRFH2.ComIbmDni.OU,'DNFSYSOU');
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Type = 'DniMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Name = 'DniMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Type = 'DniOptionsMsgAudit';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[2].Name = 'DnqER';
+		
+		-- add DnqMwhUpdateInsert request
+		SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.ExtensionId = 'ComIbmDnqER'; --@P01A
+
+		RETURN TRUE;
+	END;
+END MODULE;

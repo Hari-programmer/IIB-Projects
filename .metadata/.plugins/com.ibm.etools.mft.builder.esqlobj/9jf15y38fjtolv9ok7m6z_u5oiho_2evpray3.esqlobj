@@ -1,0 +1,198 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+--		DECLARE FIN_APPLICATION_CCSID CONSTANT INT 1047; --@P08A @P10D
+
+		DECLARE rEnv               REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinApplicationOutput";
+		DECLARE rCommonProperties  REFERENCE TO Environment."ComIbmDni"."Properties"."Common";
+		DECLARE rMtfin             REFERENCE TO InputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN";
+		DECLARE rElementCheck      REFERENCE TO OutputRoot.MQRFH2; --@P02A
+--		DECLARE chOptionsMwh       CHAR TRIM(COALESCE(rEnv."chOptionsMwh", '')); @P07D
+		DECLARE chPayloadType      CHAR ''; --@P05C @P11C
+		DECLARE chKeepMtfin        CHAR ''; -- @P03A @P05C @P11C
+		DECLARE chRoutingTarget    CHAR ''; --@P11C
+		DECLARE chOu               CHAR InputRoot.MQRFH2."ComIbmDni"."OU";
+--		DECLARE chQueueName        CHAR ''; @P10D
+		DECLARE chQueueManagerName CHAR '';
+--		DECLARE chMtfin            CHAR ''; --@P08A @P10D
+		DECLARE bDestinationList   BOOLEAN FALSE;
+--		DECLARE bTransformation    BOOLEAN TRUE; @P09D
+		DECLARE bTransform2Mtfin   BOOLEAN FALSE; --@P03A
+		DECLARE bMtfinExists       BOOLEAN FALSE; --@P13A
+                                                                 -- begin @P02A
+		-- check MQRFH2
+		IF NOT LASTMOVE(rElementCheck) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1055
+			VALUES ('Root.MQRFH2', 'DNQO1055E');
+		END IF;
+
+		-- check OU
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+		IF NOT LASTMOVE(rElementCheck) OR (LENGTH(rElementCheck) = 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1055
+			VALUES ('Root.MQRFH2.ComIbmDni.OU', 'DNQO1055E');
+		ELSE
+			SET chOu = rElementCheck;
+		END IF;
+                                                                   -- end @P02A
+		-- check message format
+                                                                 -- begin @P21A
+		DECLARE chMsgType          CHAR '';
+		MOVE rElementCheck TO InputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Type";
+		IF ((LASTMOVE(rElementCheck)) AND (LENGTH(rElementCheck)>0)) THEN
+			SET chMsgType = rElementCheck;
+		END IF;
+                                                                   -- end @P21A
+		DECLARE chPayloadFormat CHAR FIELDNAME(OutputRoot.*[<]);
+		IF ( (SUBSTRING(chPayloadFormat FROM 1 FOR 3) <> 'XML')
+			AND (chMsgType <> 'DNIEMPTY') ) THEN --@P04C @P21C
+			-- payload is not XML
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1051
+			VALUES (chPayloadFormat, 'DNQO1051E');
+		END IF;
+
+		-- check property PayloadType
+                                                                 -- begin @P11A
+		IF (CARDINALITY(rEnv."chPayloadType"[]) > 0) AND (LENGTH(rEnv."chPayloadType") > 0) THEN
+			SET chPayloadType = UPPER(TRIM(rEnv."chPayloadType"));
+--			SET rEnv."chPayloadType" = chPayloadType; @P12D
+		END IF;
+                                                                   -- end @P11A
+                                                                 -- begin @P05A
+		IF chPayloadType = '' THEN
+			SET chPayloadType = 'MTFIN';
+		END IF;
+		SET rEnv."chPayloadType" = chPayloadType; --@P12A
+                                                                 -- begin @P05A
+		IF chPayloadType NOT IN ('MTFIN', 'MTXML') THEN
+			-- PayloadType: invalid property value
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1050
+			VALUES (chPayloadType, 'DNQO1050E');
+		END IF;
+
+		-- check MQ DestinationList
+		MOVE rElementCheck TO OutputLocalEnvironment."Destination"."MQ"."DestinationData"; --@P10A
+		IF LASTMOVE(rElementCheck) AND (rElementCheck."queueName" IS NOT NULL) AND
+			(LENGTH(rElementCheck."queueName") > 0) THEN --@P10C
+			SET bDestinationList = TRUE;
+                                                                 -- begin @P10A
+			SET rEnv."chQueueName" = rElementCheck."queueName";
+			IF (rElementCheck."queueManagerName" IS NOT NULL) AND
+				(LENGTH(rElementCheck."queueManagerName") > 0) THEN
+				SET rEnv."chQueueManagerName" = rElementCheck."chQueueManagerName";
+			END IF;
+                                                                   -- end @P10A
+		ELSE -- DestinationList not present
+			-- check routing target
+                                                                 -- begin @P11A
+			IF (CARDINALITY(rEnv."chRoutingTarget"[]) > 0) AND (LENGTH(rEnv."chRoutingTarget") > 0) THEN
+				SET chRoutingTarget = TRIM(rEnv."chRoutingTarget"); --@P14C
+				SET rEnv."chRoutingTarget" = chRoutingTarget;
+			END IF;
+                                                                   -- end @P11A
+			IF LENGTH(chRoutingTarget) = 0 THEN
+				-- RoutingTarget: missing property value
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1053
+				VALUES ('DNQO1053E');
+			END IF;
+		END IF;
+		
+		SET rEnv."bDestinationList" = bDestinationList;
+		
+		-- depending on PayloadType move existing element MTFIN from MQRFH2 to payload, if it exists
+                                                                 /* begin @P10D
+		IF (chPayloadType = 'MTFIN') THEN
+			IF LASTMOVE(rMtfin) AND (LENGTH(rMtfin) > 0) THEN
+				SET chMtfin = rMtfin; --@P08A
+				SET OutputRoot.*[<] = NULL;
+				SET OutputRoot.BLOB.BLOB = CAST(chMtfin AS BLOB CCSID FIN_APPLICATION_CCSID); --@P08C
+				SET OutputRoot.*[<2].CodedCharSetId = FIN_APPLICATION_CCSID; --@P08A
+--				SET rMtfin = NULL; @P03D
+                                                                 /* begin @P09D
+				SET bTransformation = FALSE;
+			ELSE
+				SET bTransformation = TRUE; --@P03A
+*/                                                                 -- end @P09D
+			END IF;
+		END IF;
+                                                                   -- end @P10D
+*/                                                               -- begin @P03A
+		-- check property KeepMTFIN
+                                                                 -- begin @P11A
+		IF (CARDINALITY(rEnv."chKeepMtfin"[]) > 0) AND (LENGTH(rEnv."chKeepMtfin") > 0) THEN
+			SET chKeepMtfin = UPPER(TRIM(rEnv."chKeepMtfin"));
+--			SET rEnv."chKeepMtfin" = chKeepMtfin; @P12D
+		END IF;
+                                                                   -- end @P11A
+                                                                 -- begin @P05A
+		IF chKeepMtfin = '' THEN
+			SET chKeepMtfin = 'NO';
+		END IF;
+		SET rEnv."chKeepMtfin" = chKeepMtfin; --@P12A
+                                                                 -- begin @P05A
+		IF chKeepMtfin NOT IN ('NO', 'YES') THEN
+			-- KeepMTFIN: invalid property value
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1052
+			VALUES (chKeepMtfin, 'DNQO1052E');
+		END IF;
+                                                                 -- begin @P13A
+		IF LASTMOVE(rMtfin) AND (LENGTH(rMtfin) > 0) THEN --@P13C
+			SET bMtfinExists = TRUE;
+		END IF;
+		SET rEnv."bMtfinExists" = bMtfinExists;
+                                                                   -- end @P13A
+		IF chKeepMtfin = 'YES' AND (chPayloadType = 'MTXML') THEN --@P12C @P13C
+--			SET rMtfin = NULL; @P12D
+--		ELSE -- KeepMTFIN = 'YES' @P12D
+			-- initiate Transformation, if MTFIN element does not exist
+			IF NOT bMtfinExists THEN --@P13C
+				SET bTransform2Mtfin = TRUE;
+			END IF;
+		END IF;
+                                                                   -- end @P03A
+--		SET rEnv."bTransformation" = bTransformation; --@P09D
+		SET rEnv."bTransform2Mtfin" = bTransform2Mtfin; --@P03A
+                                                                 /* begin @P09D
+		IF bTransformation THEN
+			-- create Standards node request
+			DECLARE rStandardsRequest REFERENCE TO Environment;
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniStandards"."Request" AS rStandardsRequest;
+			SET rStandardsRequest."Validate"  = 'No';
+			SET rStandardsRequest."Transform" = 'Yes';
+		END IF;
+*/                                                                 -- end @P09D
+		-- address target queue
+                                                                 /* begin @P10D
+		SET OutputLocalEnvironment."Destination"."MQ"."DestinationData" = NULL;
+		SET OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueName" = chQueueName;
+*/                                                                 -- end @P10D
+		-- prepare SCPN request for MWH configuration, if needed
+		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request" = NULL;
+		DECLARE rScpnRequest REFERENCE TO Environment;
+                                                                 /* begin @P07D
+		IF LENGTH(chOptionsMwh) > 0 THEN
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+				"Request"."OU" AS rScpnRequest;
+			SET rScpnRequest."Name" = chOu;
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Type" = 'DnqOptionsMwh';
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Name" = chOptionsMwh;
+		END IF;
+*/                                                                 -- end @P07D
+		-- prepare SCPN request for routing target queue configuration, if needed
+		IF (NOT bDestinationList) THEN
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+				"Request"."OU" AS rScpnRequest; --@P06C
+			IF (rScpnRequest."Name" IS NULL) THEN
+				SET rScpnRequest."Name" = chOu;
+			END IF;
+			CREATE FIELD rScpnRequest."ConfigObjectList" AS rScpnRequest;
+			CREATE LASTCHILD OF rScpnRequest AS rScpnRequest NAME 'ConfigObject';
+			SET rScpnRequest."Type" = 'DnqRoutingTargetQueue';
+			SET rScpnRequest."Name" = chRoutingTarget;
+		END IF;
+
+		RETURN TRUE;
+	END;

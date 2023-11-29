@@ -1,0 +1,29 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		
+		DECLARE rTemp REFERENCE TO Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.Completion.Reason;
+		
+		IF LASTMOVE(rTemp) THEN
+			DECLARE rReason REFERENCE TO InputRoot;
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Dnq.Completion AS rReason;
+			SET rReason.Code = 'Failed';
+			CREATE FIELD rReason.ReasonList AS rReason;
+			CREATE LASTCHILD OF rReason AS rReason NAME 'Reason';
+			SET rReason."Code" = rTemp."Code";
+			SET rReason."Value" = rTemp."Value";
+			SET rReason."Parameter1"  = rTemp."Parameter1";
+			SET rReason."Parameter2"  = rTemp."Parameter2";
+			SET rReason."Parameter3"  = rTemp."Parameter3";
+			SET rReason."Parameter4"  = rTemp."Parameter4";
+			SET rReason."Parameter5"  = rTemp."Parameter5";
+			SET rReason."Parameter6"  = rTemp."Parameter6";
+			SET rReason."Parameter7"  = rTemp."Parameter7";
+			SET rReason."Parameter8"  = rTemp."Parameter8";
+			SET rReason."Parameter9"  = rTemp."Parameter9";
+			SET rReason."Parameter10" = 'DNQvRR'; -- set marker for deletion in retry routing
+		END IF;
+	   	    		    
+		RETURN TRUE;
+	END;
+

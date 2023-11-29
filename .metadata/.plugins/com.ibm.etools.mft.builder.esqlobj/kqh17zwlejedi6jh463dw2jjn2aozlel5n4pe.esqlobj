@@ -1,0 +1,109 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_CreateInterActInitialRequest(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT rOutputLocalEnvironment REFERENCE, IN bUpdateMsg BOOLEAN)
+BEGIN
+	DECLARE rEnv                 REFERENCE TO rEnvironment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+	DECLARE rElementCheck        REFERENCE TO rEnvironment;
+	DECLARE rTimestampCheck      REFERENCE TO rEnvironment;
+	DECLARE rDnq                 REFERENCE TO rEnvironment."ComIbmDni"."Dnq";
+	DECLARE rDnqProps            REFERENCE TO rEnvironment."ComIbmDni"."Dnq"."Properties";
+	DECLARE rDnqPropsMsif        REFERENCE TO rDnqProps."MSIF";
+	DECLARE chExtensionId        CHAR rEnv."chExtensionId";
+	DECLARE chStatus             CHAR rEnv."chStatus";
+	DECLARE chOu                 CHAR rInputRoot.MQRFH2.ComIbmDni.OU;
+	DECLARE chMwhContent         CHAR '';
+	DECLARE chContent            CHAR '';
+	DECLARE chMessageDirection   CHAR 'I';
+	DECLARE chRoutDestination    CHAR 'MSIF';
+
+	-- code parts moved to following function call
+	SET chContent = ComIbmDnqMwhUpdateInsert_GetContentFlag(chOu, rEnvironment);
+	SET rEnv."chContent" = chContent;
+		
+	DECLARE refRequest REFERENCE TO rInputRoot; --dummy initialization
+	CREATE FIELD rOutputLocalEnvironment."ComIbmDni"."Function"."DniWarehouse".{ComIbmDnqMwhUpdateInsert_GetRequestPath(bUpdateMsg)}."Request" AS refRequest; --@P02C
+	
+	DECLARE chFieldHandling CHAR 'All'; -- @P31 browser print
+
+	SET refRequest."Status" = chStatus;
+	IF bUpdateMsg THEN
+		SET refRequest."UpdateMode" = 'Mode3';
+		SET chFieldHandling = 'Defined'; -- @P31 browser print
+	ELSE
+		SET refRequest."InsertMode" = 'Mode2';
+	END IF;
+	SET refRequest."Message"       = chContent;
+	SET refRequest."HeaderFields"  = chFieldHandling; -- @P31 browser print
+	SET refRequest."MessageFields" = chFieldHandling; -- @P31 browser print
+	
+	/* setup message fields */
+	SET refRequest."MessageField"."ExtensionIdentifier" = chExtensionId;
+	SET refRequest."MessageField"."ExtensionIdentifier".(NameValue)max = '16';
+
+    MOVE rElementCheck TO rDnq."ER"."CurrentAction"."Printed";
+    MOVE rTimestampCheck TO rDnq."ER"."CurrentAction"."TimeStamp";
+    IF LASTMOVE(rElementCheck) AND UPPER(rElementCheck) = 'TRUE' AND LASTMOVE(rTimestampCheck) AND (LENGTH(rTimestampCheck) > 0) THEN
+	    SET refRequest."MessageField"."ExtensionDefined1" = rDnq."ER"."CurrentAction"."TimeStamp"; -- add browser print timestamp
+    END IF;
+
+	SET refRequest."MessageField"."ApplicationReference" = rDnqProps."ApplicationReference";
+	SET refRequest."MessageField"."ApplicationReference".(NameValue)max = '32';
+	MOVE rElementCheck TO rDnqProps."PossibleDuplicate";
+	IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    DECLARE chPdIndicator CHAR UPPER(rElementCheck);
+		IF (UPPER(chPdIndicator) = 'TRUE') THEN
+			SET refRequest."MessageField"."PDIndicator" = TRUE;
+		ELSE
+			SET refRequest."MessageField"."PDIndicator" = FALSE;
+		END IF;
+		SET refRequest."MessageField"."PDIndicator".(NameValue)dt = 'boolean';
+	END IF;
+
+    SET refRequest."MessageField"."Application" = rDnqProps."ApplicationInformation"."Application";
+	SET refRequest."MessageField"."Application".(NameValue)max = '100';
+	DECLARE chUser CHAR COALESCE(rDnqProps."ApplicationInformation"."UserId", TRIM(rInputRoot.MQMD.UserIdentifier));
+    SET refRequest."MessageField"."User" = chUser;
+	SET refRequest."MessageField"."User".(NameValue)max = '12';
+    SET refRequest."MessageField"."UserDefined1" = rDnqProps."ApplicationInformation"."UserDefined1";
+	SET refRequest."MessageField"."UserDefined1".(NameValue)max = '128';
+    SET refRequest."MessageField"."UserDefined2" = rDnqProps."ApplicationInformation"."UserDefined2";
+	SET refRequest."MessageField"."UserDefined2".(NameValue)max = '128';
+    SET refRequest."MessageField"."UserDefined3" = rDnqProps."ApplicationInformation"."UserDefined3";
+	SET refRequest."MessageField"."UserDefined3".(NameValue)max = '128';
+    SET refRequest."MessageField"."MsgDomain" = rInputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain";
+	SET refRequest."MessageField"."MsgDomain".(NameValue)max = '16';
+    SET refRequest."MessageField"."TrafficType" = 'IA';
+    MOVE rElementCheck TO rEnv."chDestination";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+    	SET chRoutDestination = rElementCheck;
+    END IF;
+    SET refRequest."MessageField"."RoutDest" = chRoutDestination;
+	SET refRequest."MessageField"."RoutDest".(NameValue)max = '30';
+    MOVE rElementCheck TO rInputRoot.MQRFH2."ComIbmDni"."ParentMessageId";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    SET refRequest."MessageField"."ParentMsgId" = rElementCheck;
+    END IF;
+    MOVE rElementCheck TO rDnqProps."MessageDirection";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    SET chMessageDirection = rElementCheck;
+    END IF;
+    SET refRequest."MessageField"."Direction" = chMessageDirection;
+                                                                 -- begin @P28A
+	DECLARE chRecordType CHAR 'P'; -- initial: primary
+	-- record type is 'primary' for:
+	--    SendMsg, SendFile, ProvideFileForDownload, or DownloadFile request
+	--    MsgReceived, FileReceived, or RespondDownload request
+	-- record type is 'secondary' for:
+	--    SendMsg, SendFile, DownloadFile, MsgReceived response
+	--    DeliveryAck notification containing a Y-Copy notification or a delivery notification for a SendMsg or SendFile
+	--    A DeliveryAck notification containing a delivery notification for a RespondDownload scenario
+	IF (CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Response"[]) > 0) OR
+		(CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendFile"."Response"[]) > 0) OR
+		(CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."DownloadFile"."Response"[]) > 0) OR
+		(CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."MsgReceived"."Response"[]) > 0) OR
+		(CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."DeliveryAck"[]) > 0) THEN
+		SET chRecordType = 'S'; -- secondary
+	END IF;
+    SET refRequest."MessageField"."RecordType" = chRecordType;
+                                                                   -- end @P28A
+	CALL ComIbmDnqMwhUpdateInsert_AddInterActAdjunctRequest(rInputRoot, rEnvironment, rOutputLocalEnvironment, bUpdateMsg);
+
+END;

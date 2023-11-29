@@ -1,0 +1,11 @@
+CREATE COMPUTE MODULE ComIbmDnqFinApplicationOutput_StoreMTFIN
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE rEnv REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinApplicationOutput";
+		SET rEnv."TransformedMTFIN" = CAST(BITSTREAM(InputRoot.BLOB.BLOB) AS CHAR CCSID 1208);
+
+		RETURN TRUE; -- only for tracing
+	END;
+END MODULE;

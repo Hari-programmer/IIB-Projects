@@ -1,0 +1,12 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		DECLARE chQueueName CHAR Environment.Variables.ComIbmDni.Dnq.Properties.Instance || '.DNFSYSOU.DNF_BACKOUT';
+		SET OutputLocalEnvironment.Destination.MQ.DestinationData.queueName = chQueueName;
+		DECLARE rHistoryEntry REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.History;
+		IF LASTMOVE(rHistoryEntry) THEN -- @P01A (history entry is not available in case of error during template import)
+			MOVE rHistoryEntry LASTCHILD NAME 'HistoryEntry';
+			SET rHistoryEntry."QueueName"      = chQueueName;
+		END IF;                         -- @P01A
+		RETURN TRUE;
+	END;

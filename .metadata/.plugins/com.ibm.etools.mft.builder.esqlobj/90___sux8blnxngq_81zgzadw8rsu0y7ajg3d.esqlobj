@@ -1,0 +1,30 @@
+CREATE COMPUTE MODULE ComIbmDnqErQueueOutput_AllowManipulation
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE chOutputTerminal CHAR 'out';
+		
+		IF Environment.Variables.ComIbmDni.Dnq.Properties.AllowMsgManipulation = 'YES' THEN
+			
+			-- remove current attribute extraction elements to initiate new extraction
+			SET Environment.ComIbmDni.Dnq.Properties = NULL; --@P03A
+			
+			-- prepare SCPN request
+			SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.Name = COALESCE(InputRoot.MQRFH2.ComIbmDni.OU,'DNFSYSOU');
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Type = 'DnqEROUOptions';
+			SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU.ConfigObjectList.ConfigObject[1].Name = 'DnqEROUOptions';
+			
+			SET chOutputTerminal = 'out1';
+			
+		END IF;
+		
+		PROPAGATE TO TERMINAL chOutputTerminal;
+
+		RETURN FALSE;
+	END;
+
+END MODULE;

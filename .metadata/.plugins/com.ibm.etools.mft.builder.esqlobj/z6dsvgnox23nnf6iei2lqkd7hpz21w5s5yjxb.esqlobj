@@ -1,0 +1,14 @@
+CREATE COMPUTE MODULE Acc_URL_Compute1
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		
+		
+		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' || InputRoot.DFDL.Input.record.Data;
+		 
+		SET OutputLocalEnvironment.HTTP.Input.RequestLine.Method = 'GET'; 
+		
+		RETURN TRUE;
+	END;
+
+END MODULE;

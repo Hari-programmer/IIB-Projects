@@ -1,0 +1,96 @@
+CREATE PROCEDURE DnqErCommon_ExceptionToCompletion( -- @P01A @P06C
+	IN    rException     REFERENCE,
+	IN    rDnqReasonList REFERENCE,
+	INOUT rCompletion    REFERENCE,
+	IN    xMsgId         BLOB,                      -- @P10A
+	IN    bTplImport     BOOLEAN,                   -- @P11A
+	IN    chNodeType     CHAR                       -- @P12A
+)
+/* ---------------------------------------------------------------------------------------
+ * DESCRIPTION
+ *   Maps the last exception in rExceptionList on completion folder rCompletion.
+ *
+ * PARAMETERS
+ *   rException      Reference to the WMB exception
+ *   rDnqReasonList  Reference to Dnq reason list (usually,
+ *                   Environment.Variables.ComIbmDni.DnqTplImport.Completion.ReasonList)
+ *   rCompletion     Reference to completion folder that is to be extended (for example,
+ *                   Root.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion)
+ *   xMsgId          WMQ message ID of request message being processed (required as
+ *                   parameter for error messages DNQK1119E and DNQK2056E/DNQK3056E)
+ *   bTplImport      Indicates whether a template import request is processed or not
+ *   chNodeType      The node type for which procedure is invoked (Fin or Msif)
+ * --------------------------------------------------------------------------------------- */
+BEGIN
+	DECLARE chCatalogPrefix CHAR;
+	DECLARE iTotalInsert    INT CARDINALITY(rException.Insert[]);
+	DECLARE rReason         REFERENCE TO rException; -- Dummy for declaration only
+
+	SET chCatalogPrefix = UPPER(SUBSTRING(rException.Catalog FROM 1 FOR 3));
+	IF 'DNI,DNF,DNQ' LIKE '%' || chCatalogPrefix || '%' THEN
+		/*------------------*\
+		|  WBI FN exception  |
+		\*------------------*/
+		IF (rException.Insert.Text = 'DNQK1125E') THEN
+			-- Parsing error(s) --> Copy the reason list from Dnq folder
+
+			/** NOTE (@P09):
+			 **   Next statement doesn't work because it maps XML attributes, e.g. attribute MPU in
+			 **      <Reason MPU="DNIY0091E">
+			 **   on XML tags, e.g.
+			 **      <Reason>
+			 **        <MPU>DNIY0091E</MPU>
+			 **        ...
+			 **      </Reason>
+			 **/
+			-- SET rCompletion.ReasonList = rDnqReasonList;                                                 @P09D
+
+			DECLARE xReasonList BLOB;                                                                    -- @P09A begin
+			SET xReasonList = ASBITSTREAM( rDnqReasonList OPTIONS FolderBitStream CCSID 1208 );
+			IF xReasonList <> '' THEN                                                                    -- @P11A
+				CREATE LASTCHILD OF rCompletion PARSE( xReasonList CCSID 1208 OPTIONS FolderBitStream ); -- @P09A end
+			END IF;                                                                                      -- @P11A
+
+		END IF; -- DNQK1125E, i.e. parsing error(s) ?
+
+		CREATE FIRSTCHILD OF rCompletion.ReasonList AS rReason NAME 'Reason'; -- FIRSTCHILD is required in case of DNQK1125E!
+		SET rReason.Code  = 'Failed';                                         -- @P07A  @P08C: Moved BEFORE next statement
+		SET rReason.Value = FIELDVALUE(rException.Insert[iTotalInsert].Text); -- Last exception contains WBI FN message ID
+
+		CALL DnqErCommon_MapInserts(
+			rException,
+			rReason,
+			iTotalInsert - 1, -- iInsertTotalInput (ignore the last Insert)
+			0,                -- iInsertOffsetInput (don't skip any Insert)
+			0                 -- iParameterOffsetInput (start with Parameter1)
+		);
+	ELSE
+		/*---------------*\
+		|  WMB exception  |
+		\*---------------*/
+		SET rCompletion.ReasonList.Reason.Code  = 'Failed';                     -- @P07A
+		IF (bTplImport) THEN                                                    -- @P11A
+			SET rCompletion.ReasonList.Reason.Value = 'DNQK1119E';
+		ELSE                                                                    -- @P11A
+			IF chNodeType = chNodeTypeFin THEN                                  -- @P12A
+				SET rCompletion.ReasonList.Reason.Value = 'DNQK2056E';          -- @P11A
+			ELSE                                                                -- @P12A begin
+				SET rCompletion.ReasonList.Reason.Value = 'DNQK3056E';
+			END IF;                                                             -- @P12A end
+		END IF;                                                                 -- @P11A
+		SET rCompletion.ReasonList.Reason.Parameter1 = rException.Number;
+		SET rCompletion.ReasonList.Reason.Parameter1.(NameValue)dt = 'int';     -- @P10A
+		SET rCompletion.ReasonList.Reason.Parameter2 = xMsgId;                  -- @P10A
+		SET rCompletion.ReasonList.Reason.Parameter2.(NameValue)dt = 'bin.hex'; -- @P10A
+		MOVE rReason TO rCompletion.ReasonList.Reason;                          -- @P06A
+
+		CALL DnqErCommon_MapInserts(
+			rException,
+			rReason,
+			iTotalInsert, -- iInsertTotalInput (take over all Inserts)
+			0,            -- iInsertOffsetInput (don't skip any Insert)
+			2             -- iParameterOffsetInput (start with Parameter3)      -- @P10C
+		);
+	END IF; -- WBI FN catalog ?
+
+END;

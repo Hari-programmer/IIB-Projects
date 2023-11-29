@@ -1,0 +1,40 @@
+CREATE COMPUTE MODULE ComIbmDnqAttributeExtraction_BuildSCPNRequest
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+                                                                 -- begin @P06A
+		SET OutputRoot = InputRoot;
+		DECLARE rElementCheck REFERENCE TO OutputRoot.MQRFH2;
+		IF NOT LASTMOVE(rElementCheck) THEN                 -- @P08C only create RFH2 if NOT exists
+			DECLARE rPrePayloadHeader REFERENCE TO OutputRoot.*[<2];
+			DECLARE rPreMqrfh2Header  REFERENCE To Environment;
+			DECLARE bPayloadExists BOOLEAN (UPPER(SUBSTRING(FIELDNAME(InputRoot.*[<]) FROM 1 FOR 2)) <> 'MQ'); -- @P08A
+			IF bPayloadExists THEN -- @P08A
+				MOVE rPreMqrfh2Header TO OutputRoot.*[<3];
+                                                                 -- begin @P08A
+			ELSE
+				MOVE rPrePayloadHeader TO OutputRoot.*[<];
+				MOVE rPreMqrfh2Header  TO OutputRoot.*[<2];
+			END IF;
+                                                                   -- end @P08A
+			CREATE NEXTSIBLING OF rPrePayloadHeader AS rElementCheck DOMAIN 'MQRFH2' NAME 'MQRFH2';
+			SET rElementCheck.(MQRFH2.Field)"CodedCharSetId" = rPreMqrfh2Header."CodedCharSetId";
+			SET rElementCheck.(MQRFH2.Field)"Encoding"       = rPreMqrfh2Header."Encoding";
+			SET rElementCheck.(MQRFH2.Field)"Format"         = rPreMqrfh2Header."Format";
+			SET rElementCheck.(MQRFH2.Field)"NameValueCCSID" = 1208;
+			SET OutputRoot.MQRFH2."ComIbmDni"."OU" = 'SYSOU';
+		ELSE
+			MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+			IF ((NOT LASTMOVE(rElementCheck)) OR (LENGTH(rElementCheck) = 0)) THEN
+				SET OutputRoot.MQRFH2."ComIbmDni"."OU" = 'SYSOU';
+			END IF;
+		END IF;
+                                                                   -- end @P06A
+		-- select queue configuration via SCPN
+		SET Environment.ComIbmDni.ConfigDataLoc = 'env';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration = NULL;
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU[1].Name = 'SYSOU';
+		SET OutputLocalEnvironment.ComIbmDni.Function.DniConfiguration.Retrieve.Request.OU[1].ConfigObjectList.ConfigObject[1].Type = 'DniLevelsTrace';
+		RETURN TRUE;
+	END;
+END MODULE;

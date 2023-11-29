@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?><wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" name="TechZert_Team" targetNamespace="http://www.TechZert_Team.org/TechZert_Team/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tns="http://www.TechZert_Team.org/TechZert_Team/" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <wsdl:documentation>
+    <wsdl:appinfo source="WMQI_APPINFO">
+      <MRWSDLAppInfo imported="true">
+        <binding hasEncoding="false" imported="true" name="TechZert_TeamSOAP" originalBindingStyle="document"/>
+      </MRWSDLAppInfo>
+    </wsdl:appinfo>
+  </wsdl:documentation>
+  
+  <wsdl:types>
+    
+          <xsd:schema targetNamespace="http://www.TechZert_Team.org/TechZert_Team/" xmlns:ibmSchExtn="http://www.ibm.com/schema/extensions">
+<xsd:include schemaLocation="TechZert_Team_InlineSchema1.xsd"/>
+</xsd:schema>
+    </wsdl:types>
+  <wsdl:message name="Employee_DetailsRequest">
+    <wsdl:part element="tns:Employee_Details" name="parameters"/>
+  </wsdl:message>
+  <wsdl:message name="Employee_DetailsResponse">
+    <wsdl:part element="tns:Employee_DetailsResponse" name="parameters"/>
+  </wsdl:message>
+  <wsdl:portType name="TechZert_Team">
+    <wsdl:operation name="Employee_Details">
+      <wsdl:input message="tns:Employee_DetailsRequest"/>
+      <wsdl:output message="tns:Employee_DetailsResponse"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="TechZert_TeamSOAP" type="tns:TechZert_Team">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="Employee_Details">
+      <soap:operation soapAction="http://www.TechZert_Team.org/TechZert_Team/Employee_Details"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="TechZert_Team">
+    <wsdl:port binding="tns:TechZert_TeamSOAP" name="TechZert_TeamSOAP">
+      <soap:address location="http://127.0.0.1:7800/TechZert_Team/getEmpDeatils"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

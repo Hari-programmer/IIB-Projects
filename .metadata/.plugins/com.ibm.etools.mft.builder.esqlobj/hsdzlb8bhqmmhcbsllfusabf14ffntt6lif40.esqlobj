@@ -1,0 +1,8 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		-- Unfortunately, constant ComIbmDnqErCommon.chAdapterFin cannot be used here
+		-- because broker schema level constants can only be used within the same broker schema.
+		SET Environment.Variables.ComIbmDni.Dnq.NodeType = 'Fin';
+		RETURN TRUE;
+	END;

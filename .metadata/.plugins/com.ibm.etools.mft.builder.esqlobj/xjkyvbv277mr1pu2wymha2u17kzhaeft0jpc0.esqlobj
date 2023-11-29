@@ -1,0 +1,5 @@
+CREATE FUNCTION DnqPrintDecryptSecVal(IN encsecval CHAR)       -- @P08A begin
+	RETURNS CHAR
+	LANGUAGE JAVA
+	EXTERNAL NAME
+		"com.ibm.dni.sec.SecurityImplementation.decryptSecVal";

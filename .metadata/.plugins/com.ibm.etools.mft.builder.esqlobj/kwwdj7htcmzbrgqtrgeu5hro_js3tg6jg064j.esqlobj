@@ -1,0 +1,41 @@
+CREATE COMPUTE MODULE ComIbmDniStandardsProcessing_StoreTraceLevel
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE rElementCheck REFERENCE TO InputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration".
+			"Retrieve"."Response"."SYSOU"."DniLevelsTrace";
+		DECLARE chTraceLevel  CHAR '';
+		
+		IF LASTMOVE(rElementCheck) THEN
+			MOVE rElementCheck TO rElementCheck."DNIYS";
+			IF LASTMOVE(rElementCheck) THEN
+				SET chTraceLevel = rElementCheck."Level";
+			ELSE
+				MOVE rElementCheck TO rElementCheck."DNIY";
+				IF LASTMOVE(rElementCheck) THEN
+					SET chTraceLevel = rElementCheck."Level";
+				ELSE
+					MOVE rElementCheck TO rElementCheck."DNI";
+					IF LASTMOVE(rElementCheck) THEN
+						SET chTraceLevel = rElementCheck."Level";
+					END IF;
+				END IF;
+			END IF;
+		END IF;
+
+		IF (LENGTH(chTraceLevel) > 0) THEN
+			SET Environment.Variables."ComIbmDni"."DniStandardsProcessing"."chTraceLevel" = chTraceLevel;
+		END IF;
+		
+		MOVE rElementCheck TO InputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"."Response".
+		{InputRoot.MQRFH2."ComIbmDni"."OU"}."DniMsgDomain";
+		IF LASTMOVE(rElementCheck) THEN
+			MOVE rElementCheck FIRSTCHILD;
+		END IF;
+		WHILE LASTMOVE(rElementCheck) DO
+			SET Environment.Variables."ComIbmDni"."DniStandardsProcessing"."DniMsgDomain".{FIELDNAME(rElementCheck)} = FIELDVALUE(rElementCheck."TestMsgDefSet");
+			MOVE rElementCheck NEXTSIBLING;
+		END WHILE;
+
+		RETURN FALSE;
+	END;
+END MODULE;

@@ -1,0 +1,85 @@
+CREATE PROCEDURE DnqErCommon_MapInserts(
+	IN    rException            REFERENCE,
+	INOUT rReason               REFERENCE,     -- @P06C: rCompletion replaced with rReason
+	IN    iInsertTotalInput     INT,
+	IN    iInsertOffsetInput    INT,
+	IN    iParameterOffsetInput INT
+)
+/* ---------------------------------------------------------------------------------------
+ * DESCRIPTION
+ *   Maps the parameters of an exception in rException
+ *   on elements Parameter<n> in rReason.
+ *
+ * PARAMETERS
+ *   rException             The reference to the WMB exception
+ *   rReason                The reference to the Reason element
+ *   iInsertTotalInput      The total number of Inserts to be mapped
+ *   iInsertOffsetInput     The number of Inserts to be skipped
+ *   iParameterOffsetInput  The number of elements Parameter<n> to be skipped
+ *
+ * EXAMPLE:
+ *               iInsertOffsetInput = 4
+ *                   +-----------+
+ *                   |           |
+ *                   |           v
+ *   Insert No.:     1  2  3  4  5  6  7  8  9  10  11  12
+ *                              /  /  /  /  /  /
+ *   iInsertTotalInput = 6     /  /  /  /  /  /
+ *                            V  V  V  V  V  V
+ *   Parameter No.:  1  2  3  4  5  6  7  8  9  10  11  12
+ *                   |        ^
+ *                   |        |
+ *                   +--------+
+ *             iParameterOffsetInput = 3
+ * --------------------------------------------------------------------------------------- */
+BEGIN
+	DECLARE iInsertCounter   INT 1;
+	DECLARE iInsertTotal     INT;
+	DECLARE iInsertOffset    INT;
+	DECLARE iInsertMax       INT;
+	DECLARE iInsertPos       INT 0;
+	DECLARE iInsertThreshold INT 0;
+	DECLARE rParameter       REFERENCE TO rReason; -- Dummy for declaration only
+
+	-- Initialization
+	SET iInsertTotal = iInsertTotalInput;
+	SET iInsertOffset = iInsertOffsetInput;
+	SET iInsertMax = 10 - iParameterOffsetInput; -- Completion folder allows only 10 parameters
+
+	IF (iInsertTotal - iInsertOffset) > iInsertMax THEN
+		SET iInsertTotal = iInsertMax;
+	END IF;
+
+	SET iInsertThreshold = iInsertTotal - iInsertOffset;
+
+	WHILE (iInsertCounter <= iInsertThreshold) DO
+		EVAL('CREATE FIELD rReason.Parameter' || CAST(iInsertCounter + iParameterOffsetInput AS CHARACTER) || ' AS rParameter;');
+		SET iInsertPos = iInsertCounter + iInsertOffset;
+		IF rException."Insert"[iInsertPos].Type IN ( 7, 8, 10 ) THEN
+			-- Set WBI FN data type
+			SET rParameter = rException."Insert"[iInsertPos].Text;
+			SET rParameter.(NameValue)dnidt = CASE rException."Insert"[iInsertPos].Type
+				WHEN  7 THEN 'time'
+				WHEN  8 THEN 'date'
+				WHEN 10 THEN 'dateTime'
+			END;
+		ELSE
+			-- Set WMB data type
+			SET rParameter = rException."Insert"[iInsertPos].Text;
+			SET rParameter.(NameValue)dt = CASE rException."Insert"[iInsertPos].Type
+				WHEN  1 THEN 'boolean'
+				WHEN  2 THEN 'int'
+				WHEN  3 THEN 'r8'
+				WHEN  5 THEN 'string'
+				WHEN 12 THEN 'bin.hex'
+				WHEN 13 THEN 'bin.hex'
+				WHEN 14 THEN 'bin.hex'
+				ELSE 'string'
+			END;
+		END IF;
+	
+		SET iInsertCounter = iInsertCounter + 1; -- Access next Insert element
+
+	END WHILE;
+
+END;

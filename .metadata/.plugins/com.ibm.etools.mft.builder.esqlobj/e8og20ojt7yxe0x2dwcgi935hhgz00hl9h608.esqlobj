@@ -1,0 +1,41 @@
+CREATE PROCEDURE DnqErCommon_FillExplanation( -- @P06A
+	INOUT rOutputRoot            REFERENCE,
+	INOUT rInputLocalEnvironment REFERENCE
+)
+/* ---------------------------------------------------------------------------------------
+ * DESCRIPTION
+ *   Adds message text retrieved from the DniMessageFormatter node to
+ *   to Explanation elements of the Reason elements.
+ *
+ * PARAMETERS
+ *   rOutputRoot             Reference to OutputRoot providing the Reason elements
+ *   rInputLocalEnvironment  Reference to OutputLocalEnvironment providing the
+ *                           DniMessageFormatter response
+ * --------------------------------------------------------------------------------------- */
+BEGIN
+	DECLARE iPosition    INTEGER;
+	DECLARE rRspFormat   REFERENCE TO rInputLocalEnvironment.ComIbmDni.Function.DniUMG.Transform.Response;
+	DECLARE rTplRequest  REFERENCE TO rOutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Request; -- @P11A
+	DECLARE rReasonList  REFERENCE TO rOutputRoot; -- Dummy for declaration only                         @P11C
+	DECLARE rExplanation REFERENCE TO rOutputRoot; -- Dummy for declaration only
+
+	IF LASTMOVE(rTplRequest) THEN -- @P11A begin
+		MOVE rReasonList TO rOutputRoot.MQRFH2.ComIbmDni.Function.DNQ_K_TPL.Import.Response.Completion.ReasonList;
+	ELSE
+		MOVE rReasonList TO rOutputRoot.MQRFH2.ComIbmDni.Dnq.Completion.ReasonList;
+	END IF; -- @P11A end
+
+	-- Loop response from DniMessageFormatter
+	MOVE rRspFormat TO rRspFormat.MessageText;
+	WHILE (LASTMOVE(rRspFormat)) DO
+		SET iPosition = CAST(rRspFormat.(NameValue)Position AS INTEGER);
+		-- Create element Explanation as next sibling of Value element if required
+		MOVE rExplanation TO rReasonList.Reason[iPosition].Explanation;
+		IF NOT LASTMOVE(rExplanation) THEN
+			-- @P08D          SET rReasonList.Reason[iPosition].Explanation = FIELDVALUE(rRspFormat);
+			CREATE NEXTSIBLING OF rReasonList.Reason[iPosition].Value NAME 'Explanation' VALUE FIELDVALUE(rRspFormat); -- @P08A
+		END IF;
+		MOVE rRspFormat NEXTSIBLING;
+	END WHILE;
+
+END;

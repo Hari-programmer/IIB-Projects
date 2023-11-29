@@ -1,0 +1,29 @@
+CREATE COMPUTE MODULE ComIbmDnqFinApplicationOutput_CopyMTFIN
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+
+		DECLARE FIN_APPLICATION_CCSID CONSTANT INT 1047;
+
+		DECLARE rEnv          REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinApplicationOutput";
+		DECLARE rMtfin        REFERENCE TO InputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN";
+		DECLARE chPayloadType CHAR UPPER(TRIM(rEnv."chPayloadType"));
+		DECLARE chKeepMtfin   CHAR rEnv."chKeepMtfin"; --@P12A
+		DECLARE chMtfin       CHAR '';
+
+		IF (chPayloadType = 'MTFIN') THEN
+			IF LASTMOVE(rMtfin) AND (LENGTH(rMtfin) > 0) THEN
+				SET chMtfin = rMtfin;
+				SET OutputRoot.*[<] = NULL;
+				SET OutputRoot.BLOB.BLOB = CAST(chMtfin AS BLOB CCSID FIN_APPLICATION_CCSID);
+				SET OutputRoot.*[<2].CodedCharSetId = FIN_APPLICATION_CCSID;
+			END IF;
+		END IF;
+                                                                 -- begin @P12A
+		IF (chKeepMtfin = 'NO') OR (chPayloadType = 'MTFIN') THEN --@P15C
+			DELETE FIELD OutputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."MTFIN";
+		END IF;
+                                                                   -- end @P12A
+		RETURN TRUE;
+	END;
+END MODULE;

@@ -1,0 +1,36 @@
+CREATE COMPUTE MODULE Acc_URL_Compute1
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		
+		
+		DECLARE i INTEGER 1;
+	    FOR InRef AS InputRoot.MRM[]  DO
+	    	DECLARE List INTEGER CARDINALITY(InRef.String[]);
+	    		WHILE i<=List DO
+	    			SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' 
+                	                                              || InRef.String[i];
+	   				SET OutputLocalEnvironment.Destination.HTTP.RequestLine.Method = 'GET';
+	    		PROPAGATE TO TERMINAL 'out';
+	    
+	    		SET i = i+1;
+	    		END WHILE;
+	    END FOR;
+		
+		
+--		DECLARE i INTEGER 1;
+--		FOR InRef AS InputRoot.DFDL.Input.record[] DO
+--			DECLARE List INTEGER CARDINALITY(InRef.Data[]);
+--		    	WHILE i<=List DO
+--                	IF CONTAINS(InRef.Data[i],'hello') THEN
+--                  		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' 
+--                  	                                                          || InRef.Data[i];
+--				    	SET OutputLocalEnvironment.Destination.HTTP.RequestLine.Method = 'GET';
+--		        	END IF;
+--		    	SET i=i+1;
+--		    	END WHILE;
+--			END FOR;
+		
+		RETURN TRUE;
+	END;
+
+END MODULE;

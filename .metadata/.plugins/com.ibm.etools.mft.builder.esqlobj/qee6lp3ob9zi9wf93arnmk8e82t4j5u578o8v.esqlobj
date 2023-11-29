@@ -1,0 +1,37 @@
+CREATE FUNCTION ComIbmDnqMwhUpdateInsert_GetAuthenticationStatus(rInputRoot REFERENCE, rEnvironment REFERENCE) RETURNS CHAR BEGIN
+
+	DECLARE chReturn CHAR '';
+	DECLARE chReason CHAR '';
+	DECLARE rReason  REFERENCE TO rInputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."Completion"."ReasonList"."Reason"[1];
+
+	/* scan reason list and set the authentication status */
+	WHILE ((chReturn = '') AND LASTMOVE(rReason)) DO
+		/* extract reason code */
+		SET chReason = rReason.Value;
+
+		IF (chReason = 'DNFL9430E') THEN
+			IF (rReason."Parameter1" = 'NOTFOUND') OR (rReason."Parameter1" = 'NOPERMISSION') THEN
+				SET chReturn = 'RM_NFND';
+			ELSE
+				SET chReturn = 'RM_INV';
+			END IF;
+		ELSEIF (chReason = 'DNFH3861E') THEN
+			IF (rReason."Code" = 'Failed') THEN
+				SET chReturn = 'SG_FAIL';
+			ELSE
+				SET chReturn = 'SG_INV';
+			END IF;
+		ELSEIF (chReason = 'DNFH3860E') THEN
+			SET chReturn = 'DG_FAIL';
+
+		END IF;
+		MOVE rReason NEXTSIBLING REPEAT NAME;
+	END WHILE;
+
+	-- authentication was performed but no auth error => OK
+	IF ((chReturn = '') AND (CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Dnf"."FIN"."AuthenticationInformation"[]) > 0)) THEN
+		SET chReturn = 'OK';
+	END IF;
+
+	RETURN chReturn;
+END;

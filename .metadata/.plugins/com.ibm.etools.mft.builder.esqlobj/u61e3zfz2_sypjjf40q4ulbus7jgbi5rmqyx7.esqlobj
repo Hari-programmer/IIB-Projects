@@ -1,0 +1,25 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		
+		
+		
+		
+		SET OutputRoot.JSON.Data.word = InputRoot.JSON.Data.Item.word;
+        SET OutputRoot.JSON.Data.definition = InputRoot.JSON.Data.Item.meanings.Item.definitions.Item.definition;
+        Propagate TO TERMINAL 'out';
+        
+        --DECLARE wordRef CHARACTER CAST(EV.Ref.JSON.Data.Item.word AS CHARACTER CCSID 1208);
+        --DECLARE definitionRef CHARACTER CAST(EV.Ref.JSON.Data.Item.meanings.Item.definitions.Item.definition AS CHARACTER CCSID 1208);
+        
+        SET OutputRoot.DFDL.URLOutput.header.word = 'word'; 
+        SET OutputRoot.DFDL.URLOutput.header.definition = 'definition'; 
+        SET OutputRoot.DFDL.URLOutput.record.word       = InputRoot.JSON.Data.Item.word;
+        SET OutputRoot.DFDL.URLOutput.record.definition = InputRoot.JSON.Data.Item.meanings.Item.definitions.Item.definition;
+       
+		
+		RETURN FALSE;
+	END;
+
+	

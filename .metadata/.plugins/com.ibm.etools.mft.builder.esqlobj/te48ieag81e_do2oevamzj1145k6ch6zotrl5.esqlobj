@@ -1,0 +1,257 @@
+CREATE COMPUTE MODULE csv_Compute1
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+--		
+--		  SET OutputRoot.DFDL.FileOutput.record[] =
+--          (SELECT D.USR_ID, D.EMAIL_ID,
+--           F.USR_AUTH_STATUS, F.RO_NAME,F.OU_NAME,F.USR_COMMITTED_BY,F.USR_COMMITTED_ON,F.USR_APPROVED_BY,F.USR_APPROVED_ON
+--           FROM InputLocalEnvironment.Destination.details.DFDL.File.record[] AS D,
+--           InputLocalEnvironment.Destination.File.DFDL.File1.record[] AS F
+--           WHERE D.USR_ID=F.USR_ID);
+		
+		
+		DECLARE i INTEGER 1;
+    	FOR details AS InputLocalEnvironment.Destination.details.DFDL.File.record[] DO
+    	FOR File AS InputLocalEnvironment.Destination.File.DFDL.File1.record[] DO
+    	
+    	
+		        
+		    If  details.USR_ID[i] = File.USR_ID[i] then
+		    	
+		    SET OutputRoot.DFDL.FileOutput.record[i].USR_ID       = File.USR_ID[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].EMAIL_ID      = details.EMAIL_ID[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].USR_AUTH_STATUS        = File.USR_AUTH_STATUS[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].RO_NAME         = File.RO_NAME[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].OU_NAME         = File.OU_NAME[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].USR_COMMITTED_BY         = File.USR_COMMITTED_BY[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].USR_COMMITTED_ON         = File.USR_COMMITTED_ON[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].USR_APPROVED_BY         = File.USR_APPROVED_BY[i];
+		    SET OutputRoot.DFDL.FileOutput.record[i].USR_APPROVED_ON         = File.USR_APPROVED_ON[i];
+		    SET i=i+1;
+    END IF ;
+    
+    
+   END FOR;
+  END FOR;
+
+
+
+
+--DECLARE Chr BLOB;
+		 -- SET OutputRoot = InputLocalEnvironment.Destination.details.DFDL.Data || InputLocalEnvironment.Destination.File.DFDL.Data1;
+		 -- DECLARE hischar1 CHARACTER CAST(Chr as CHARACTER CCSID 1208);
+		 -- SET OutputRoot.DFDL.Data.record.field1 = hischar1;
+		 
+--		 DECLARE  Data REFERENCE TO InputLocalEnvironment.Destination.details.DFDL.Data.record;
+--		 DECLARE  Data1 REFERENCE TO InputLocalEnvironment.Destination.File.DFDL.Data1.record;
+		--DECLARE  Data2 REFERENCE TO InputLocalEnvironment.Destination.File.DFDL.OutputData.record;
+		 
+		 
+--		 DECLARE USR_ID, EMAIL_ID, RO_NAME ,OU_NAME,USR_COMMITTED_ON,USR_COMMITTED_BY,USR_APPROVED_BY,USR_APPROVED_ON,USR_AUTH_STATUS CHARACTER;
+--		 
+--		 
+--		 
+--		 SET USR_ID = InputLocalEnvironment.Destination.details.DFDL.Data.record.USR_ID;
+--		 SET EMAIL_ID = InputLocalEnvironment.Destination.details.DFDL.Data.record.EMAIL_ID;
+--		 
+--		 SET RO_NAME = InputLocalEnvironment.Destination.File.DFDL.Data1.record.RO_NAME;
+--		 SET OU_NAME = InputLocalEnvironment.Destination.FILE.DFDL.Data1.record.OU_NAME;
+--		 SET USR_COMMITTED_ON = InputLocalEnvironment.Destination.File.DFDL.Data1.record.USR_COMMITTED_ON;
+--		 SET USR_COMMITTED_BY = InputLocalEnvironment.Destination.File.DFDL.Data1.record.USR_COMMITTED_BY;
+--		 SET USR_APPROVED_BY = InputLocalEnvironment.Destination.File.DFDL.Data1.record.USR_APPROVED_BY;
+--		 SET USR_APPROVED_ON = InputLocalEnvironment.Destination.File.DFDL.Data1.record.USR_APPROVED_ON;
+--		 SET USR_AUTH_STATUS = InputLocalEnvironment.Destination.File.DFDL.Data1.record.USR_AUTH_STATUS;
+		 
+		 
+		 
+		--  SET EV = Environment.Variables;
+----		  
+--		 SET OutputRoot.DFDL.FileOutput.record[] = (SELECT D.USR_ID, D.EMAIL_ID, D1.USR_ID,D1.USR_AUTH_STATUS, D1.RO_NAME, D1.OU_NAME, D1.USR_COMMITTED_BY, D1.USR_COMMITTED_ON, D1.USR_APPROVED_BY, D1.USR_APPROVED_ON
+--		  FROM Data AS D,Data1 AS D1
+--		  WHERE  D.USER_ID = D1.USER_ID);
+		  
+		-- FROM Data INNER JOIN Data1 
+		  --  ON Data.USR_ID = Data1.USR_ID ;
+--		    
+--		    
+--		    --INNER JOIN Data2					
+--			--ON Data1.USER_ID = Data2.USER_ID ;
+--			
+----		  FROM Data,Data1
+----		  Where Data.USER_ID = Data1.USER_ID;
+----		        
+----				FROM ( Data[] INNER JOIN Data1[]
+----					ON Data[].USER_ID = Data1[].USER_ID) INNER JOIN File3
+----					ON File2.NameItem2 = File3.NameItem2 ;
+		  
+		  
+		  
+		  
+--		  
+--	DECLARE i INTEGER 1;
+--    FOR source AS InputLocalEnvironment.Destination.details.DFDL.Data.record[]DO
+--    FOR source AS InputLocalEnvironment.Destination.File.DFDL.Data1.record[] DO
+--    	
+--    	DECLARE USR REFERENCE TO InputLocalEnvironment.Destination.details.DFDL.Data.record.USR_ID;
+--        DECLARE USR1 REFERENCE TO InputLocalEnvironment.Destination.File.DFDL.Data1.record.USR_ID;
+--        
+--    If  USR = USR1 then
+--    SET OutputRoot.DFDL.OutputData.record[i].USR_ID         = InputLocalEnvironment.Destination.details.DFDL.Data.record[i].USR_ID;
+--    SET OutputRoot.DFDL.OutputData.record[i].EMAIL_ID       = InputLocalEnvironment.Destination.details.DFDL.Data.record[i].EMAIL_ID;
+--    SET OutputRoot.DFDL.OutputData.record[i].USR_AUTH_STATUS = InputLocalEnvironment.Destination.File.DFDL.Data1.record[i].USR_AUTH_STATUS;
+--    SET OutputRoot.DFDL.OutputData.record[i].RO_NAME         = InputLocalEnvironment.Destination.File.DFDL.Data1.record[i].RO_NAME;
+--    SET OutputRoot.DFDL.OutputData.record[i].OU_NAME         = InputLocalEnvironment.Destination.File.DFDL.Data1.record[i].OU_NAME;
+--    SET OutputRoot.DFDL.OutputData.record[i].USR_COMMITTED_BY = InputLocalEnvironment.Destination.File.DFDL.Data1.record[i].USR_COMMITTED_BY;
+--    SET OutputRoot.DFDL.OutputData.record[i].USR_COMMITTED_ON = InputLocalEnvironment.Destination.File.DFDL.Data1.record[i].USR_COMMITTED_ON;
+--    SET OutputRoot.DFDL.OutputData.record[i].USR_APPROVED_BY = InputLocalEnvironment.Destination.File.DFDL.Data1.record[i].USR_APPROVED_BY;
+--    SET OutputRoot.DFDL.OutputData.record[i].USR_APPROVED_ON = InputLocalEnvironment.Destination.File.DFDL.Data1.record[i].USR_APPROVED_ON;
+--    
+--    END IF ;
+--    
+--    SET i=i+1;
+--   END FOR;
+--  END FOR;
+		  
+		  
+		  
+		  
+		  
+		  
+		  
+		  
+		  
+--		  
+--		  DECLARE Chr1 BLOB;
+--		 SET Chr1 =InputLocalEnvironment.Destination.details.BLOB.BLOB;
+--		  DECLARE hischar2 CHARACTER CAST(Chr1 as CHARACTER CCSID 1208);
+--		  SET OutputRoot.DFDL.Data.record.field1 = hischar1 || hischar2;
+		   
+		   --SET OutputRoot.XMLNSC.Data = InputLocalEnvironment.Destination.File.BLOB.BLOB ;
+		   --SET OutputRoot.XMLNSC.Data1 = InputLocalEnvironment.Destination.details.BLOB.BLOB;
+		  
+		  
+		 
+		 
+		 --DECLARE Input REFERENCE TO InputRoot.BLOB;
+--		 DECLARE Input1 REFERENCE TO InputLocalEnvironment.Destination;
+--		 DECLARE EV REFERENCE TO Environment.Variables;
+--		 
+--		 
+--		 DECLARE Val INTEGER 1;
+--		 DECLARE Val1 INTEGER;
+--		 SET Val1 = CARDINALITY(Input1.*[]);
+--		
+--		
+--		 	IF EXISTS(EV.Input1[]) THEN
+--		 	CREATE LASTCHILD OF OutputRoot.DFDL.Data NAME 'record';
+--		 	SET OutputRoot.DFDL.Data.record.field1 = Input1 ;
+--		 	END IF;
+--		 	
+		 
+		 
+--		 
+--		 DECLARE Chr CHARACTER;
+--		 
+--		 SET OutputLocalEnvironment.File = InputLocalEnvironment.File;
+--		 SET Chr= OutputLocalEnvironment.File;
+--		 SET Input.field1 = Chr;
+		 
+		  
+		  
+		  
+--		   
+--		   DECLARE Data REFERENCE TO InputRoot.BLOB;
+--		   DECLARE Data1 REFERENCE TO InputLocalEnvironment.File;
+--		   
+--		   SET OutputRoot = Data || Data1;
+		
+		   --
+		   --SET OutputLocalEnvironment.BLOB.Role   = InputLocalEnvironment.File;
+		   
+		  -- SET OutputRoot = OutputLocalEnvironment.BLOB.Details || OutputLocalEnvironment.BLOB.Role;
+		   
+		   
+		   --SET OutputRoot = InputRoot;
+--		    
+--	        CREATE LASTCHILD OF InputLocalEnvironment TYPE Name NAME 'Filenames';
+--      		DECLARE fRef REFERENCE TO InputLocalEnvironment.Filenames;
+--      		
+--     		CREATE LASTCHILD OF fRef TYPE NameValue NAME 'FileName' VALUE 'user_details.csv';
+--     		CREATE LASTCHILD OF fRef TYPE NameValue NAME 'FileName' VALUE 'user_roles.csv';
+--     		
+--     		SET OutputRoot = fRef.FileName;
+--     		
+		   
+
+
+	
+		--SET OutputLocalEnvironment.TwoFiles = InputLocalEnvironment.File;
+		
+		--SET OutputRoot = InputLocalEnvironment.File;
+		--SET OutputRoot =  InputLocalEnvironment.File.Read;
+		
+		
+		
+		--SET InputLocalEnvironment.Destination.File.Name = 'user_details.csv';
+		
+	
+	
+	--SET  =  InputLocalEnvironment.File;
+	
+	--SEt OutputLocalEnvironment.File = InputLocalEnvironment.File;
+	
+--			CREATE LASTCHILD OF InputLocalEnvironment TYPE Name NAME 'Filenames';
+--      		DECLARE fRef REFERENCE TO InputLocalEnvironment.Filenames;
+--      		
+--     		CREATE LASTCHILD OF fRef TYPE NameValue NAME 'FileName' VALUE 'user_details.csv';
+--     		CREATE LASTCHILD OF fRef TYPE NameValue NAME 'FileName' VALUE 'user_roles.csv';
+     		
+     		--SET OutputLocalEnvironment.Destination.File.Name = fRef.FileName || fRef.FileName ;
+     		
+     		--SET OutputRoot = OutputLocalEnvironment.Destination.File.Name;
+	
+	
+	
+		
+		--SEt OutputLocalEnvironment.File = InputLocalEnvironment.File;
+		
+--		DECLARE currtime CHARACTER CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyyMMddHHmmssSSS');
+--
+--		SET OutputLocalEnvironment.WrittenDestination.File.Name='ResponseFile_'||currtime||'.csv'; 
+--		SEt OutputRoot = l
+		--SET OutputLocalEnvironment.Destination.File.Name = 'user_roles.csv';
+		
+		--SET OutputLocalEnvironment.Details =  InputLocalEnvironment.File.Read;
+		--SET OutputLocalEnvironment.Role =  InputLocalEnvironment.File;
+		
+		--SET OutputRoot.DFDL.Data.record.field1 = OutputLocalEnvironment.BLOB.Details || OutputLocalEnvironment.BLOB.Role;
+		
+		--SET OutputLocalEnvironment.Destination.File.Name = OutputLocalEnvironment.Details || OutputLocalEnvironment.Role;
+		
+		--SET OutputRoot = OutputLocalEnvironment.Role;
+		
+		
+		
+		
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+		
+		 
+	END;
+END MODULE;

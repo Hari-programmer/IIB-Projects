@@ -1,0 +1,13 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		
+		
+		SET OutputRoot.JSON.Data.URLDATA = InputRoot.BLOB.BLOB;
+       --DECLARE chrRef CHARACTER CAST(InputRoot.BLOB.BLOB AS CHARACTER CCSID 1208);
+        
+		
+		RETURN TRUE;
+	END;
+
+	

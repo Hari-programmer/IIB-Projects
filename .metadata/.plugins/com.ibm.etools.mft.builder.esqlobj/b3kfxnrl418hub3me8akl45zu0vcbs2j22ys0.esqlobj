@@ -1,0 +1,154 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rEnv                 REFERENCE TO Environment.Variables.ComIbmDni."DnqMwhUpdateInsert";
+		DECLARE rInputRoot           REFERENCE TO InputRoot;
+		DECLARE rEnvironment         REFERENCE TO Environment;
+		DECLARE rElementCheck        REFERENCE TO Environment;
+		DECLARE chOptionsMwh         CHAR ''; --@P07C
+--		DECLARE chStatus             CHAR TRIM(rEnv."chStatus"); @P07D
+--		DECLARE chAdjunctTableCoName CHAR ''; @P07D
+--		DECLARE chExtensionId        CHAR ''; @P07D
+		DECLARE chOu                 CHAR '';
+		DECLARE chExtractMsgFields   CHAR ''; --@P07C
+		DECLARE bExtractMsgFields    BOOLEAN FALSE;
+		DECLARE bScpnNeeded          BOOLEAN FALSE; --@P10A
+
+		-- safe ConfigDataLoc
+		MOVE rElementCheck TO Environment."ComIbmDni"."ConfigDataLoc";
+		IF LASTMOVE(rElementCheck) THEN
+			SET rEnv."chConfigDataLoc" = rElementCheck;
+		END IF;
+
+		-- check MQRFH2
+		MOVE rElementCheck TO OutputRoot.MQRFH2;
+		IF NOT LASTMOVE(rElementCheck) THEN
+			THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1001
+			VALUES ('Root.MQRFH2', 'DNQC1001E');
+		END IF;
+
+		-- check OU
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+		IF NOT LASTMOVE(rElementCheck) OR (LENGTH(rElementCheck) = 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1001
+			VALUES ('Root.MQRFH2.ComIbmDni.OU', 'DNQC1001E');
+		ELSE
+			SET chOu = rElementCheck;
+		END IF;
+                                                                 /* begin @P07D
+		-- check MessageDomain
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain";
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET chDomain = rElementCheck;
+			SET rEnv."chDomain" = chDomain;
+		ELSE
+			IF chDomain <> '' THEN
+				SET OutputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain" = chDomain;
+			ELSE
+				THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1004
+				VALUES ('DNQC1004E');
+			END IF;
+		END IF;
+
+		-- get adjunct table settings
+		CALL ComIbmDnqMwhUpdateInsert_GetAdjunctTableSettings(rInputRoot, rEnvironment, chExtensionId, chAdjunctTableCoName);
+		SET rEnv."chExtensionId" = chExtensionId;
+		SET rEnv."chAdjunctTableCoName" = chAdjunctTableCoName;
+*/                                                                 -- end @P07D
+--		CALL ComIbmDnqMwhUpdateInsert_SetExtensionIdentifier(rInputRoot, rEnvironment); @P29D
+
+		-- check extract message fields
+                                                                 -- begin @P07A
+		IF (CARDINALITY(rEnv."chExtractMsgFields"[]) > 0) AND (LENGTH(rEnv."chExtractMsgFields") > 0) THEN
+			SET chExtractMsgFields = UPPER(TRIM(rEnv."chExtractMsgFields"));
+		END IF;
+                                                                   -- end @P07A
+		IF chExtractMsgFields = '' THEN
+			SET chExtractMsgFields = 'FALSE';
+		END IF;
+		SET rEnv."chExtractMsgFields" = chExtractMsgFields;
+
+		IF chExtractMsgFields NOT IN ('TRUE', 'FALSE') THEN
+			-- extract message fields: invalid property value
+			THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1002
+			VALUES (chExtractMsgFields, 'DNQC1002E');
+		END IF;
+
+		IF chExtractMsgFields = 'TRUE' THEN
+			SET bExtractMsgFields = TRUE;
+		END IF;
+		SET rEnv."bExtractMsgFields" = bExtractMsgFields;
+                                                                 -- begin @P07A
+		-- check options MWH
+		IF (CARDINALITY(rEnv."chOptionsMwh"[]) > 0) AND (LENGTH(rEnv."chOptionsMwh") > 0) THEN
+			SET chOptionsMwh = TRIM(rEnv."chOptionsMwh");
+		END IF;
+		SET rEnv."chOptionsMwh" = chOptionsMwh;
+                                                                   -- end @P07A
+                                                                 /* begin @P07D
+		-- check options MWH
+		IF chOptionsMwh = '' THEN
+			-- options MWH: not specified
+			THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1003
+			VALUES ('OptionsMwh', 'DNQC1003E');
+		END IF;
+*/                                                                 -- end @P07D
+                                                                 /* begin @P07D
+		-- check status
+                                                                 -- begin @P03A
+		MOVE rElementCheck TO InputLocalEnvironment."ComIbmDni"."Function"."DnqMwhInsertUpdate"."UpdateInsert"."Request"."Status";
+		IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+			SET chStatus = rElementCheck;
+			SET rEnv."chStatus" = chStatus;
+		END IF;
+                                                                   -- end @P03A
+		IF chStatus = '' THEN
+			-- status: not specified
+			THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1003
+			VALUES ('Status', 'DNQC1003E');
+		END IF;
+*/                                                                 -- end @P07D
+		-- check extension identifier
+                                                                 /* begin @P05D
+		IF chExtensionId = '' THEN
+			-- extension identifier: not specified
+			THROW USER EXCEPTION CATALOG 'dnqccmsg' MESSAGE 1003
+			VALUES ('ExtensionIdentifier', 'DNQC1003E');
+		END IF;
+*/                                                                 -- end @P05D
+		-- prepare SCPN request for MWH configuration
+--		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"."Request" = NULL; @P10D
+		IF (LENGTH(chOptionsMwh) > 0) THEN --@P06A
+			DELETE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve"; --@P10A
+			SET bScpnNeeded = TRUE; -- @P10A
+			DECLARE rScpnRequest  REFERENCE TO Environment;
+			DECLARE rConfigObject REFERENCE TO Environment;
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+				"Request"."OU" AS rScpnRequest;
+			SET rScpnRequest."Name" = OutputRoot.MQRFH2."ComIbmDni"."OU";
+			CREATE FIELD rScpnRequest."ConfigObjectList" AS rScpnRequest NAME 'ConfigObjectList';
+			CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+			SET rConfigObject."Type" = 'DnqOptionsMwh';
+			SET rConfigObject."Name" = chOptionsMwh;
+			CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+			SET rConfigObject."Type" = 'DniMessageWarehouse';
+			SET rConfigObject."Name" = 'DniMwh';
+                                                                 -- begin @P25A
+			CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+			SET rConfigObject."Type" = 'DniMessageWarehouseAdjunct';
+                                                                   -- end @P25A
+                                                                 /* begin @P07D
+			IF chAdjunctTableCoName <> '' THEN
+				CREATE LASTCHILD OF rScpnRequest AS rConfigObject NAME 'ConfigObject';
+				SET rConfigObject."Type" = 'DniMessageWarehouseAdjunct';
+				SET rConfigObject."Name" = chAdjunctTableCoName;
+			END IF;
+*/                                                                 -- end @P07D
+		END IF; --@P06A
+		
+		SET rEnv."bScpnNeeded" = bScpnNeeded; --@P10A
+
+		RETURN TRUE;
+	END;

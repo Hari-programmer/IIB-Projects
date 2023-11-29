@@ -1,0 +1,48 @@
+Summary of selections: WSDL files generation
+
+The selected message set:
+/IIB_EMP_DETAILS/IIB_EMP_DETAILS
+
+The generated WSDL files will go into:
+/IIB_EMP_DETAILS
+
+The version of WSDL to be generated: 1.1
+The version of SOAP to be generated: 1.1
+
+The selected style for WSDL generation: document
+The WSDL Namespace: http://tempuri.org/IIB_EMP_DETAILS
+
+The following operations will be created:
+GetEmpDetails (Request-Response)
+
+The following bindings are selected:
+SOAP over http.
+
+The following WSDL files will be generated:
+/IIB_EMP_DETAILS/IIB_EMP_DETAILSService.wsdl
+
+
+Creating new WSDL Service file '\IIB_EMP_DETAILS\IIB_EMP_DETAILSService.wsdl'
+Setting wsdl definition name for 'IIB_EMP_DETAILSService.wsdl': IIB_EMP_DETAILS
+Setting wsdl definition targetNamespace for 'IIB_EMP_DETAILSService.wsdl': http://tempuri.org/IIB_EMP_DETAILS
+Adding namespace: xmlns for 'IIB_EMP_DETAILSService.wsdl':soap=http://schemas.xmlsoap.org/wsdl/soap/
+Adding namespace: xmlns for 'IIB_EMP_DETAILSService.wsdl':xsd=http://www.w3.org/2001/XMLSchema
+Adding namespace: xmlns for 'IIB_EMP_DETAILSService.wsdl':wsdl=http://schemas.xmlsoap.org/wsdl/
+Creating new WSDL Interface file '\IIB_EMP_DETAILS\IIB_EMP_DETAILSService.wsdl'
+Creating portType for WSDL Interface: IIB_EMP_DETAILSPortType
+Creating portType operation 'GetEmpDetails'
+Creating message 'GetEmpDetails_in'
+Creating message 'GetEmpDetails_out'
+Creating message 'GetEmpDetails_fault1'
+Creating SOAP over HTTP binding 'IIB_EMP_DETAILSSOAP_HTTP_Binding'
+Creating binding operation 'GetEmpDetails' for binding 'IIB_EMP_DETAILSSOAP_HTTP_Binding'
+Creating SOAP over HTTP service 'IIB_EMP_DETAILS_Service'
+Creating port 'IIB_EMP_DETAILSSOAP_HTTP_Port' for service 'IIB_EMP_DETAILS_Service'
+
+Elapsed time processing this WSDL definition: 1.655468136135E9 seconds
+Number of warnings for this WSDL definition: 0
+
+
+Number of files processed: 1
+
+

@@ -1,0 +1,129 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+SET OutputRoot = InputRoot;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node selects a timer record from timer database by given TimerId value. It extracts the OU from this 
+  record and compares it with the OU value included in the incoming message. If they match, processing
+  of flow DniCancelTimer will go on. Else, a DniCancelTimer response with completion code 'Failed' will 
+  be created.
+  If already an error occured in DniCancelTimer flow (indicated throw appeared response section), no
+  processing will take place.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+SET OutputLocalEnvironment = InputLocalEnvironment;
+
+-------------------------------------------------------------------------------------------------------------
+-- Find out if a DniCancelTimer response message exists. 
+-- A response section in the incoming message indicates, that an error occured in one of the preceding nodes
+-- of the DniCancelTimer flow. Than, no further processing should be done. The incoming message will be 
+-- forwarded to the next node in this flow.
+-------------------------------------------------------------------------------------------------------------
+DECLARE pFunction REFERENCE TO OutputRoot.MQRFH2[<].ComIbmDni.Function;
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE pFunction TO OutputLocalEnvironment.ComIbmDni.Function;
+END IF;
+
+IF (CARDINALITY(pFunction.DniTimer.Cancel.Response[]) > 0) THEN
+  RETURN TRUE;  
+END IF;
+
+
+------------------------------------------------------------------------------------------------------------
+-- Creates the response section in the DniCancelTimer Function. If an mandatory parameter is wrong, 
+-- a negative response will be added to this section. Else, this section will be removed at end of 
+-- processing in this node.
+------------------------------------------------------------------------------------------------------------
+CREATE FIELD pFunction.DniTimer.Cancel.Response;
+DECLARE refResp REFERENCE TO pFunction.DniTimer.Cancel.Response;
+
+-- flag for finding out, if response entries was made ------------------------------------------------------
+DECLARE boolRespSet BOOLEAN;
+SET boolRespSet = FALSE;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- Declarations and Initializations
+-------------------------------------------------------------------------------------------------------------
+DECLARE refTimReqIn REFERENCE TO InputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Request;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refTimReqIn TO InputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Request;
+END IF;
+
+CREATE FIELD OutputLocalEnvironment.Variables.ComIbmDni.Function.DniTimer.Cancel;
+DECLARE refLocEnvOut REFERENCE TO OutputLocalEnvironment.Variables.ComIbmDni.Function.DniTimer.Cancel;
+
+DECLARE sqlState1 CHARACTER;
+DECLARE sqlErrorText1 CHARACTER;
+DECLARE sqlCode1 INTEGER;
+DECLARE sqlNativeError1 INTEGER;
+
+DECLARE chDBStmt CHARACTER;
+DECLARE chRetValueOu CHARACTER;
+DECLARE blobTimerId BLOB;
+
+SET blobTimerId = refTimReqIn.TimerId;
+
+-------------------------------------------------------------------------------------------------------------
+-- Get timer record by given TimerId from database.
+-- Then, find out, if the OU of the timer record matched with the OU of the incoming message.
+-- If they do not match, create a DniCancelTimer response with completion code 'Failed' and stop 
+-- any further processing.
+-------------------------------------------------------------------------------------------------------------
+SET chDBStmt = 'SELECT T.T_OU_NAME FROM ' || refTimReqIn.TimerTable || ' AS T '
+		  || 'WHERE T.T_TIMER_UID = ' || '?';
+
+SET refLocEnvOut.tempDBValues.ouValue[] = PASSTHRU(chDBStmt, blobTimerId);
+SET chRetValueOu = refLocEnvOut.tempDBValues.ouValue[1].T_OU_NAME;
+SET sqlCode1 = SQLCODE;
+
+
+-- if no entry was found, set bad response ------------------------------------------------------------------
+IF (CARDINALITY(refLocEnvOut.tempDBValues.ouValue[]) < 1) THEN
+  SET refResp.Completion.Code = 'Failed';
+  SET refResp.Completion.Reason = '5';
+  SET boolRespSet = TRUE;
+ELSE
+  IF (sqlCode1 < 0) THEN
+    -- if any other database error occured, throw a Denali exception ----------------------------------------
+    SET sqlState1 = SQLSTATE;
+    SET sqlErrorText1 = SQLERRORTEXT;
+    SET sqlNativeError1 = SQLNATIVEERROR;
+    THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6002 
+	VALUES ('DniCancelTimer', refTimReqIn.TimerTable, sqlCode1, sqlState1, sqlNativeError1, sqlErrorText1, 'DNIT6002E'); 
+  END IF;
+END IF;
+
+-- if got ou not equal with ou of cancelling service, set bad response ---------------------------------------
+IF (boolRespSet = FALSE) THEN
+  SET chRetValueOu = refLocEnvOut.tempDBValues.ouValue[1].T_OU_NAME;
+  IF (InputRoot.MQRFH2[<].ComIbmDni.OU <> TRIM(chRetValueOu)) THEN
+    SET refResp.Completion.Code = 'Failed';
+    SET refResp.Completion.Reason = '6';
+    SET boolRespSet = TRUE;
+  END IF;
+END IF;
+
+
+-------------------------------------------------------------------------------------------------------------
+-- If an mandatory parameter was wrong, a response has been created and the value boolRespSet has
+-- been set to TRUE.
+-- If all checked parameters were valid (boolRespSet = FALSE), the response section has to be removed 
+-- from the outgoing message. 
+-------------------------------------------------------------------------------------------------------------
+IF (boolRespSet = FALSE) THEN
+  IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+  THEN
+    SET OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response = NULL;
+  ELSE
+    SET OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Response = NULL;
+  END IF;  
+END IF;
+
+
+RETURN true;
+END;
+

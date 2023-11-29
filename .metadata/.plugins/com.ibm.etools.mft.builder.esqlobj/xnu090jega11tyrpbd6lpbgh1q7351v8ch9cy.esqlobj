@@ -1,0 +1,48 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_AddInterActAdjunctRequest(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT rOutputLocalEnvironment REFERENCE, IN bUpdateMsg BOOLEAN)
+BEGIN
+	DECLARE rElementCheck REFERENCE TO rEnvironment;
+	DECLARE rDnqProps     REFERENCE TO rEnvironment."ComIbmDni"."Dnq"."Properties";
+	DECLARE rDnqPropsMsif REFERENCE TO rDnqProps."MSIF";
+	DECLARE refRequest    REFERENCE TO rOutputLocalEnvironment."ComIbmDni"."Function"."DniWarehouse".
+										{ComIbmDnqMwhUpdateInsert_GetRequestPath(bUpdateMsg)}."Request";
+	DECLARE refAdjunct    REFERENCE TO rInputRoot;
+	CREATE LASTCHILD OF refRequest AS refAdjunct NAME 'Adjunct';
+	SET refAdjunct."Name" = 'DnfMwhMsgEfa'; -- InterAct specific adjunct table
+	CREATE FIELD refAdjunct."MessageField" AS refAdjunct;
+
+	SET refAdjunct."Service"  = rDnqPropsMsif."Service";
+	SET refAdjunct."Service".(NameValue)max = '30';
+	SET refAdjunct."Request_Type"  = rDnqPropsMsif."RequestType";
+	SET refAdjunct."Request_Type".(NameValue)max = '30';
+	SET refAdjunct."Local_DN"  = rDnqProps."LocalAddress";
+	SET refAdjunct."Local_DN".(NameValue)max = '100';
+	SET refAdjunct."Remote_DN"  = rDnqProps."RemoteAddress";
+	SET refAdjunct."Remote_DN".(NameValue)max = '100';
+	SET refAdjunct."SN_Reference"  = rDnqPropsMsif."SwiftNetReference";
+	SET refAdjunct."SN_Reference".(NameValue)max = '50';
+
+    MOVE rElementCheck TO rDnqPropsMsif."ApplicationHeader"."MsgRef";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    SET refAdjunct."AH_MsgRef" = rElementCheck;
+	    SET refAdjunct."AH_MsgRef".(NameValue)max = '30';
+    END IF;
+    MOVE rElementCheck TO rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."SendOptions"."DeliveryMode";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    SET refAdjunct."Mode" = rElementCheck;
+	    SET refAdjunct."Mode".(NameValue)max = '3';
+    END IF;
+
+	DECLARE chInterActScenario   CHAR '';
+
+	IF (CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."MsgReceived"[]) > 0) THEN
+		SET chInterActScenario = 'RCV';
+	ELSE
+		IF (CARDINALITY(rInputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"[]) > 0) THEN
+			SET chInterActScenario = 'SND';
+		END IF;
+	END IF;
+
+    IF chInterActScenario <> '' THEN
+	    SET refAdjunct."IA_Scenario" = chInterActScenario;
+    END IF;
+END;

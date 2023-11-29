@@ -1,0 +1,12 @@
+CREATE FUNCTION DnqUtil_ExtractApplicationHeaderLT(chFinMessage CHAR) RETURNS CHAR
+BEGIN
+	SET chFinMessage = DnqUtil_GetNestedMessage(chFinMessage);
+
+	-- set application header LT begin position based on message direction (ISN/OSN)
+	DECLARE iApplicationHeaderLtBeginPos INT 47; -- default: OSN
+	IF SUBSTRING(chFinMessage FROM 33 FOR 1) = 'I' THEN
+		SET iApplicationHeaderLtBeginPos = 37;
+	END IF;
+
+	RETURN SUBSTRING(chFinMessage FROM iApplicationHeaderLtBeginPos FOR 9);
+END;

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?><MessageBroker name="Soap_Library">
+  <XSDCollection href="platform:/resource/Soap_Library/IBMdefined/soap.xsd" prefix="" targetNamespace="">
+    <element href="platform:/resource/Soap_Library/IBMdefined/soap.xsd#//SOAP_Domain_Msg;XSDElementDeclaration" name="SOAP_Domain_Msg" type="mlib://Soap_Library#/-/complexType{}SOAP_Msg_type"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/soap.xsd#//MIME_Headers_type;XSDComplexTypeDefinition" name="MIME_Headers_type"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/soap.xsd#//Attachment_type;XSDComplexTypeDefinition=1" name="Attachment_type"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/soap.xsd#//SOAP_Msg_type;XSDComplexTypeDefinition=2" name="SOAP_Msg_type"/>
+    <group href="platform:/resource/Soap_Library/IBMdefined/soap.xsd#//MIME_header_fields;XSDModelGroupDefinition" name="MIME_header_fields"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd" prefix="tns" targetNamespace="http://schemas.xmlsoap.org/soap/envelope/">
+    <import name="IBMdefined/org/w3/www/xml/_1998/namespace/xml.xsd" targetNamespace="http://www.w3.org/XML/1998/namespace"/>
+    <element href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Envelope;XSDElementDeclaration" name="Envelope" type="mlib://Soap_Library#/-/complexType{http://schemas.xmlsoap.org/soap/envelope/}Envelope"/>
+    <element href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Header;XSDElementDeclaration=1" name="Header" type="mlib://Soap_Library#/-/complexType{http://schemas.xmlsoap.org/soap/envelope/}Header"/>
+    <element href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Body;XSDElementDeclaration=2" name="Body" type="mlib://Soap_Library#/-/complexType{http://schemas.xmlsoap.org/soap/envelope/}Body"/>
+    <element href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Fault;XSDElementDeclaration=3" name="Fault" type="mlib://Soap_Library#/-/complexType{http://schemas.xmlsoap.org/soap/envelope/}Fault"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Envelope;XSDComplexTypeDefinition" name="Envelope"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Header;XSDComplexTypeDefinition=1" name="Header"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Body;XSDComplexTypeDefinition=2" name="Body"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//Fault;XSDComplexTypeDefinition=3" name="Fault"/>
+    <complexType href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//FaultString;XSDComplexTypeDefinition=4" name="FaultString"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//detail;XSDComplexTypeDefinition=5" name="detail"/>
+    <simpleType href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//encodingStyle;XSDSimpleTypeDefinition" name="encodingStyle" variety="list"/>
+    <attribute href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//mustUnderstand;XSDAttributeDeclaration" name="mustUnderstand"/>
+    <attribute href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//actor;XSDAttributeDeclaration=1" name="actor"/>
+    <attribute href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//encodingStyle;XSDAttributeDeclaration=2" name="encodingStyle"/>
+    <attributeGroup href="platform:/resource/Soap_Library/IBMdefined/org/xmlsoap/schemas/soap/envelope/soapenv11.xsd#//encodingStyle;XSDAttributeGroupDefinition" name="encodingStyle"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/Soap_Library/IBMdefined/org/w3/www/xml/_1998/namespace/xml.xsd" prefix="xml" targetNamespace="http://www.w3.org/XML/1998/namespace">
+    <attribute href="platform:/resource/Soap_Library/IBMdefined/org/w3/www/xml/_1998/namespace/xml.xsd#//lang;XSDAttributeDeclaration" name="lang"/>
+    <attribute href="platform:/resource/Soap_Library/IBMdefined/org/w3/www/xml/_1998/namespace/xml.xsd#//space;XSDAttributeDeclaration=1" name="space"/>
+    <attribute href="platform:/resource/Soap_Library/IBMdefined/org/w3/www/xml/_1998/namespace/xml.xsd#//base;XSDAttributeDeclaration=2" name="base"/>
+    <attributeGroup href="platform:/resource/Soap_Library/IBMdefined/org/w3/www/xml/_1998/namespace/xml.xsd#//specialAttrs;XSDAttributeGroupDefinition" name="specialAttrs"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd" prefix="" targetNamespace="http://tempuri.org/IIB_EMP_DETAILS">
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Emp_Id;XSDElementDeclaration" name="Emp_Id" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}int"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Emp_Name;XSDElementDeclaration=1" name="Emp_Name" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}string"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Emp_Phone;XSDElementDeclaration=2" name="Emp_Phone" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}int"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Emp_Address;XSDElementDeclaration=3" name="Emp_Address" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}string"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Emp_Mail;XSDElementDeclaration=4" name="Emp_Mail" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}string"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Emp_DOB;XSDElementDeclaration=5" name="Emp_DOB" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}date"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Fault;XSDElementDeclaration=6" name="Fault" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}int"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//Fstring;XSDElementDeclaration=7" name="Fstring" type="mlib://Soap_Library#/-/simpleType{http://www.w3.org/2001/XMLSchema}string"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//GET_EMP_REQUEST;XSDElementDeclaration=8" name="GET_EMP_REQUEST" type="mlib://Soap_Library#/-/complexType{http://tempuri.org/IIB_EMP_DETAILS}GET_EMP_REQUEST"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//GET_EMP_RESPONSE;XSDElementDeclaration=9" name="GET_EMP_RESPONSE" type="mlib://Soap_Library#/-/complexType{http://tempuri.org/IIB_EMP_DETAILS}GET_EMP_RESPONSE"/>
+    <element href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//FAULT;XSDElementDeclaration=10" name="FAULT" type="mlib://Soap_Library#/-/complexType{http://tempuri.org/IIB_EMP_DETAILS}FAULT"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//GET_EMP_REQUEST;XSDComplexTypeDefinition" name="GET_EMP_REQUEST"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//GET_EMP_RESPONSE;XSDComplexTypeDefinition=1" name="GET_EMP_RESPONSE"/>
+    <complexType baseType="mlib://Soap_Library#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd#//FAULT;XSDComplexTypeDefinition=2" name="FAULT"/>
+  </XSDCollection>
+  <XSDCollection href="platform:/resource/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1.xsd" prefix="tns" targetNamespace="http://tempuri.org/IIB_EMP_DETAILS">
+    <include name="/Soap_Library/RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd" targetNamespace="http://tempuri.org/IIB_EMP_DETAILS"/>
+  </XSDCollection>
+</MessageBroker>

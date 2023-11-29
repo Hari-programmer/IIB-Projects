@@ -1,0 +1,89 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN        
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment; --@P06A
+		
+		DECLARE chSchema CHAR Environment.Variables.ComIbmDni.Dnq.Properties.SchemaName;
+		DECLARE rDnqInput REFERENCE TO Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput;
+		DECLARE rCurrentAction REFERENCE TO Environment.ComIbmDni.Dnq.ER.CurrentAction;
+		DECLARE rUserAction REFERENCE TO Environment.ComIbmDni.Dnq.ER.CurrentAction.UserAction;
+		DECLARE rTrace REFERENCE TO Environment;
+		DECLARE rDnqOutput REFERENCE TO Environment;
+		DECLARE rInputRoot  REFERENCE TO InputRoot;
+		
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Trace.DnqOutput AS rTrace;
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput AS rDnqOutput;
+		
+		-- create history entry for delete useraction
+		IF (LASTMOVE(rUserAction) AND (UPPER(rUserAction) = 'DELETE')) THEN
+			-- create Message History record
+			DECLARE rHistory       REFERENCE TO Environment;
+			DECLARE rHistoryEntry  REFERENCE TO Environment;
+			
+			CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.History AS rHistory;
+			
+			-- add new history entry
+			CREATE LASTCHILD OF rHistory AS rHistoryEntry NAME 'HistoryEntry';
+			SET rHistoryEntry.UserId     	 = rCurrentAction.UserId;
+			SET rHistoryEntry.Component      = 'DNQ';
+			SET rHistoryEntry.Service        = 'ER';
+			IF (CARDINALITY(rCurrentAction.UserAction[])>0) AND (rCurrentAction.UserAction<>'') THEN
+				SET rHistoryEntry.UserAction = rCurrentAction.UserAction;
+			END IF;
+			IF (CARDINALITY(rCurrentAction.TimeStamp[])>0) AND (rCurrentAction.TimeStamp<>'') THEN
+				SET rHistoryEntry.TimeStamp  = rCurrentAction.TimeStamp;
+			ELSE
+				SET rHistoryEntry.TimeStamp  = DnqUtil_GetCurrentWbifnTimestamp();
+			END IF;
+			SET rHistoryEntry.Function		 = rCurrentAction.Function;
+			SET rHistoryEntry.FunctionResult = 'Ok';
+				
+		END IF;
+		
+	    -- check for copy indicator in message history
+	    DECLARE bIsCopy     BOOLEAN FALSE;
+	    DECLARE bIsOriginal BOOLEAN FALSE;
+	    DECLARE bIsPureCopy BOOLEAN FALSE;
+	    CALL ComIbmDnqErQueueOutput_CheckCopy(rInputRoot, rDnqInput.LastHistoryEntryTS, bIsCopy, bIsOriginal, bIsPureCopy);
+   	    
+   	    -- copy is not stored in DB
+   	    IF (NOT bIsCopy) THEN
+			
+			IF (bIsOriginal) THEN
+				-- original must be deleted later as its needed for processing the copied message
+				-- need to retrive Workfolder
+				DECLARE chStmt CHAR;
+				SET chStmt = 'SELECT QUEUE, QUEUETYPE, ROUTINGREQ, EXTERNALID, COMIBMDNI FROM ' || chSchema || '.DNQE_MESSAGES WHERE ID = ?';
+				SET rTrace.Workfolder.chStmt = chStmt;
+				SET rTrace.Workfolder.Id = rDnqInput.NewId;
+		 		SET rDnqOutput.Workfolder[] = PASSTHRU( chStmt, rDnqInput.NewId );
+		 		IF CARDINALITY( rDnqOutput.Workfolder.COMIBMDNI[] ) < 1 OR rDnqOutput.Workfolder.COMIBMDNI = '' THEN
+				    -- error	
+		  	      THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1101 VALUES( rDnqInput.NewId, 'DNQK1101E' );		  
+				END IF;
+        		CREATE LASTCHILD OF Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput NAME 'DBAction' VALUE 'deferedDelete';
+			ELSE
+        		CREATE LASTCHILD OF Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput NAME 'DBAction' VALUE 'Yes';
+				-- delete message
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_MESSAGES    WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIFIN   WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIFUNDS WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIENI   WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_MSGDESC     WHERE MSGID = ?', rDnqInput.NewId );
+			END IF;
+		
+   	    ELSEIF ((bIsPureCopy) AND (Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput.DBAction[1] = 'deferedDelete')) THEN
+		        CREATE LASTCHILD OF Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput NAME 'DBAction' VALUE 'Yes';
+				-- delete message
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_MESSAGES    WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIFIN   WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIFUNDS WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_ME_DNIENI   WHERE ID = ?', rDnqInput.NewId );
+				PASSTHRU( 'DELETE FROM ' || chSchema || '.DNQE_MSGDESC     WHERE MSGID = ?', rDnqInput.NewId );
+   	    END IF;
+                                                                 -- begin @P06A		
+		-- add DnqMwhUpdateInsert request
+		SET OutputLocalEnvironment.ComIbmDni.Function.DnqMwhInsertUpdate.UpdateInsert.Request.ExtensionId = 'ComIbmDnqER';
+                                                                   -- end @P06A		
+		RETURN TRUE;
+	END;

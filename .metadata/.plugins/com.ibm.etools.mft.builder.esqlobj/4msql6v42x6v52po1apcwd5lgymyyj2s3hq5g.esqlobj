@@ -1,0 +1,14 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		IF Root.XMLNSC.Employee.name='Gnaneswar' Then
+			RETURN TRUE;
+		ELSEIF Root.XMLNSC.Employee.name='Hari' Then
+			RETURN FALSE;
+			
+			ELSE
+			RETURN UNKNOWN;
+		END IF;
+			
+	END;
+

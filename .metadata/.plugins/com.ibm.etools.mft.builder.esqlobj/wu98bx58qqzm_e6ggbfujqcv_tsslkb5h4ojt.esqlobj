@@ -1,0 +1,9 @@
+CREATE COMPUTE MODULE ComIbmDnqErFinInput_DelEvtReq
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		DELETE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store;
+		RETURN TRUE;
+	END;
+
+END MODULE;

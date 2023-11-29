@@ -1,0 +1,12 @@
+CREATE COMPUTE MODULE ComIbmDnqErQueueOutput_PrepareDelete
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+
+      SET OutputRoot = InputRoot;
+      
+      CREATE LASTCHILD OF Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput NAME 'DBAction' VALUE 'Yes';
+      
+	  RETURN TRUE;
+	END;
+
+END MODULE;

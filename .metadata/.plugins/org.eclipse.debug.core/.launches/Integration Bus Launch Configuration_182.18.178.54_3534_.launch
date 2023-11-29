@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?><launchConfiguration type="com.ibm.etools.mft.debug.internal.mbLaunchConfigurationDelegate">
+<stringAttribute key="BRName" value="Q1P2BRK"/>
+<stringAttribute key="ConnectionInfo" value="182.18.178.54:4414"/>
+<stringAttribute key="EGName" value="IIBDEV4_EG"/>
+<stringAttribute key="com.ibm.etools.mft.debug.attr_hostname" value="182.18.178.54"/>
+<stringAttribute key="com.ibm.etools.mft.debug.attr_javaportname" value="3534"/>
+</launchConfiguration>

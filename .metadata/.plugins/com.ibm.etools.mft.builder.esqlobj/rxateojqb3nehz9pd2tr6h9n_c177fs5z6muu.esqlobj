@@ -1,0 +1,10 @@
+CREATE COMPUTE MODULE ComIbmDnqErMsifInput_SetNodeType -- @P01A
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		-- Unfortunately, constant ComIbmDnqErCommon.chAdapterMsif cannot be used here
+		-- because broker schema level constants can only be used within the same broker schema.
+		SET Environment.Variables.ComIbmDni.Dnq.NodeType = 'Msif';
+		RETURN TRUE;
+	END;
+END MODULE;

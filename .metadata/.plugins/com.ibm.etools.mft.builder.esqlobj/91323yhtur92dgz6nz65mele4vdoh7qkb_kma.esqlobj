@@ -1,0 +1,62 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+
+    DECLARE dni  REFERENCE TO InputRoot;
+    DECLARE prop REFERENCE TO InputRoot;
+
+    IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+      MOVE dni  TO InputLocalEnvironment.ComIbmDni;
+      MOVE prop TO Environment.ComIbmDni.Properties.Common;      
+    ELSE
+      MOVE dni  TO InputRoot.MQRFH2.ComIbmDni;
+      MOVE prop TO dni.Properties.Common;
+    END IF;
+
+    DECLARE evt REFERENCE TO dni.Function.DniEvent.Store.Request;
+    DECLARE ref REFERENCE TO OutputRoot;
+
+    -- Create the topic tree.
+
+    DECLARE chTopic CHAR;
+    
+    SET chTopic =           UPPER(SUBSTRING(evt.EventId FROM 1 FOR 3))
+                  || '/' || evt.OU
+                  || '/' || COALESCE(evt.Service      , 'DNI_UNKNOWN')
+                  || '/' || COALESCE(evt.ComponentName, 'DNI_UNKNOWN')
+                  || '/' || COALESCE(evt.SystemId     , 'DNI_UNKNOWN')
+                  || '/' || UPPER(evt.EventId);
+
+    -- Create the WBI-MB Publish message.
+
+    SET OutputRoot.MQMD         = InputRoot.MQMD;
+    SET OutputRoot.MQMD.User    = prop.BrokerUID;
+    SET OutputRoot.MQMD.MsgType = MQMT_DATAGRAM;
+
+    CREATE NEXTSIBLING OF OutputRoot.MQMD DOMAIN 'MQRFH2' NAME 'MQRFH2';
+
+    CREATE FIELD OutputRoot.MQRFH2.psc AS ref;
+
+    SET ref.Command = 'Publish';
+    SET ref.Topic   =  chTopic;
+
+    CREATE FIELD OutputRoot.MQRFH2.ComIbmDni AS ref;
+
+    SET ref.Version = InputRoot.MQRFH2.ComIbmDni.Version;
+    SET ref.OU      = InputRoot.MQRFH2.ComIbmDni.OU;
+
+    CREATE FIELD ref.Function.DniEvent.Store.Request AS ref;
+
+    SET ref.(NameValue)MPU = FIELDVALUE(evt.EventId);
+
+    FOR element AS evt.*[] DO
+
+      IF (FIELDTYPE(element) <> Value) THEN
+        SET ref.{FIELDNAME(element)} = FIELDVALUE(element);
+        FOR attr AS element.(NameValue)*[] DO
+          SET ref.{FIELDNAME(element)}.(NameValue){FIELDNAME(attr)} = FIELDVALUE(attr);
+        END FOR;
+      END IF;
+
+    END FOR; -- element AS evt.*[]
+
+  END; -- main()
+  

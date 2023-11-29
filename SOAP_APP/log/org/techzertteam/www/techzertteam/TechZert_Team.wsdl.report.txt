@@ -1,0 +1,22 @@
+
+
+Importing file: C:\Users\hari\IBM\IIBT10\workspace\SOAP_APP\TechZert_Team.wsdl
+
+The WSDL import will proceed with bindings TechZert_TeamSOAP.
+Creating wsdl schema document for file:///C:/Users/hari/IBM/IIBT10/workspace/SOAP_APP/TechZert_Team.wsdl.
+Parsing wsdl binding {http://www.TechZert_Team.org/TechZert_Team/}TechZert_TeamSOAP.
+Parsing wsdl binding input Employee_Details.
+Parsing wsdl binding output Employee_Details.
+Processing doc style for operation Employee_Details.
+Populating WSDL schema TechZert_Team.xsd.
+Creating file TechZert_Team.xsd in the workspace.
+Creating file TechZert_Team_InlineSchema1.xsd in the workspace.
+Copying source WSDL TechZert_Team.wsdl to TechZert_Team.wsdl.
+
+Elapsed time processing this message definition file: 0.39 seconds
+Number of warnings for this message definition file: 0
+
+
+Number of files processed: 1
+
+

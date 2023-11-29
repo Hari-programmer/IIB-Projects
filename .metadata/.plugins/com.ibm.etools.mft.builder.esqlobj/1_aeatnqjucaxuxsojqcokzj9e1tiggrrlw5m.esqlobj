@@ -1,0 +1,255 @@
+CREATE COMPUTE MODULE "ComIbmDniMwhInsert_CheckMessage"
+CREATE FUNCTION main() RETURNS BOOLEAN BEGIN
+SET OutputRoot = InputRoot;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+SET OutputLocalEnvironment = InputLocalEnvironment;
+
+-- Check availability of mandatory parameters and valid values, if applicable.
+--   - DB schema name
+--   - DB table name
+--   - Name of organizational unit owning message
+--   - Warehouse request folder (+ validity of structure and content)
+--   - Status info for message warehouse entry
+--
+-- Check optional parameters for valid values. Default value in < >.
+--   - InsertMode   : <MODE1>, MODE2
+--   - Message      : <COMPLETE>, NONE, BODY
+--   - HeaderFields : <ALL>, NONE
+--   - MessageFields: ALL, <NONE>
+--   - PDIndicator  : TRUE, FALSE
+--
+-- If the optional group Adjunct is available, check mandatory parameters.
+--   - Name of adjunct
+--   - DB table name for adjunct table
+
+
+DECLARE chFunction CHARACTER;
+SET chFunction = 'DniMwhInsert';
+DECLARE chPath     CHARACTER;
+
+-- Schema and table name for base table available?
+
+DECLARE chSchemaName CHARACTER;
+DECLARE chTableName  CHARACTER;
+
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  SET chPath     = 'Environment.ComIbmDni.Properties.' || InputRoot.MQRFH2.ComIbmDni.OU;
+  SET chSchemaName = Environment.ComIbmDni.Properties.{InputRoot.MQRFH2.ComIbmDni.OU}.DniMessageWarehouse.*[1].DniSchemaMwh;
+  SET chTableName = Environment.ComIbmDni.Properties.{InputRoot.MQRFH2.ComIbmDni.OU}.DniMessageWarehouse.*[1].DniTableMwh;
+ELSE
+  SET chPath     = 'MQRFH2.ComIbmDni.Properties.OU';
+  DECLARE refConfigObj REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Properties.OU.ConfigObjectList.ConfigObject[1];
+
+  WHILE LASTMOVE(refConfigObj) AND (chSchemaName IS NULL OR chTableName IS NULL)
+  DO
+     IF refConfigObj.Type = 'DniMessageWarehouse' THEN
+        DECLARE refAttr REFERENCE TO refConfigObj.AttributeList.Attribute[1];
+        WHILE LASTMOVE(refAttr) AND (chSchemaName IS NULL OR chTableName IS NULL)
+        DO
+           IF refAttr.Name = 'DniSchemaMwh' THEN
+              SET chSchemaName = refAttr.Value;
+           ELSE
+              IF refAttr.Name = 'DniTableMwh' THEN
+                 SET chTableName = refAttr.Value;
+              END IF;
+           END IF;
+           MOVE refAttr NEXTSIBLING;
+        END WHILE;
+     END IF;
+     MOVE refConfigObj NEXTSIBLING;
+  END WHILE;
+END IF;
+
+IF chSchemaName IS NULL  OR  LENGTH(TRIM(chSchemaName)) = 0 THEN
+   THROW USER EXCEPTION CATALOG 'dniccmsg'
+                        MESSAGE 7501
+                        VALUES( chFunction, chPath || '.DniSchemaMwh', '$eventId', 'DNIW7501E' );
+END IF;
+IF chTableName IS NULL  OR  LENGTH(TRIM(chTableName)) = 0 THEN
+   THROW USER EXCEPTION CATALOG 'dniccmsg'
+                        MESSAGE 7501
+                        VALUES( chFunction, chPath || '.DniTableMwh', '$eventId', 'DNIW7501E' );
+END IF;
+
+-- Store full qualified table name in fixed location for use in succeeding nodes.
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  SET OutputLocalEnvironment.ComIbmDni.Function.DniWarehouse.FullTableName = chSchemaName || '.' || chTableName;
+ELSE
+  SET OutputRoot.MQRFH2.ComIbmDni.Function.DniWarehouse.FullTableName = chSchemaName || '.' || chTableName;
+END IF;
+
+-- Name of originating organizational unit available?
+DECLARE refComIbmDni REFERENCE TO InputRoot.MQRFH2.ComIbmDni;
+IF refComIbmDni.OU IS NULL  OR  LENGTH(TRIM(refComIbmDni.OU)) = 0 THEN
+   THROW USER EXCEPTION CATALOG 'dniccmsg'
+                        MESSAGE 7501
+                        VALUES( chFunction, 'MQRFH2.ComIbmDni.OU', '$eventId', 'DNIW7501E' );
+END IF;
+
+-- Message status available?
+DECLARE refRequest REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Function.DniWarehouse.Insert.Request;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refRequest TO InputLocalEnvironment.ComIbmDni.Function.DniWarehouse.Insert.Request;
+END IF;
+
+IF refRequest.Status IS NULL THEN
+   THROW USER EXCEPTION CATALOG 'dniccmsg'
+                        MESSAGE 7601
+                        VALUES( chFunction, 'ComIbmDni.Function.DniWarehouse.Insert.Request.Status', '$eventId', 'DNIW7601E' );
+END IF;
+
+
+-- Optional element InsertMode available?
+DECLARE chInsertMode CHARACTER; SET chInsertMode = UPPER(refRequest.InsertMode);
+DECLARE pOutFunction REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE pOutFunction TO OutputLocalEnvironment.ComIbmDni.Function;
+END IF;
+
+IF chInsertMode IS NOT NULL THEN
+   IF chInsertMode NOT IN ('MODE1', 'MODE2') THEN
+      THROW USER EXCEPTION CATALOG 'dniccmsg'
+                           MESSAGE 7602
+                           VALUES( chFunction, chInsertMode, 'ComIbmDni.Function.DniWarehouse.Insert.Request.InsertMode', '$eventId', 'DNIW7602E' );
+   END IF;
+ELSE
+   -- Set default behaviour in case that element is not available.
+   SET pOutFunction.DniWarehouse.Insert.Request.InsertMode = 'MODE1';
+
+END IF;
+
+
+-- Optional element Message available?
+DECLARE chMessage CHARACTER; SET chMessage = UPPER(refRequest.Message);
+IF chMessage IS NOT NULL THEN
+   IF chMessage NOT IN ('COMPLETE', 'NONE', 'BODY') THEN
+      THROW USER EXCEPTION CATALOG 'dniccmsg'
+                           MESSAGE 7602
+                           VALUES( chFunction, chMessage, 'ComIbmDni.Function.DniWarehouse.Insert.Request.Message', '$eventId', 'DNIW7602E' );
+   END IF;
+ELSE
+   -- Set default behaviour in case that element is not available.
+   SET pOutFunction.DniWarehouse.Insert.Request.Message = 'COMPLETE';
+END IF;
+
+
+-- Optional element HeaderFields available?
+DECLARE chHeaderFields CHARACTER; SET chHeaderFields = UPPER(refRequest.HeaderFields);
+IF chHeaderFields IS NOT NULL THEN
+   IF chHeaderFields NOT IN ('ALL', 'NONE') THEN
+      THROW USER EXCEPTION CATALOG 'dniccmsg'
+                           MESSAGE 7602
+                           VALUES( chFunction, chHeaderFields, 'ComIbmDni.Function.DniWarehouse.Insert.Request.HeaderFields', '$eventId', 'DNIW7602E' );
+   END IF;
+ELSE
+   -- Set default behaviour in case that element is not available.
+   SET pOutFunction.DniWarehouse.Insert.Request.HeaderFields = 'ALL';
+END IF;
+
+
+-- Optional element MessageFields available?
+DECLARE chMessageFields CHARACTER; SET chMessageFields = UPPER(refRequest.MessageFields);
+IF chMessageFields IS NOT NULL THEN
+   IF chMessageFields NOT IN ('ALL', 'NONE') THEN
+      THROW USER EXCEPTION CATALOG 'dniccmsg'
+                           MESSAGE 7602
+                           VALUES( chFunction, chMessageFields, 'ComIbmDni.Function.DniWarehouse.Insert.Request.MessageFields', '$eventId', 'DNIW7602E' );
+   END IF;
+ELSE
+   -- Set default behaviour in case that element is not available.
+   SET pOutFunction.DniWarehouse.Insert.Request.MessageFields = 'NONE';
+END IF;
+
+-- Optional element PDIndicator available?
+DECLARE chPDIndicator CHARACTER; SET chPDIndicator = refRequest.MessageField.PDIndicator;
+IF chPDIndicator IS NOT NULL THEN
+   IF UPPER(chPDIndicator) NOT IN ('TRUE', 'FALSE') THEN
+      THROW USER EXCEPTION CATALOG 'dniccmsg'
+                           MESSAGE 7602
+                           VALUES( chFunction, chPDIndicator, 'ComIbmDni.Function.DniWarehouse.Insert.Request.MessageField.PDIndicator', '$eventId', 'DNIW7602E' );
+   END IF;
+END IF;
+
+                                                                                  /* begin @P01A */
+-- Optional group Adjunct available?
+DECLARE refAdjunct REFERENCE TO refRequest.Adjunct[>]; --@P13C
+                                                                 -- begin @P13A
+DECLARE refRequestOut REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DniWarehouse.Insert.Request;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refRequestOut TO OutputLocalEnvironment.ComIbmDni.Function.DniWarehouse.Insert.Request;
+END IF;
+DECLARE refAdjunctOut REFERENCE TO refRequestOut.Adjunct[>];
+                                                                   -- end @P13A
+WHILE LASTMOVE(refAdjunct) DO --@P13C
+
+   DECLARE chAdjunctTableName       CHARACTER;
+
+   -- Element Name available?
+   DECLARE chName CHARACTER; SET chName = refAdjunct.Name;
+   IF chName IS NULL THEN
+      THROW USER EXCEPTION CATALOG 'dniccmsg'
+                           MESSAGE 7601
+                           VALUES( chFunction, 'ComIbmDni.Function.DniWarehouse.Insert.Request.Adjunct.Name', '$eventId', 'DNIW7601E' );
+   END IF;
+
+   -- Schema and table name for adjunct table available?
+   IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+   THEN
+      SET chPath = 'Environment.ComIbmDni.Properties.' || InputRoot.MQRFH2.ComIbmDni.OU;
+      SET chAdjunctTableName  = Environment.ComIbmDni.Properties.{InputRoot.MQRFH2.ComIbmDni.OU}.DniMessageWarehouseAdjunct.{chName}.DniTableMwh;
+   ELSE
+      SET chPath     = 'MQRFH2.ComIbmDni.Properties.OU';
+      DECLARE refConfigObj REFERENCE TO InputRoot.MQRFH2.ComIbmDni.Properties.OU.ConfigObjectList.ConfigObject[1];
+
+      WHILE LASTMOVE(refConfigObj) AND chAdjunctTableName IS NULL
+      DO
+         IF refConfigObj.Type = 'DniMessageWarehouseAdjunct' AND refConfigObj.Name = chName THEN
+            DECLARE refAttr REFERENCE TO refConfigObj.AttributeList.Attribute[1];
+            WHILE LASTMOVE(refAttr) AND chAdjunctTableName IS NULL
+            DO
+               IF refAttr.Name = 'DniTableMwh' THEN
+                  SET chAdjunctTableName = refAttr.Value;
+               END IF;
+               MOVE refAttr NEXTSIBLING;
+            END WHILE;
+         END IF;
+         MOVE refConfigObj NEXTSIBLING;
+      END WHILE;
+   END IF;
+
+   IF chAdjunctTableName IS NULL OR LENGTH(TRIM(chAdjunctTableName)) = 0 THEN
+      THROW USER EXCEPTION CATALOG 'dniccmsg'
+                           MESSAGE 7501
+                           VALUES( chFunction, chPath || '.DniTableMwh', '$eventId', 'DNIW7501E' );
+   END IF;
+
+   -- Store full qualified adjunct table name in relative location for use in succeeding nodes.
+   SET refAdjunctOut.FullAdjunctTableName = chSchemaName || '.' || chAdjunctTableName; --@P13A
+                                                                 /* begin @P13D
+   -- Store full qualified table name in fixed location for use in succeeding nodes.
+   IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+   THEN
+      SET OutputLocalEnvironment.ComIbmDni.Function.DniWarehouse.FullAdjunctTableName = chSchemaName || '.' || chAdjunctTableName;
+   ELSE
+      SET OutputRoot.MQRFH2.ComIbmDni.Function.DniWarehouse.FullAdjunctTableName = chSchemaName || '.' || chAdjunctTableName;
+   END IF;
+*/                                                                 -- end @P13D
+    MOVE refAdjunct    NEXTSIBLING NAME 'Adjunct'; --@P13A
+    MOVE refAdjunctOut NEXTSIBLING NAME 'Adjunct'; --@P13A
+END WHILE;                                                                    /* end @P01A @P13C */
+
+
+/* Remove possible UnknownParserName entry inserted by the MQInput node */
+IF OutputRoot.BLOB.UnknownParserName IS NOT NULL THEN
+   SET OutputRoot.BLOB.UnknownParserName = NULL;
+END IF;
+
+RETURN true;
+END;
+
+END MODULE;

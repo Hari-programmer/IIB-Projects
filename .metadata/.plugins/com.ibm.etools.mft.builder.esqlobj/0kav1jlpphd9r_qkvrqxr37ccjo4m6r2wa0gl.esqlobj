@@ -1,0 +1,50 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+SET OutputRoot = InputRoot;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+
+/*-----------------------------------------------------------------------------------------------------------*\
+  This node checks if the incoming message is an DniCancelTimer request message. If no request was found,
+  an Denali exception will be thrown.  
+  Further, this node checks if the incoming DniCancelTimer request message does already has 
+  an response section. If an response exists, this section will be removed from the message.
+\*-----------------------------------------------------------------------------------------------------------*/
+
+DECLARE refDni REFERENCE TO InputRoot.MQRFH2[<].ComIbmDni;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  MOVE refDni TO InputLocalEnvironment.ComIbmDni;
+END IF;
+
+-- Check, if message is a timer cancel message --------------------------------------------------------------
+IF (CARDINALITY(refDni.Function.DniTimer[]) = 0) THEN 
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6001 VALUES('DNIT6001E'); 
+END IF;
+
+-- Check if timer cancel request message is complete --------------------------------------------------------
+IF (CARDINALITY(refDni.Function.DniTimer.Cancel.Request[]) = 0) THEN 
+  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 6050 VALUES('DNIT6051E'); 
+END IF;
+
+-- Check for the response section, if present, remove it  ---------------------------------------------------
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+  IF (CARDINALITY(OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response[]) > 0) THEN
+    SET OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response = NULL;
+  END IF;
+ELSE
+  IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+  THEN
+    IF (CARDINALITY(OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response[]) > 0) THEN
+      SET OutputLocalEnvironment.ComIbmDni.Function.DniTimer.Cancel.Response = NULL;
+    END IF;  
+  ELSE
+    IF (CARDINALITY(OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Response[]) > 0) THEN
+      SET OutputRoot.MQRFH2[<].ComIbmDni.Function.DniTimer.Cancel.Response = NULL;
+    END IF;  
+  END IF;
+END IF;  
+
+
+RETURN true;
+END;
+

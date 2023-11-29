@@ -1,0 +1,200 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+/* =============================================================================
+ * Following processing is done:
+ * 1. Get last exception in WMQI exception list
+ * 2. If this exception is a WBI for FN exception, then simply re-throw the exception
+ * 3. Otherwise:
+ *    a. Wrap the exception in a WBI for FN exception DNIX2110E
+ *    b. Throw WBI for FN exception DNIX2110E, i.e.:
+ *       WebSphere MQI error '%0' in WriteToDatabase node of subflow DniMessageAudit;
+ *       parameters: '%1', '%2', '%3', '%4', '%5', '%6', '%7', '%8', '%9'
+ * =============================================================================
+ * FLAG REASON  RLSE DATE   ORIGIN COMMENT                                    
+ * ---- ------- ---- ------ ------ ---------------------------------------------
+ * @Ann PQnnnnn 110  YYMMDD uid    ...
+ * ============================================================================= */
+DECLARE pRef                     REFERENCE TO InputExceptionList.*[1];
+DECLARE pVar                     REFERENCE TO InputLocalEnvironment.Variables;
+DECLARE fBreak                   BOOLEAN; SET fBreak = FALSE;
+DECLARE iCountInsert             INTEGER;
+DECLARE chThrowStmt              CHAR;
+DECLARE iLoop                    INTEGER;
+DECLARE iLength                  INTEGER;
+DECLARE iPos                     INTEGER;
+DECLARE chParameter              CHAR;
+DECLARE fSuppressConversionError BOOLEAN FALSE;
+
+/*--------------------------------*\
+|  get last exception in the list  |
+\*--------------------------------*/
+WHILE (LASTMOVE(pRef) = TRUE AND fBreak = FALSE) DO
+  /* check if pRef still refers to an exception */
+  IF (pRef.Number IS NOT NULL) THEN
+    MOVE pRef LASTCHILD; /* jump to next exception in the list */
+  ELSE
+    MOVE pRef PARENT;    /* jump to last exception */
+    SET fBreak = TRUE;   /* break the loop         */
+  END IF;
+END WHILE; /* end looping exception list */
+
+/*----------------------------------------------*\
+|  check whether to suppress conversion errors  |
+\*----------------------------------------------*/
+IF (LASTMOVE(pVar) AND UPPER(pVar.ComIbmDni.SuppressConversionError) = 'YES') THEN
+  DECLARE fIsMbException BOOLEAN FIELDNAME(pRef) <> 'UserException';
+  IF (fIsMbException AND (pRef.Number BETWEEN 2130 AND 2136)) THEN
+    SET Environment.ComIbmDni.ErrorIndicator = TRUE;
+    SET fSuppressConversionError = TRUE;
+  END IF;
+END IF;
+
+/*-----------------------------------------*\
+|  if requested, suppress conversion error  |
+\*-----------------------------------------*/
+IF (fSuppressConversionError) THEN
+
+  SET OutputLocalEnvironment = InputLocalEnvironment;
+  SET OutputRoot = InputRoot;
+
+  DECLARE dni  REFERENCE TO OutputRoot;
+  DECLARE prop REFERENCE TO OutputRoot;
+
+  IF (Environment.ComIbmDni.ConfigDataLoc = 'env') THEN
+    MOVE dni  TO OutputLocalEnvironment.ComIbmDni;
+    MOVE prop TO Environment.ComIbmDni.Properties.Common;      
+  ELSE
+    MOVE dni  TO OutputRoot.MQRFH2.ComIbmDni;
+    MOVE prop TO dni.Properties.Common;
+  END IF;
+
+  DECLARE evt REFERENCE TO dni;
+  CREATE FIELD dni.Function.DniEvent.Store.Request AS evt;
+
+  DECLARE ts CHAR CAST(CURRENT_GMTTIMESTAMP AS CHAR);
+  SET ts = OVERLAY(SUBSTRING(ts FROM 15 FOR 19) PLACING 'T' FROM 11 FOR 1);
+
+  SET evt.TimeStamp = ts;
+  SET evt.TimeStamp.(NameValue)dnidt = 'dateTime';
+
+  SET evt.EventId        = 'DNIX2115E';
+  SET evt.OU             = OutputRoot.MQRFH2.ComIbmDni.OU;
+  SET evt.Service        = prop.Common.Service;
+  SET evt.SystemId       = 'CP_' || prop.Common.QueueManager;
+  SET evt.ComponentName  = 'UNKNOWN';
+  SET evt.MessageFlow    = prop.Common.MessageFlow;
+  SET evt.ExecutionGroup = prop.Common.ExecutionGroup;
+  SET evt.Broker         = prop.Common.Broker;
+  SET evt.MessageGroup   = OutputRoot.MQRFH2.ComIbmDni.MessageGroup;
+
+  DECLARE plist CHAR;
+  FOR p AS pRef.Insert[] DO
+    DECLARE value CHAR RTRIM(p.Text);
+    IF (LENGTH(value) > 256) THEN
+      SET value = SUBSTRING(value FROM 1 FOR 256) || '...';
+    END IF;
+    SET plist = COALESCE(plist || ', ', '') || '''' || value || '''';
+  END FOR;
+
+  SET evt.Parameter1 = 'DniMessageAudit';
+  SET evt.Parameter2 = OutputRoot.MQMD.MsgId;
+  SET evt.Parameter3 = pRef.Number;
+  SET evt.Parameter4 = plist;
+
+  -- Ensure, that the event does never expire
+  SET OutputRoot.MQMD.Expiry = MQEI_UNLIMITED;
+
+ELSEIF (pRef."Catalog" = 'dniccmsg') THEN
+  /*-------------------------------------*\
+  |  exception is a WBI for FN exception  |
+  |  --> simply re-throw the exception    |
+  \*-------------------------------------*/
+  SET chThrowStmt =    'THROW USER EXCEPTION SEVERITY '
+                    ||  CAST (pRef.Severity AS CHAR)
+                    || ' CATALOG '
+                    || '''' || pRef."Catalog" || ''''
+                    || ' MESSAGE '
+                    ||  CAST (pRef.Number AS CHAR);
+  SET iCountInsert = CARDINALITY(pRef."Insert"[]);
+  IF (iCountInsert > 0) THEN
+    /*-------------------*\
+    |  insert parameters  |
+    \*-------------------*/
+    SET chThrowStmt = chThrowStmt || ' VALUES(';
+    SET iLoop = 1;
+    WHILE (iLoop <= iCountInsert) DO
+      IF (iLoop > 1) THEN
+        SET chThrowStmt = chThrowStmt || ', ';
+      END IF;
+      SET chParameter = CAST (pRef."Insert"[iLoop].Text AS CHAR);
+      /*------------------------------------------------------------------*\
+      |  add escape character ' before single quotes ' because             |
+      |  otherwise they are interpreted as end of the string chThrowStmt!  |
+      \*------------------------------------------------------------------*/
+      SET iLength = LENGTH(chParameter);
+      SET iPos = 1;
+      WHILE (iPos <= iLength) DO
+        IF ( SUBSTRING(chParameter FROM iPos FOR 1) = '''' ) THEN
+          /* the vast quantity of single quotes is confusing, but required ... */
+          SET chParameter = OVERLAY(chParameter PLACING '''''' FROM iPos FOR 1);
+          /* caution: inserting a new character has impact on iPos as well as on iLength! */
+          SET iPos = iPos + 1;
+          SET iLength = LENGTH(chParameter);
+        END IF;
+        SET iPos = iPos + 1;
+      END WHILE; /* end checking for single quotes in current parameter */
+      SET chThrowStmt = chThrowStmt || '''' || chParameter || '''';
+      SET iLoop = iLoop + 1;
+    END WHILE;                             /* end looping "Insert" elements   */
+    SET chThrowStmt = chThrowStmt || ')';  /* end of VALUES() clause          */
+  END IF;                                  /* any "Insert" element available? */
+  /*------------------------------*\
+  |  finally, throw the exception  |
+  \*------------------------------*/
+  EVAL(chThrowStmt || ';');
+ELSE
+  /*--------------------------------------------*\
+  |  exception is no (!) WBI for FN exception    |
+  |  --> prepare WBI for FN exception DNIX2110E  |
+  \*--------------------------------------------*/
+  SET chThrowStmt  = 'THROW USER EXCEPTION SEVERITY 3 CATALOG ''dniccmsg''
+                        MESSAGE 2110 VALUES(' || CAST(pRef.Number AS CHAR);
+  SET iCountInsert = CARDINALITY(pRef."Insert"[]);
+  IF (iCountInsert > 0) THEN
+    /*-------------------*\
+    |  insert parameters  |
+    \*-------------------*/
+    SET iLoop = 1;
+    WHILE (    iLoop <= iCountInsert
+           AND iLoop <  10) DO /* Note that error message DNIX2110E can only provide 9 parameters */
+      SET chThrowStmt = chThrowStmt || ', ';
+      SET chParameter = CAST (pRef."Insert"[iLoop].Text AS CHAR);
+      /*------------------------------------------------------------------*\
+      |  add escape character ' before single quotes ' because             |
+      |  otherwise they are interpreted as end of the string chThrowStmt!  |
+      \*------------------------------------------------------------------*/
+      SET iLength = LENGTH(chParameter);
+      SET iPos = 1;
+      WHILE (iPos <= iLength) DO
+        IF ( SUBSTRING(chParameter FROM iPos FOR 1) = '''' ) THEN
+          /* the vast quantity of single quotes is confusing, but required ... */
+          SET chParameter = OVERLAY(chParameter PLACING '''''' FROM iPos FOR 1);
+          /* caution: inserting a new character has impact on iPos as well as on iLength! */
+          SET iPos = iPos + 1;
+          SET iLength = LENGTH(chParameter);
+        END IF;
+        SET iPos = iPos + 1;
+      END WHILE; /* end checking for single quotes in current parameter */
+      SET chThrowStmt = chThrowStmt || '''' || chParameter || '''';
+      SET iLoop = iLoop + 1;
+    END WHILE;                                          /* end looping "Insert" elements   */
+  END IF;                                               /* any "Insert" element available? */
+  SET chThrowStmt = chThrowStmt || ', ''DNIX2110E'')';  /* end of VALUES() clause          */
+  /*-------------------------*\
+  |  throw the exception now  |
+  \*-------------------------*/
+  EVAL(chThrowStmt || ';');
+END IF; /* exception is a WBI for FN exception? */
+/* ----- This line is only required to force the ESQL editor to display the last line of code ----- */
+RETURN true;
+END;
+

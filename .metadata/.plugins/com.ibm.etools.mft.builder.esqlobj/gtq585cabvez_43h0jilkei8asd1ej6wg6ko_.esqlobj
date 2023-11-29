@@ -1,0 +1,9 @@
+CREATE FILTER MODULE ComIbmDnqErQueueInput_BackoutMsg
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+  	  RETURN( Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.PreviousId IS NOT NULL AND
+		      CAST( Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.PreviousId AS INTEGER ) > 0
+ 		    );
+	END;
+
+END MODULE;

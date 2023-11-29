@@ -1,0 +1,12 @@
+
+
+Importing file: C:\Users\hari\AppData\Local\IBM\IIBT10-config\10.0.0.21\configuration\org.eclipse.osgi\381\0\.cp\ibm\soap\soap.xsd
+
+
+Elapsed time processing this message definition file: 0.176 seconds
+Number of warnings for this message definition file: 0
+
+
+Number of files processed: 1
+
+

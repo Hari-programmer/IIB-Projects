@@ -1,0 +1,56 @@
+CREATE PROCEDURE ComIbmDnqMwhUpdateInsert_CreateMwhRequestMinimum(IN rInputRoot REFERENCE, INOUT rEnvironment REFERENCE, INOUT rOutputLocalEnvironment REFERENCE, IN bUpdateMsg BOOLEAN) --@P02C
+BEGIN
+	DECLARE rEnv                 REFERENCE TO rEnvironment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+	DECLARE chStatus             CHAR rEnv."chStatus";
+                                                                 -- begin @P14A
+	DECLARE rElementCheck        REFERENCE TO rEnvironment;
+	DECLARE rTimestampCheck      REFERENCE TO rEnvironment;
+	DECLARE rDnq                 REFERENCE TO rEnvironment."ComIbmDni"."Dnq";
+	DECLARE rDnqProps            REFERENCE TO rEnvironment."ComIbmDni"."Dnq"."Properties";
+	DECLARE chOu                 CHAR rInputRoot.MQRFH2.ComIbmDni.OU;
+	DECLARE chMwhContent         CHAR '';
+	DECLARE chContent            CHAR ''; --@P25C
+
+	-- code parts moved to following function call
+	SET chContent = ComIbmDnqMwhUpdateInsert_GetContentFlag(chOu, rEnvironment); --@P25A
+	SET rEnv."chContent" = chContent;
+		
+	/* create warehouse request */
+	DECLARE refRequest REFERENCE TO rInputRoot; --dummy initialization
+	CREATE FIELD rOutputLocalEnvironment."ComIbmDni"."Function"."DniWarehouse".{ComIbmDnqMwhUpdateInsert_GetRequestPath(bUpdateMsg)}."Request" AS refRequest;
+	
+	DECLARE chFieldHandling CHAR 'All'; -- @P31 browser print
+
+	SET refRequest."Status" = chStatus;
+	IF bUpdateMsg THEN
+		SET refRequest."UpdateMode" = 'Mode3';
+		SET chFieldHandling = 'Defined'; -- @P31 browser print
+	ELSE
+		SET refRequest."InsertMode" = 'Mode2';
+	END IF;
+	SET refRequest."Message"       = chContent;
+	SET refRequest."HeaderFields"  = chFieldHandling; -- @P31 browser print
+	SET refRequest."MessageFields" = chFieldHandling; -- @P31 browser print
+
+	MOVE rElementCheck TO rInputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain";
+	IF LASTMOVE(rElementCheck) THEN
+	    SET refRequest."MessageField"."MsgDomain" = rInputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Domain";
+		SET refRequest."MessageField"."MsgDomain".(NameValue)max = '16';
+	END IF;
+    MOVE rElementCheck TO rEnv."chDestination";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    SET refRequest."MessageField"."RoutDest" = rEnv."chDestination";
+		SET refRequest."MessageField"."RoutDest".(NameValue)max = '30';
+    END IF;
+    MOVE rElementCheck TO rInputRoot.MQRFH2."ComIbmDni"."ParentMessageId";
+    IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+	    SET refRequest."MessageField"."ParentMsgId" = rElementCheck;
+    END IF;
+    MOVE rElementCheck TO rDnq."ER"."CurrentAction"."Printed";
+    MOVE rTimestampCheck TO rDnq."ER"."CurrentAction"."TimeStamp";
+    IF LASTMOVE(rElementCheck) AND UPPER(rElementCheck) = 'TRUE' AND LASTMOVE(rTimestampCheck) AND (LENGTH(rTimestampCheck) > 0) THEN
+	    SET refRequest."MessageField"."ExtensionDefined1" = rDnq."ER"."CurrentAction"."TimeStamp"; -- add browser print timestamp
+    END IF;
+                                                                   -- end @P14A
+	SET rOutputLocalEnvironment."ComIbmDni"."Function"."DniWarehouse".{ComIbmDnqMwhUpdateInsert_GetRequestPath(bUpdateMsg)}."Request"."Status" = chStatus; --@P02C
+END;

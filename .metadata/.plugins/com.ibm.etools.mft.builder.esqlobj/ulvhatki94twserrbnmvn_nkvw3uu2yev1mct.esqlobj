@@ -1,0 +1,61 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		
+		DECLARE rEnvironment           REFERENCE TO Environment;
+		DECLARE	rInputLocalEnvironment REFERENCE TO InputLocalEnvironment;
+		DECLARE rEnv                   REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinInput";
+		DECLARE rElementCheck          REFERENCE TO OutputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."State"; --@P29C
+		DECLARE rConfig                REFERENCE TO Environment."ComIbmDni"."Properties";
+		DECLARE rMqrfh2                REFERENCE TO OutputRoot.MQRFH2[<];
+		DECLARE chLtName               CHAR rEnv."chLtName";
+		DECLARE chRequestOu            CHAR COALESCE(rEnv."chRequestOu", '');
+		DECLARE chLtMapOu              CHAR rConfig."DNFSYSOU"."DnfLTMap".{chLtName}."OU";
+		
+		CALL DnqUtil_CopyScpnToEnv(rInputLocalEnvironment, rEnvironment);
+
+		-- check elements of ComIbmDni
+		IF (LENGTH(chRequestOu) > 0) AND (chRequestOu <> chLtMapOu) THEN
+			-- existing OU in MQRFH2 does not match the configured one from DnfLTMap
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1003
+			VALUES (chLtName, chRequestOu, chLtMapOu, 'DNQO1003E');
+		ELSE
+			SET rMqrfh2."ComIbmDni"."OU" = chLtMapOu;
+		END IF;
+		SET rEnv."chLtMapOu" = chLtMapOu;
+		
+		-- check the existence of a CO of CT DnfLT named like the determined LT
+		IF CARDINALITY(rConfig.{chLtMapOu}."DnfLT".{chLtName}[]) = 0 THEN
+			-- LT not configured in determined OU
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1002
+			VALUES (chLtName, chLtMapOu, 'DNQO1002E');
+		END IF;
+
+		CALL DnqUtil_CreateDefaultElements(rMqrfh2); --@P10A @P21C
+                                                                 /* begin @P10D
+		CALL DnqFinInput_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."Version"', '1.0');
+		CALL DnqFinInput_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."ProtocolVersion"', '3');
+		CALL DnqFinInput_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."AcknowledgmentMode"', 'Merged');
+		CALL DnqFinInput_CreateDefaultElement(rMqrfh2, '"ComIbmDni"."Dnf"."FIN"."ResponseMode"', 'Final');
+*/                                                                 -- end @P10D
+                                                                 -- begin @P29A
+		DECLARE DNQO_MSG_STANDARD_INFO_STATE_PARSE_ERROR CONSTANT CHAR 'ParseError';
+		DECLARE DNQO_MSG_STANDARD_INFO_STATE_TRANSFORMED CONSTANT CHAR 'Transformed';
+		DECLARE DNQO_MSG_STANDARD_INFO_STATE_VALID       CONSTANT CHAR 'Valid';
+		DECLARE bMessageValid BOOLEAN FALSE;
+		DECLARE chOutputTerminal CHAR 'out'; -- equals: invalid
+
+		IF LASTMOVE(rElementCheck) THEN
+			IF (rElementCheck IN (DNQO_MSG_STANDARD_INFO_STATE_VALID, DNQO_MSG_STANDARD_INFO_STATE_TRANSFORMED)) THEN
+				SET chOutputTerminal = 'out1'; -- equals: valid
+			ELSE
+				IF (rElementCheck = DNQO_MSG_STANDARD_INFO_STATE_PARSE_ERROR) THEN
+					SET chOutputTerminal = 'out2'; -- equals: parse error
+				END IF;
+			END IF;
+		END IF;
+		
+		PROPAGATE TO TERMINAL chOutputTerminal;
+                                                                   -- end @P29A
+		RETURN FALSE; --@P29C
+	END;

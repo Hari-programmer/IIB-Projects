@@ -1,0 +1,18 @@
+CREATE COMPUTE MODULE ComIbmDniMwhInsert_HandleDbError
+
+  CREATE FUNCTION Main() RETURNS BOOLEAN BEGIN
+
+    DECLARE err REFERENCE TO InputLocalEnvironment.Variables.DatabaseError;
+
+    DECLARE statement CHAR err.Statement;
+    DECLARE code      INT  err.SqlCode;
+    DECLARE state     CHAR err.SqlState;
+    DECLARE native    INT  err.SqlNative;
+    DECLARE text      CHAR err.SqlText;
+
+    THROW USER EXCEPTION CATALOG 'dniccmsg' MESSAGE 7704 VALUES (
+    'DniMwhInsert', statement, code, state, native, text, '$eventId', 'DNIW7704E');
+
+  END;
+
+END MODULE;

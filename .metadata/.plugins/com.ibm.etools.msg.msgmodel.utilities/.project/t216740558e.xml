@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?><MRMessageSet id="CR5Q3U4002001" name="MRM_PIP" parser="MRM">
+  
+
+
+<MRMsgCollection href="platform:/resource/MRM_PIP/MRM_PIP/PIPSeraprate.mxsd" prefix="" targetNamespace="">
+    <message href="platform:/resource/MRM_PIP/MRM_PIP/PIPSeraprate.mxsd#/0/ELEMENTS;XSDElementDeclaration=1$MRMessage" name="ELEMENTS"/>
+    <element href="platform:/resource/MRM_PIP/MRM_PIP/PIPSeraprate.mxsd#/0/String;XSDElementDeclaration" name="String" type="mset://MRM_PIP#/-/simpleType{http://www.w3.org/2001/XMLSchema}string">
+      <tds messageSetDefaultRep="Text1" tag=""/>
+    </element>
+    <element href="platform:/resource/MRM_PIP/MRM_PIP/PIPSeraprate.mxsd#/0/ELEMENTS;XSDElementDeclaration=1" name="ELEMENTS" type="mset://MRM_PIP#/-/complexType{}ELEMENTS">
+      <tds messageSetDefaultRep="Text1" tag=""/>
+    </element>
+    <complexType baseType="mset://MRM_PIP#/-/complexType{http://www.w3.org/2001/XMLSchema}anyType" href="platform:/resource/MRM_PIP/MRM_PIP/PIPSeraprate.mxsd#/0/ELEMENTS;XSDComplexTypeDefinition" name="ELEMENTS"/>
+  </MRMsgCollection>
+</MRMessageSet>

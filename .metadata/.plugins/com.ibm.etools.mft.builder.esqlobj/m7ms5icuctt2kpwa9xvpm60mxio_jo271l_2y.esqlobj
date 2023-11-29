@@ -1,0 +1,6 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		DECLARE rEnv REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		RETURN rEnv."bPayloadPresent";
+	END;
+

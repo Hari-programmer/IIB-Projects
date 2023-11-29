@@ -1,0 +1,72 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "title" : "Employee_Api",
+    "version" : "1.0.0",
+    "description" : "Employee_Api"
+  },
+  "paths" : {
+    "/GetEmployee_Details" : {
+      "post" : {
+        "operationId" : "postGetEmployee_Details",
+        "responses" : {
+          "200" : {
+            "description" : "Get Employe Details",
+            "schema" : {
+              "$ref" : "#/definitions/Output"
+            }
+          }
+        },
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "description" : "Insert a GetEmployee_Details",
+        "parameters" : [ {
+          "name" : "body",
+          "in" : "body",
+          "schema" : {
+            "type" : "boolean"
+          },
+          "description" : "The request body for the operation",
+          "required" : true
+        } ]
+      }
+    }
+  },
+  "basePath" : "/employee_api/v1",
+  "definitions" : {
+    "Input" : {
+      "type" : "object",
+      "properties" : {
+        "EMP_ID" : {
+          "type" : "integer"
+        }
+      }
+    },
+    "Output" : {
+      "type" : "object",
+      "properties" : {
+        "EMP_ID" : {
+          "type" : "integer"
+        },
+        "EMP_Name" : {
+          "type" : "string"
+        },
+        "EMP_Phn" : {
+          "type" : "integer"
+        },
+        "EMP_Age" : {
+          "type" : "integer"
+        },
+        "EMP_Gender" : {
+          "type" : "string"
+        },
+        "EMP_Location" : {
+          "type" : "string"
+        },
+        "EMP_Mail" : {
+          "type" : "string"
+        }
+      }
+    }
+  }
+}

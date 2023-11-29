@@ -1,0 +1,76 @@
+CREATE FUNCTION ComIbmDnqFinExtractFromMT021_GetNestedMessage(IN chFinMessage CHAR, OUT chReturnMessage CHAR) RETURNS CHAR
+
+/*
+ occurrences:
+  - ComIbmDnqFinExtractFromMT021
+ parameters:
+  - IN chFinMessage CHAR
+    The input message with the potential MT021 APDU
+  - OUT chReturnMessage CHAR
+    '' if there is an error and no message can be extracted from MT021 APDU
+    'nnn' the value of field 421 if there was a retrieval error reported with the MT021 APDU
+    or the nested message from the MT021 APDU
+ returns:
+  '' if there is no error - the message was extracted successfully.
+  'DNQK1127E' - Parsing error during an attempt to extract an MT021 APDU.
+  'DNQK1129E' - Retrieval Error in MT021 APDU.
+*/
+BEGIN
+	DECLARE chErrorMsg      CHAR '';
+	DECLARE chMessageType   CHAR ComIbmDnqFinExtractFromMT021_GetMsgType(chFinMessage);
+	DECLARE iPositionBlk4   INT POSITION( '{4:' IN chFinMessage FROM 3);
+	DECLARE iNestedPosBlk1  INT 0;
+	DECLARE iNestedPosBlk4  INT 0;
+	DECLARE iNestedPos421   INT 0;	
+
+	-- Initialize
+	SET chReturnMessage = '';
+	
+	IF (chMessageType = 'O021') THEN
+		-- Search Block4 in MT021
+		IF (iPositionBlk4 > 0) THEN
+			-- Extract Block4 with nested message (...{4:[return value]}...)
+			SET chReturnMessage = ComIbmDnqFinExtractFromMT021_TrimBlock(SUBSTRING(chFinMessage FROM (iPositionBlk4+3)));
+			
+			-- Find next Block1 in nested message
+			SET iNestedPosBlk1 = POSITION( '{1:' IN chReturnMessage FROM 3);
+			
+			IF (iNestedPosBlk1 > 0 ) THEN
+				SET chReturnMessage = SUBSTRING(chReturnMessage FROM iNestedPosBlk1);
+				
+				-- Find next Block4
+				SET iNestedPosBlk4 = POSITION('{4:' IN chReturnMessage FROM 3);
+				
+				IF (iNestedPosBlk4 > 0 ) THEN
+					-- chReturnMessage is okay, and will be returned
+				ELSE
+					-- If no Block4 is given, find field 421
+					SET iNestedPos421 = POSITION( '{421:' IN chReturnMessage FROM 3);
+					
+					IF (iNestedPos421 > 0) AND (SUBSTRING(chReturnMessage FROM iNestedPos421+8 FOR 1) = '}') THEN
+						-- Nested message contains RTV Error Code in field 421
+						SET chErrorMsg = 'DNQK1129E';
+						SET chReturnMessage = SUBSTRING(chReturnMessage FROM iNestedPos421+5 FOR 3);
+					ELSE
+						-- No Block4 and no Field 421 given, chFinMessage seems corrupt
+						SET chErrorMsg = 'DNQK1127E';
+						SET chReturnMessage = '';
+					END IF;
+				END IF;
+			ELSE
+				-- No Block1 in inner message, chFinMessage seems corrupt
+				SET chErrorMsg = 'DNQK1127E';
+				SET chReturnMessage = '';
+			END IF;
+		ELSE
+			-- No Block4 in chFinMessage, Message seems corrupt
+			SET chErrorMsg = 'DNQK1127E';
+			SET chReturnMessage = '';
+		END IF;
+	ELSE
+		-- No MT021, pass chFinMessage
+		SET chReturnMessage = chFinMessage;
+	END IF;
+
+RETURN chErrorMsg;
+END;

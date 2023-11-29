@@ -1,0 +1,23 @@
+CREATE PROCEDURE DnqUtil_CompletionFolder(IN rCompletionSource REFERENCE, INOUT rTargetParentTree REFERENCE)
+BEGIN
+	DECLARE rElementCheck REFERENCE TO rTargetParentTree."Completion"."Code";
+	DECLARE chCode CHAR rCompletionSource."Code";
+
+	IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+		SET chCode = DnqUtil_GetRelevantCompletionCode(chCode, rTargetParentTree."Completion"."Code");
+	END IF;
+
+	SET rTargetParentTree."Completion"."Code" = chCode;
+	MOVE rElementCheck TO rCompletionSource."ReasonList"."Reason"[<];
+	DECLARE rTargetReason REFERENCE TO rCompletionSource;
+	DECLARE rReasonPart   REFERENCE TO rCompletionSource;
+	WHILE LASTMOVE(rElementCheck) DO
+		CREATE FIRSTCHILD OF rTargetParentTree."Completion"."ReasonList" AS rTargetReason NAME 'Reason';
+		MOVE rReasonPart TO rElementCheck.*[>];
+		WHILE LASTMOVE(rReasonPart) DO
+			SET rTargetReason.{FIELDNAME(rReasonPart)} = FIELDVALUE(rReasonPart);
+			MOVE rReasonPart NEXTSIBLING;
+		END WHILE;
+		MOVE rElementCheck PREVIOUSSIBLING REPEAT NAME;
+	END WHILE;
+END;

@@ -1,0 +1,133 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+/* =============================================================================
+ * Following processing is done:
+ * 1. Get last exception in WMQI exception list
+ * 2. If this exception is a WBI for FN exception, then simply re-throw the exception
+ * 3. Otherwise:
+ *    a. Wrap the exception in a WBI for FN exception DNIX2109E
+ *    b. Throw WBI for FN exception DNIX2109E, i.e.:
+ *       WebSphere MQI error '%0' in WriteToDatabase node of subflow DniSaveUserAuditData;
+ *       parameters: '%1', '%2', '%3', '%4', '%5', '%6', '%7', '%8', '%9'
+ * =============================================================================
+ * FLAG REASON  RLSE DATE   ORIGIN COMMENT                                    
+ * ---- ------- ---- ------ ------ ---------------------------------------------
+ * @Ann PQnnnnn 110  YYMMDD uid    ...
+ * ============================================================================= */
+DECLARE pRef         REFERENCE TO InputExceptionList.*[1];
+DECLARE fBreak       BOOLEAN; SET fBreak = FALSE;
+DECLARE iCountInsert INTEGER;
+DECLARE chThrowStmt  CHAR;
+DECLARE iLoop        INTEGER;
+DECLARE iLength      INTEGER;
+DECLARE iPos         INTEGER;
+DECLARE chParameter  CHAR;
+
+/*--------------------------------*\
+|  get last exception in the list  |
+\*--------------------------------*/
+WHILE (LASTMOVE(pRef) = TRUE AND fBreak = FALSE) DO
+  /* check if pRef still refers to an exception */
+  IF (pRef.Number IS NOT NULL) THEN
+    MOVE pRef LASTCHILD; /* jump to next exception in the list */
+  ELSE
+    MOVE pRef PARENT;    /* jump to last exception */
+    SET fBreak = TRUE;   /* break the loop         */
+  END IF;
+END WHILE; /* end looping exception list */
+
+IF (pRef."Catalog" = 'dniccmsg') THEN
+  /*-------------------------------------*\
+  |  exception is a WBI for FN exception  |
+  |  --> simply re-throw the exception    |
+  \*-------------------------------------*/
+  SET chThrowStmt =    'THROW USER EXCEPTION SEVERITY '
+                    ||  CAST (pRef.Severity AS CHAR)
+                    || ' CATALOG '
+                    || '''' || pRef."Catalog" || ''''
+                    || ' MESSAGE '
+                    ||  CAST (pRef.Number AS CHAR);
+  SET iCountInsert = CARDINALITY(pRef."Insert"[]);
+  IF (iCountInsert > 0) THEN
+    /*-------------------*\
+    |  insert parameters  |
+    \*-------------------*/
+    SET chThrowStmt = chThrowStmt || ' VALUES(';
+    SET iLoop = 1;
+    WHILE (iLoop <= iCountInsert) DO
+      IF (iLoop > 1) THEN
+        SET chThrowStmt = chThrowStmt || ', ';
+      END IF;
+      SET chParameter = CAST (pRef."Insert"[iLoop].Text AS CHAR);
+      /*------------------------------------------------------------------*\
+      |  add escape character ' before single quotes ' because             |
+      |  otherwise they are interpreted as end of the string chThrowStmt!  |
+      \*------------------------------------------------------------------*/
+      SET iLength = LENGTH(chParameter);
+      SET iPos = 1;
+      WHILE (iPos <= iLength) DO
+        IF ( SUBSTRING(chParameter FROM iPos FOR 1) = '''' ) THEN
+          /* the vast quantity of single quotes is confusing, but required ... */
+          SET chParameter = OVERLAY(chParameter PLACING '''''' FROM iPos FOR 1);
+          /* caution: inserting a new character has impact on iPos as well as on iLength! */
+          SET iPos = iPos + 1;
+          SET iLength = LENGTH(chParameter);
+        END IF;
+        SET iPos = iPos + 1;
+      END WHILE; /* end checking for single quotes in current parameter */
+      SET chThrowStmt = chThrowStmt || '''' || chParameter || '''';
+      SET iLoop = iLoop + 1;
+    END WHILE;                             /* end looping "Insert" elements   */
+    SET chThrowStmt = chThrowStmt || ')';  /* end of VALUES() clause          */
+  END IF;                                  /* any "Insert" element available? */
+  /*------------------------------*\
+  |  finally, throw the exception  |
+  \*------------------------------*/
+  EVAL(chThrowStmt || ';');
+ELSE
+  /*--------------------------------------------*\
+  |  exception is no (!) WBI for FN exception    |
+  |  --> prepare WBI for FN exception DNIX2109E  |
+  \*--------------------------------------------*/
+  SET chThrowStmt  = 'THROW USER EXCEPTION SEVERITY 3 CATALOG ''dniccmsg''
+                        MESSAGE 2109 VALUES(' || CAST(pRef.Number AS CHAR);
+  SET iCountInsert = CARDINALITY(pRef."Insert"[]);
+  IF (iCountInsert > 0) THEN
+    /*-------------------*\
+    |  insert parameters  |
+    \*-------------------*/
+    SET iLoop = 1;
+    WHILE (    iLoop <= iCountInsert
+           AND iLoop <  10) DO /* Note that error message DNIX2109E can only provide 9 parameters */
+      SET chThrowStmt = chThrowStmt || ', ';
+      SET chParameter = CAST (pRef."Insert"[iLoop].Text AS CHAR);
+      /*------------------------------------------------------------------*\
+      |  add escape character ' before single quotes ' because             |
+      |  otherwise they are interpreted as end of the string chThrowStmt!  |
+      \*------------------------------------------------------------------*/
+      SET iLength = LENGTH(chParameter);
+      SET iPos = 1;
+      WHILE (iPos <= iLength) DO
+        IF ( SUBSTRING(chParameter FROM iPos FOR 1) = '''' ) THEN
+          /* the vast quantity of single quotes is confusing, but required ... */
+          SET chParameter = OVERLAY(chParameter PLACING '''''' FROM iPos FOR 1);
+          /* caution: inserting a new character has impact on iPos as well as on iLength! */
+          SET iPos = iPos + 1;
+          SET iLength = LENGTH(chParameter);
+        END IF;
+        SET iPos = iPos + 1;
+      END WHILE; /* end checking for single quotes in current parameter */
+      SET chThrowStmt = chThrowStmt || '''' || chParameter || '''';
+      SET iLoop = iLoop + 1;
+    END WHILE;                                          /* end looping "Insert" elements   */
+  END IF;                                               /* any "Insert" element available? */
+  SET chThrowStmt = chThrowStmt || ', ''DNIX2109E'')';  /* end of VALUES() clause          */
+  /*-------------------------*\
+  |  throw the exception now  |
+  \*-------------------------*/
+  EVAL(chThrowStmt || ';');
+END IF; /* exception is a WBI for FN exception? */
+/* ----- This line is only required to force the ESQL editor to display the last line of code ----- */
+RETURN true;
+END;
+

@@ -1,0 +1,21 @@
+CREATE PROCEDURE ComIbmDnqErQueueOutput_CopyHistoryEntries(IN rInputRoot REFERENCE, IN rHistory REFERENCE, IN cHistoryTS CHAR)
+BEGIN
+		-- copy HistoryEntries of copy nodes which can have a maximum depth of 1
+		DECLARE rCopyEntry    REFERENCE TO rInputRoot.MQRFH2.ComIbmDni.History.HistoryEntry[<];
+		DECLARE rHistoryEntry REFERENCE TO rHistory.HistoryEntry[<];
+		DECLARE rCopyField    REFERENCE TO rHistoryEntry;
+		
+		WHILE (LASTMOVE(rCopyEntry) AND (cHistoryTS <> rCopyEntry.TimeStamp)) DO
+			IF (rCopyEntry.Function = 'COPY') THEN
+				CREATE LASTCHILD OF rHistory AS rHistoryEntry NAME 'HistoryEntry';
+				MOVE rCopyField TO rCopyEntry.*[1];
+				-- copy fields of this history entry
+				WHILE LASTMOVE(rCopyField) DO
+					SET rHistoryEntry.{FIELDNAME(rCopyField)} = rCopyField;
+					MOVE rCopyField NEXTSIBLING;
+				END WHILE;
+			END IF;
+			
+			MOVE rCopyEntry PREVIOUSSIBLING;
+		END WHILE;
+END;

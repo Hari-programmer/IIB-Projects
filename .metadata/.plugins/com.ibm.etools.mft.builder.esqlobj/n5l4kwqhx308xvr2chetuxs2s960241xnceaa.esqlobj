@@ -1,0 +1,77 @@
+CREATE COMPUTE MODULE Convert_char_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		
+		
+		
+		DECLARE EV REFERENCE TO Environment.Variables;
+		DECLARE i INTEGER 1;
+		--DECLARE Blobref BLOB ;
+		--DECLARE Blob2 BLOB;
+	
+		FOR ref AS InputRoot.DFDL.CsvInput.record[] DO
+		
+		--DECLARE Dref BLOB  CAST(ref.PAYLOAD AS BLOB CCSID 1208);
+		--DECLARE Dref1 BLOB CAST(Dref AS BLOB CCSID 1208);
+		--DECLARE Dref2 CHARACTER CAST(Dref AS CHARACTER CCSID 1208);
+		
+		DECLARE Dref BLOB CAST(ref.PAYLOAD AS BLOB CCSID 1208);
+		SET EV.Blobref = Dref;
+		DECLARE CharRef CHARACTER CAST(CAST(EV.Blobref AS CHARACTER CCSID 1208) AS CHARACTER CCSID 1208);
+	  --DECLARE charref2 CHARACTER CAST(CharRef AS CHARACTER CCSID 1208);
+	  
+	  
+		--  DECLARE charref1 CHARACTER CAST(CharRef AS CHARACTER CCSID 1208);	
+----		DECLARE Dref2 BLOB CAST(CharRef AS BLOB CCSID 1208);
+----		SET EV.Blobref1 = CAST(Dref2 AS BLOB CCSID 1208);
+----		DECLARE CharRef1 CHARACTER CAST(EV.Blobref1 AS CHARACTER CCSID 1208);
+		--SET OutputRoot.DFDL.CSVOutput.record[i].PAYLOAD =CharRef;
+		
+		SET i= i+1;	
+		END FOR;
+		
+		--DECLARE CharRef1 CHARACTER CAST(CHAR1 As CHARACTER CCSID 1208);
+		--SET OutputRoot.BLOB.BLOB.record[i].payload= EV.Blobref;
+		
+		
+		
+		
+		
+--		SET i= i+1;	
+--		END FOR;
+--		
+
+
+
+
+
+
+		
+		--SET OutputRoot.XMLNSC.payload[i]. =CharRef;
+		
+	
+		
+--		
+		
+		
+		
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;

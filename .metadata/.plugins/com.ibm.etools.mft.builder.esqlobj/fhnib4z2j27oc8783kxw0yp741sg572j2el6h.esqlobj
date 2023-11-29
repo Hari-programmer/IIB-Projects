@@ -1,0 +1,14 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		
+		
+		
+		SET OutputLocalEnvironment.Destination.HTTP.RequestURL = 'https://api.dictionaryapi.dev/api/v2/entries/en/' || InputRoot.DFDL.Input.record.Data;
+		SET OutputLocalEnvironment.Destination.HTTP.Timeout = 42; 
+		SET OutputLocalEnvironment.Destination.HTTP.RequestLine.Method = 'GET';
+		SET OutputLocalEnvironment.Destination.HTTP.RequestLine.HTTPVersion = 'HTTP/1.1'; 
+		SET OutputLocalEnvironment.Destination.HTTP.SSLProtocol = 'TLS';
+		
+		RETURN TRUE;
+	END;
+

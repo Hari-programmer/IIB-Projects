@@ -1,0 +1,38 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+/* =============================================================================
+ * Following processing is done:
+ * 1. Get last exception in WMQI exception list
+ * 2. Wrap this exception in a WBI for FN exception DNIX2101E
+ * 3. Throw WBI for FN exception DNIX2101E, i.e.:
+ *    WebSphere MQI error '%0' in FlowOrder node of subflow DniSaveUserAuditData;
+ *    parameters: '%1', '%2', '%3', '%4', '%5', '%6', '%7', '%8', '%9'
+ * =============================================================================
+ * FLAG REASON  RLSE DATE   ORIGIN COMMENT                                    
+ * ---- ------- ---- ------ ------ ---------------------------------------------
+ * @Ann PQnnnnn 110  YYMMDD uid    ...
+ * ============================================================================= */
+DECLARE pRef REFERENCE TO InputExceptionList.*[1];
+DECLARE fBreak BOOLEAN;
+SET     fBreak = FALSE;
+
+/* get last exception in the list */
+WHILE (LASTMOVE(pRef) = TRUE AND fBreak = FALSE) DO
+  /* check if pRef still refers to an exception */
+  IF (pRef.Number IS NOT NULL) THEN
+    MOVE pRef LASTCHILD; /* jump to next exception in the list */
+  ELSE
+    MOVE pRef PARENT;    /* jump to last exception */
+    SET fBreak = TRUE;   /* break the loop         */
+  END IF;
+END WHILE; /* end looping exception list */
+
+/* ----- throw the exception now ----- */
+THROW USER EXCEPTION SEVERITY 3 CATALOG 'dniccmsg' MESSAGE 2101 VALUES(pRef.Number,
+  pRef."Insert"[1].Text, pRef."Insert"[2].Text, pRef."Insert"[3].Text, pRef."Insert"[4].Text,
+  pRef."Insert"[5].Text, pRef."Insert"[6].Text, pRef."Insert"[7].Text, pRef."Insert"[8].Text,
+  pRef."Insert"[9].Text, 'DNIX2101E');
+/* ----- This line is only required to force the ESQL editor to display the last line of code ----- */
+RETURN true;
+END;
+

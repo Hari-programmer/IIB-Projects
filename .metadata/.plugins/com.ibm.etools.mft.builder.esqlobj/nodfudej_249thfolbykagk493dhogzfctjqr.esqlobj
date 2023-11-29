@@ -1,0 +1,7 @@
+CREATE FILTER MODULE ComIbmDnqMwhUpdateInsert_DoMwh
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		RETURN Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert"."bDoMwh";
+	END;
+
+END MODULE;

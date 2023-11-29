@@ -1,0 +1,82 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+
+		DECLARE rEnv               REFERENCE TO Environment.Variables."ComIbmDni"."DnqGenericMqOutput";
+		DECLARE chQueueName        CHAR ''; --@P04C
+		DECLARE chQueueManagerName CHAR ''; --@P04C
+		DECLARE chDestination      CHAR ''; --@P04C
+--		DECLARE chOptionsMwh       CHAR TRIM(COALESCE(rEnv."chOptionsMwh", '')); @P02D
+
+		-- use properties QueueName and QueueManagerName, only if MQ DestinationList does not exist
+                                                                 -- begin @P04A
+		IF (CARDINALITY(rEnv."chQueueName"[]) > 0) AND (LENGTH(rEnv."chQueueName") > 0) THEN
+			SET chQueueName = TRIM(rEnv."chQueueName");
+			SET rEnv."chQueueName" = chQueueName;
+		END IF;
+		IF (CARDINALITY(rEnv."chQueueManagerName"[]) > 0) AND (LENGTH(rEnv."chQueueManagerName") > 0) THEN
+			SET chQueueManagerName = TRIM(rEnv."chQueueManagerName");
+			SET rEnv."chQueueManagerName" = chQueueManagerName;
+		END IF;
+		IF (CARDINALITY(rEnv."chDestination"[]) > 0) AND (LENGTH(rEnv."chDestination") > 0) THEN
+			SET chDestination = TRIM(rEnv."chDestination");
+			SET rEnv."chDestination" = chDestination;
+			SET OutputLocalEnvironment."ComIbmDni"."Function"."DnqMwhInsertUpdate"."UpdateInsert"."Request"."Destination" = chDestination;
+		END IF;
+                                                                   -- end @P04A
+		IF CARDINALITY(OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueName"[]) = 0 THEN
+			IF LENGTH(chQueueName) > 0 THEN
+				SET OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueName" = chQueueName;
+				IF LENGTH(chQueueManagerName) > 0 THEN
+					SET OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueManagerName" = chQueueManagerName;
+				ELSE
+					-- retrieve local QMgr name from CPN
+					SET chQueueManagerName = Environment."ComIbmDni"."Properties"."Common"."QueueManager";
+				END IF;
+			ELSE -- chQueueName not specified
+				-- neither MQ DestinationList nor QueueName are specified
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1200
+				VALUES ('DNQO1200E');
+			END IF;
+		ELSE
+			SET chQueueName        = OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueName";
+			SET chQueueManagerName = COALESCE(
+				OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueManagerName",
+				Environment."ComIbmDni"."Properties"."Common"."QueueManager");
+		END IF;
+
+		-- create Message History record
+		DECLARE rHistoryEntry REFERENCE TO Environment;
+		CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."History" AS rHistoryEntry;
+		CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+		
+		SET rHistoryEntry."UserId"         = TRIM(InputRoot.MQMD.UserIdentifier); --@P06C
+		SET rHistoryEntry."TimeStamp"      = DnqUtil_GetCurrentWbifnTimestamp();
+		SET rHistoryEntry."QueueType"      = 'MQ';
+		SET rHistoryEntry."QueueName"      = chQueueName;
+		SET rHistoryEntry."QueueManager"   = chQueueManagerName;
+		SET rHistoryEntry."Component"      = 'DNQ';
+		SET rHistoryEntry."Service"        = 'ROUTING';
+		IF LENGTH(chDestination) > 0 THEN
+			SET rHistoryEntry."Destination" = chDestination;
+		END IF;
+		SET rHistoryEntry."Function"       = 'OUTPUT';
+		SET rHistoryEntry."FunctionResult" = 'Ok';
+		
+		SET OutputLocalEnvironment."ComIbmDni"."Function"."DnqMwhInsertUpdate"."UpdateInsert"."Request"."Destination" = chDestination; --@P05A
+                                                                 /* begin @P02D
+		-- prepare SCPN request for MWH configuration, if needed
+		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request" = NULL;
+		DECLARE rScpnRequest REFERENCE TO Environment;
+		IF LENGTH(chOptionsMwh) > 0 THEN
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+				"Request"."OU" AS rScpnRequest;
+			SET rScpnRequest."Name" = InputRoot.MQRFH2."ComIbmDni"."OU";
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Type" = 'DnqOptionsMwh';
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Name" = chOptionsMwh;
+		END IF;
+*/                                                                 -- end @P02D
+		RETURN TRUE;
+	END;

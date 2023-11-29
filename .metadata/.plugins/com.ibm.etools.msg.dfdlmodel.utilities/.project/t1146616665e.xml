@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?><MessageBroker name="FTM_Csv_File">
+  <XSDCollection href="platform:/resource/FTM_Csv_File/Char.xsd" prefix="" targetNamespace="">
+    <import name="IBMdefined/CommaSeparatedFormat.xsd" targetNamespace="http://www.ibm.com/dfdl/CommaSeparatedFormat"/>
+    <element href="platform:/resource/FTM_Csv_File/Char.xsd#//Char;XSDElementDeclaration" name="Char"/>
+  </XSDCollection>
+</MessageBroker>

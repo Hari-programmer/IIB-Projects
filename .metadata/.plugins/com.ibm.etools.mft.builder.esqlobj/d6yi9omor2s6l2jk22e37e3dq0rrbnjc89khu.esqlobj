@@ -1,0 +1,173 @@
+CREATE COMPUTE MODULE ComIbmDnqMsifServiceOutput_Check_History
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment; --@P04A
+
+		DECLARE DNQ_MSIF_SERVICE    CONSTANT CHARACTER 'DNF_O_FT';
+		DECLARE rCommonProperties   REFERENCE TO Environment."ComIbmDni"."Properties"."Common";
+		DECLARE rEnv                REFERENCE TO Environment;
+		CREATE FIELD Environment."Variables"."ComIbmDni"."DnqMsifServiceOutput" AS rEnv;
+		DECLARE rElementCheck       REFERENCE TO OutputRoot.MQRFH2;
+--		DECLARE chOptionsMwh        CHAR TRIM(COALESCE(rEnv."chOptionsMwh", '')); @P02D
+		DECLARE chTransferOptionSet CHAR TRIM(COALESCE(rEnv."chTransferOptionSet", ''));
+		DECLARE chInstanceName      CHAR rCommonProperties."Instance";
+		DECLARE chOu                CHAR '';
+		DECLARE chQueueName         CHAR '';
+
+		-- check MQRFH2
+		IF NOT LASTMOVE(rElementCheck) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1300
+			VALUES ('Root.MQRFH2', 'DNQO1300E');
+		END IF;
+
+		-- check OU
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."OU";
+		IF NOT LASTMOVE(rElementCheck) OR (LENGTH(rElementCheck) = 0) THEN --@P01C
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1300
+			VALUES ('Root.MQRFH2.ComIbmDni.OU', 'DNQO1300E');
+		ELSE
+			SET chOu = rElementCheck;
+		END IF;
+                                                                 -- begin @P11A
+		-- check payload format
+		DECLARE chPayloadFormat CHAR UPPER(FIELDNAME(InputRoot.*[<]));
+		IF (SUBSTRING(chPayloadFormat FROM 1 FOR 2) <> 'MQ') AND
+			(chPayloadFormat <> 'XMLNSC') THEN
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1301
+			VALUES (chPayloadFormat, 'DNQO1301E');
+		END IF;
+                                                                 -- begin @P13A
+		MOVE rElementCheck TO InputRoot.MQMD.ReplyToQ;
+		IF (NOT LASTMOVE(rElementCheck)) OR (LENGTH(TRIM(rElementCheck)) = 0) THEN
+			THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1300
+			VALUES ('Root.MQMD.ReplyToQ', 'DNQO1300E');
+		END IF;
+                                                                   -- end @P13A
+                                                                   -- end @P11A
+		-- check TransferOptionSet
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptionSet";
+		IF NOT LASTMOVE(rElementCheck) OR (LENGTH(rElementCheck) = 0) THEN
+                                                                 -- begin @P03A
+			IF (CARDINALITY(rEnv."chTransferOptionSet"[]) > 0) AND (LENGTH(rEnv."chTransferOptionSet") > 0) THEN
+				SET chTransferOptionSet = TRIM(rEnv."chTransferOptionSet");
+				SET rEnv."chTransferOptionSet" = chTransferOptionSet;
+			END IF;
+                                                                   -- end @P03A
+			IF LENGTH(chTransferOptionSet) > 0 THEN --@P05C
+                                                                 /* begin @P05D
+				THROW USER EXCEPTION CATALOG 'dnqcomsg' MESSAGE 1301
+				VALUES ('DNQO1301E');
+			ELSE
+*/                                                                 -- end @P05D
+				SET OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptionSet" = chTransferOptionSet;
+			END IF;
+		END IF;
+                                                                 -- begin @P04A
+		MOVE rElementCheck TO OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptionSet"; --@P05A
+		IF LASTMOVE(rElementCheck) THEN --@P05A
+			SET OutputLocalEnvironment."ComIbmDni"."Function"."CheckTransferOptionSetConfig".
+				"CheckConfig"."Request"."TransferOptionSetName" =
+				OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptionSet";
+		END IF; --@P05A
+                                                                 -- begin @P17A @P18C
+		-- copy RequestType from MsgStandardInfo to request folder, if not yet present
+		IF ((CARDINALITY(OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptions"."RequestType"[]) = 0) AND
+			(CARDINALITY(OutputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Type"[]) > 0)) THEN
+			SET OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Request"."TransferOptions"."RequestType"
+				= OutputRoot.MQRFH2."ComIbmDni"."MsgStandardInfo"."Type";
+		END IF;
+                                                                   -- end @P17A @P18C
+                                                                   -- end @P04A
+		-- create queue name
+		SET chQueueName = chInstanceName || '.' || chOu || '.' || DNQ_MSIF_SERVICE;
+                                                                 -- begin @P06A
+		DECLARE chUserId  CHAR '';
+		DECLARE chService CHAR '';
+
+		IF (CARDINALITY(Environment."ComIbmDni"."Dnq"."ER"[]) > 0) THEN
+			SET chUserId = Environment."ComIbmDni"."Properties"."Common"."BrokerUID";
+			SET chService = 'ER';
+		ELSE
+			SET chUserId = TRIM(InputRoot.MQMD.UserIdentifier);
+			SET chService = 'ROUTING';
+		END IF;
+                                                                   -- end @P06A
+		-- create Message History record
+		DECLARE rHistoryEntry REFERENCE TO Environment;
+		CREATE FIELD OutputRoot.MQRFH2."ComIbmDni"."History" AS rHistoryEntry;
+		CREATE LASTCHILD OF rHistoryEntry AS rHistoryEntry NAME 'HistoryEntry';
+		
+		SET rHistoryEntry."UserId"         = chUserId; --@P06C @P07C
+		SET rHistoryEntry."TimeStamp"      = DnqUtil_GetCurrentWbifnTimestamp();
+		SET rHistoryEntry."QueueType"      = 'MQ';
+		SET rHistoryEntry."QueueName"      = chQueueName;
+		SET rHistoryEntry."Component"      = 'DNQ';
+		SET rHistoryEntry."Service"        = chService; --@P06C
+		SET rHistoryEntry."Destination"    = 'MSIF';
+		SET rHistoryEntry."Function"       = 'OUTPUT';
+		SET rHistoryEntry."FunctionResult" = 'Ok';
+
+		-- address target queue
+		SET OutputLocalEnvironment."Destination"."MQ"."DestinationData" = NULL;
+		SET OutputLocalEnvironment."Destination"."MQ"."DestinationData"."queueName" = chQueueName;
+		
+		-- remove old response if available
+		DELETE FIELD OutputRoot.MQRFH2."ComIbmDni"."Function"."DNF_O_FT"."SendMsg"."Response"; -- @P16A
+		
+                                                                 /* begin @P02D
+		-- prepare SCPN request for MWH configuration, if needed
+		SET OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+			"Request" = NULL;
+		DECLARE rScpnRequest REFERENCE TO Environment;
+		IF LENGTH(chOptionsMwh) > 0 THEN
+			CREATE FIELD OutputLocalEnvironment."ComIbmDni"."Function"."DniConfiguration"."Retrieve".
+				"Request"."OU" AS rScpnRequest;
+			SET rScpnRequest."Name" = OutputRoot.MQRFH2."ComIbmDni"."OU";
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Type" = 'DnqOptionsMwh';
+			SET rScpnRequest."ConfigObjectList"."ConfigObject"[1]."Name" = chOptionsMwh;
+		END IF;
+*/                                                                 -- end @P02D
+                                                                 /* begin @P10D
+		-- code moved to module RestoreOriginal
+                                                                 -- begin @P08A
+		-- restore original message format, if present, otherwise set to 'MQSTR   '
+		DELETE FIELD OutputRoot.MQRFH2."mcd";
+		DECLARE chMsd CHAR '';
+		DECLARE rRfh2Mcd REFERENCE TO Environment."ComIbmDni"."Dnq"."OriginalMessageInformation"."MessageContentDescriptor"; --@P09C
+		IF LASTMOVE(rRfh2Mcd) THEN
+			DECLARE rMcd REFERENCE TO Environment;
+			CREATE FIELD OutputRoot.MQRFH2."mcd" AS rMcd;
+			MOVE rElementCheck TO rRfh2Mcd."MessageServiceDomain";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET chMsd = rElementCheck;
+				SET rMcd."Msd" = chMsd;
+			END IF;
+			MOVE rElementCheck TO rRfh2Mcd."MessageSet";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rMcd."Set" = rElementCheck;
+			END IF;
+			MOVE rElementCheck TO rRfh2Mcd."MessageFormat";
+			IF LASTMOVE(rElementCheck) AND (LENGTH(rElementCheck) > 0) THEN
+				SET rMcd."Fmt" = rElementCheck;
+			END IF;
+		ELSE
+			SET OutputRoot.MQRFH2."Format" = MQFMT_STRING;
+		END IF;
+
+		DELETE FIELD Environment."ComIbmDni"."Dnq"."OriginalMessageInformation"."MessageContentDescriptor"; --@P09C
+
+		IF SUBSTRING(chMsd FROM 1 for 3) = 'xml' THEN
+			IF chMsd <> 'xmlnsc' THEN
+				DELETE FIELD OutputRoot.XMLNSC;
+				SET OutputRoot.{UPPER(chMsd)} = InputBody;
+			END IF;
+		ELSE
+			DELETE FIELD OutputRoot.XMLNSC;
+			SET OutputRoot.BLOB.BLOB = ASBITSTREAM(InputRoot.XMLNSC CCSID 1208);
+		END IF;
+                                                                   -- end @P08A
+*/                                                                 -- end @P10D
+		RETURN TRUE;
+	END;
+END MODULE;

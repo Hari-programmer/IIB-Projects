@@ -1,0 +1,13 @@
+CREATE FILTER MODULE ComIbmDnqFinInput_EmptyPayload
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE bEmptyPayload BOOLEAN FALSE;
+		
+		IF (Root.MQRFH2."ComIbmDni"."MsgStandardInfo"."Type" = 'DNIEMPTY') THEN
+			SET bEmptyPayload = TRUE;
+		END IF;
+		
+		RETURN bEmptyPayload;
+	END;
+
+END MODULE;

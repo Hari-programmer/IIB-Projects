@@ -1,0 +1,23 @@
+
+
+Importing file: C:\Users\hari\IBM\IIBT10\workspace\IIB_EMP_DETAILS\IIB_EMP_DETAILSService.wsdl
+
+The WSDL import will proceed with bindings IIB_EMP_DETAILSSOAP_HTTP_Binding.
+Creating wsdl schema document for file:///C:/Users/hari/IBM/IIBT10/workspace/IIB_EMP_DETAILS/IIB_EMP_DETAILSService.wsdl.
+Parsing wsdl binding {http://tempuri.org/IIB_EMP_DETAILS}IIB_EMP_DETAILSSOAP_HTTP_Binding.
+Parsing wsdl binding input GetEmpDetails.
+Parsing wsdl binding output GetEmpDetails.
+Parsing wsdl binding fault GetEmpDetails_Fault.
+Processing doc style for operation GetEmpDetails.
+Populating WSDL schema RemoteFile/IIB_EMP_DETAILSService1.xsd.
+Creating file RemoteFile/IIB_EMP_DETAILSService1.xsd in the workspace.
+Creating file RemoteFile/IIB_EMP_DETAILSService1_InlineSchema1.xsd in the workspace.
+Copying source WSDL IIB_EMP_DETAILSService.wsdl to IIB_EMP_DETAILSService.wsdl.
+
+Elapsed time processing this message definition file: 0.365 seconds
+Number of warnings for this message definition file: 0
+
+
+Number of files processed: 1
+
+

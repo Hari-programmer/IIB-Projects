@@ -1,0 +1,112 @@
+CREATE COMPUTE MODULE ComIbmDnqErQueueOutput_CheckProperties
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+	    
+		DECLARE rInputRoot REFERENCE TO InputRoot;
+		DECLARE rDnqInput REFERENCE TO Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput;
+		DECLARE rDnqOutput REFERENCE TO Environment;
+		DECLARE rDestinationData REFERENCE TO Environment;
+		DECLARE rTrace REFERENCE TO Environment;
+		DECLARE rProperties REFERENCE TO Environment.Variables.ComIbmDni.Dnq.Properties;
+		DECLARE rER REFERENCE TO Environment.ComIbmDni.Dnq.ER;
+		DECLARE rCurrentAction REFERENCE TO Environment.ComIbmDni.Dnq.ER.CurrentAction;
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqOutput AS rDnqOutput;
+		CREATE FIELD Environment.Variables.ComIbmDni.Dnq.Trace.DnqOutput AS rTrace;
+		
+		IF rProperties.RecursionThreshold IS NULL OR
+		   rProperties.RecursionThreshold < 1 OR
+		   rProperties.RecursionThreshold > 99999 THEN
+		  SET rProperties.RecursionThreshold = 50;   
+		END IF;
+		
+		IF (UPPER(TRIM(rProperties.Delete)) = 'YES') THEN
+			SET rProperties.Delete = 'YES';
+			-- if delete property set, no destination data must be present
+			IF (CARDINALITY(OutputLocalEnvironment.Destination.Dnq.DestinationData[]) > 0) THEN
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1105 VALUES( OutputLocalEnvironment.Destination.Dnq.DestinationData.QueueName, 'DNQK1105E' );
+			ELSEIF ((CARDINALITY(rProperties.DefaultTargetQueue[]) > 0) AND 
+					(rProperties.DefaultTargetQueue <> '')) THEN
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1105 VALUES( rProperties.DefaultTargetQueue, 'DNQK1105E' );
+			END IF;
+		ELSEIF ((UPPER(TRIM(rProperties.Delete)) = 'NO') OR
+			    (TRIM(rProperties.Delete) = '')) THEN
+			SET rProperties.Delete = 'NO';
+		ELSE
+			THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1116 VALUES( rProperties.Delete, 'DNQK1116E' );
+		END IF;
+        IF (UPPER(TRIM(InputLocalEnvironment.Destination.Dnq.DestinationData.NextProcessingType)) = 'DELETE') THEN
+        	SET rProperties.Delete = 'YES';
+        	DELETE FIELD OutputLocalEnvironment.Destination.Dnq;
+        END IF;
+        
+		IF rProperties.Delete <> 'YES' THEN
+			CREATE FIELD OutputLocalEnvironment.Destination.Dnq.DestinationData AS rDestinationData;
+			-- set defaults values for queue name and next processing type
+			IF CARDINALITY(rDestinationData.QueueName[])=0 OR rDestinationData.QueueName = '' THEN
+				IF rProperties.DefaultTargetQueue <> '' THEN
+					SET rDestinationData.QueueName = rProperties.DefaultTargetQueue;
+				ELSE
+					SET rDestinationData.QueueName = rER.QueueName;
+				END IF;
+			END IF;
+			IF CARDINALITY(rDestinationData.NextProcessingType[])=0 OR rDestinationData.NextProcessingType = '' THEN
+				IF CARDINALITY(rProperties.DefaultTargetProcessingType[])=0 OR rProperties.DefaultTargetProcessingType = '' THEN
+					SET rDestinationData.NextProcessingType = 'APPLICATION'; -- set default
+				ELSE
+					SET rDestinationData.NextProcessingType = rProperties.DefaultTargetProcessingType;
+				END IF;
+			END IF;
+			-- check values for next processing type and queue type
+			-- and adjust them to 1 char
+			SET rDestinationData.NextProcessingType = UPPER(TRIM(rDestinationData.NextProcessingType));
+			IF (rDestinationData.NextProcessingType NOT IN ('APPLICATION', 'USERACTION', 'BUSINESS')) THEN
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1114
+					VALUES( 'NextProcessingType', rDestinationData.NextProcessingType, 'DNQK1114E' );
+			END IF;
+			IF ((CARDINALITY(rDestinationData.QueueType[]) = 0) OR
+				(rDestinationData.QueueType = '') ) THEN
+				SET rDestinationData.QueueType = 'MAIN'; -- set default
+			ELSE
+				SET rDestinationData.QueueType = UPPER(TRIM(rDestinationData.QueueType));
+			END IF;
+			IF (rDestinationData.QueueType NOT IN ('MAIN', 'DRAFT', 'BACKOUT', 'REDIRECT', 'TEMPLATE')) THEN
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1114
+					VALUES( 'QueueType', rDestinationData.QueueType, 'DNQK1114E' );
+			END IF;
+		END IF;
+                                                                 -- begin @P02A
+		IF (CARDINALITY(rProperties.AllowMsgManipulation[]) > 0) AND (LENGTH(TRIM(rProperties.AllowMsgManipulation)) > 0) THEN
+			SET rProperties.AllowMsgManipulation = UPPER(TRIM(rProperties.AllowMsgManipulation));
+		ELSE
+			SET rProperties.AllowMsgManipulation = 'NO'; -- default
+		END IF;
+                                                                   -- end @P02A
+		IF CARDINALITY( rDnqOutput.Completion[] ) > 0 THEN
+			-- DnqERQueueOutput already invoked => check for copy indicator
+			DECLARE bIsCopy     BOOLEAN FALSE;
+			DECLARE bIsOriginal BOOLEAN FALSE;
+			DECLARE bIsPureCopy BOOLEAN FALSE;
+		    CALL ComIbmDnqErQueueOutput_CheckCopy(rInputRoot, rDnqInput.LastHistoryEntryTS, bIsCopy, bIsOriginal, bIsPureCopy);
+	   	    IF NOT bIsCopy THEN -- DnqERQueueOutput must not be invoked more than once for the same message
+				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1104 VALUES( 'DNQK1104E' );
+	   	    END IF;
+		END IF;
+		SET rDnqOutput.Completion = 'OK';
+	    SET Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.Dnq.Completion = 'OK';
+	    -- check if DnqERQueueInput was invoked
+		IF rDnqInput.NewId IS NULL THEN
+		  THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1106 VALUES( 'DNQK1106E' );	
+		END IF;
+		
+--		IF rCurrentAction.UserAction = 'RETRYROUTING' THEN
+--			IF CARDINALITY( rER.BackoutCurrentAction[] ) < 1 THEN
+--				THROW USER EXCEPTION SEVERITY 3 CATALOG 'dnqckmsg' MESSAGE 1112 VALUES( rDnqInput.NewId, 'DNQK1112E');
+--			END IF;
+--		END IF;
+
+		DELETE FIELD Environment.ComIbmDni.Dnq.Tmp;
+		RETURN TRUE;
+	END;
+END MODULE;

@@ -1,0 +1,11 @@
+CREATE FILTER MODULE ComIbmDnqFinApplicationOutput_TransformPayload
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE rEnv          REFERENCE TO Environment.Variables."ComIbmDni"."DnqFinApplicationOutput";
+		DECLARE chPayloadType CHAR rEnv."chPayloadType";
+		DECLARE bMtfinExists  BOOLEAN rEnv."bMtfinExists";
+
+		RETURN (chPayloadType = 'MTFIN') AND (NOT bMtfinExists);
+	END;
+
+END MODULE;

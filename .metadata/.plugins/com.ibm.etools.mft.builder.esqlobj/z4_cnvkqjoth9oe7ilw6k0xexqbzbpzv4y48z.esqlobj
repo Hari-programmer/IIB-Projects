@@ -1,0 +1,17 @@
+/*EATE FUNCTION main() RETURNS BOOLE*/ BEGIN
+SET OutputRoot = InputRoot;
+SET OutputLocalEnvironment = InputLocalEnvironment;
+-- Enter SQL below this line.  SQL above this line might be regenerated, causing any modifications to be lost.
+
+/******************************************************************************
+* Remove message warehouse folder.
+******************************************************************************/
+DECLARE refMwhFolder REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DniWarehouse;
+IF Environment.ComIbmDni.ConfigDataLoc = 'env'
+THEN
+   MOVE refMwhFolder TO OutputLocalEnvironment.ComIbmDni.Function.DniWarehouse;
+END IF;
+DETACH refMwhFolder;
+RETURN true;
+END;
+

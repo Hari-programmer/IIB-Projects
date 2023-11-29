@@ -1,0 +1,28 @@
+/*EATE FUNCTION Main() RETURNS BOOLE*/
+	BEGIN
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		
+		SET OutputLocalEnvironment.Destination.MQ.DestinationData.queueName =
+			Environment."ComIbmDni"."Properties"."Common"."Instance" || '.SYSOU.DNI_R_EVENT';
+		
+		
+                                                                 -- begin @P05A
+		DECLARE rEnv REFERENCE TO Environment;
+		DECLARE rEvent REFERENCE TO InputRoot.MQRFH2."ComIbmDni"."Function"."DniEvent"."Store"."Request";
+		CREATE FIELD Environment."Variables"."ComIbmDni"."Dnq"."ProcessingInformation"."Completion"."Reason" AS rEnv;
+		SET rEnv."Code" = 'Failed';
+		SET rEnv."Value" = rEvent."EventId";
+		SET rEnv."Parameter1"  = rEvent."Parameter1";
+		SET rEnv."Parameter2"  = rEvent."Parameter2";
+		SET rEnv."Parameter3"  = rEvent."Parameter3";
+		SET rEnv."Parameter4"  = rEvent."Parameter4";
+		SET rEnv."Parameter5"  = rEvent."Parameter5";
+		SET rEnv."Parameter6"  = rEvent."Parameter6";
+		SET rEnv."Parameter7"  = rEvent."Parameter7";
+		SET rEnv."Parameter8"  = rEvent."Parameter8";
+		SET rEnv."Parameter9"  = rEvent."Parameter9";
+		SET rEnv."Parameter10" = rEvent."Parameter10";
+                                                                   -- end @P05A
+		
+		RETURN TRUE;
+	END;

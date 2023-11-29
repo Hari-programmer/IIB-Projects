@@ -1,0 +1,8 @@
+CREATE FILTER MODULE ComIbmDnqMwhUpdateInsert_ExtractDnqProps
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE rEnv REFERENCE TO Environment.Variables."ComIbmDni"."DnqMwhUpdateInsert";
+		RETURN rEnv."bExtractMsgFields" AND rEnv."bExtractDnqProps";
+	END;
+
+END MODULE;

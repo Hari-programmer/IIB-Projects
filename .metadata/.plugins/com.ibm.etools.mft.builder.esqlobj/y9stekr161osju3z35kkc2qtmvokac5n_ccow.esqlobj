@@ -1,0 +1,40 @@
+CREATE COMPUTE MODULE ComIbmDnqErQueueInput_CreateBackoutEvent
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+
+	  SET OutputRoot = InputRoot;
+	  SET OutputLocalEnvironment = InputLocalEnvironment;
+	  
+	  CREATE FIELD OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request;
+      DECLARE refEvtReq REFERENCE TO OutputRoot.MQRFH2.ComIbmDni.Function.DniEvent.Store.Request;
+
+	  DECLARE chInstance CHAR Environment.Variables.ComIbmDni.Dnq.Properties.Instance;
+
+      -- convert WebSphere MQ Integrator current GMT timestamp in WebSphere BI for FN format
+      DECLARE chTimestamp CHARACTER;
+      SET chTimestamp = CAST(CURRENT_GMTTIMESTAMP AS CHAR);
+      SET chTimestamp = SUBSTRING(chTimestamp FROM (POSITION('''' IN chTimestamp) + 1));
+      SET chTimestamp = SUBSTRING(chTimestamp FROM 1 FOR (POSITION('''' IN chTimestamp) - 1));
+      SET chTimestamp = OVERLAY(chTimestamp PLACING 'T' FROM 11 FOR 1);
+
+      -- set event request folder fields
+      SET refEvtReq.TimeStamp = chTimestamp;
+      SET refEvtReq.TimeStamp.(NameValue)dnidt = 'dateTime';
+      SET refEvtReq.EventId = 'DNQK1006E';
+      SET refEvtReq.OU = InputRoot.MQRFH2.ComIbmDni.OU;
+      SET refEvtReq.Service = Environment.ComIbmDni.Properties.Common.Service;
+      SET refEvtReq.SystemId = 'QM_' || Environment.ComIbmDni.Properties.Common.QueueManager;
+      SET refEvtReq.MessageFlow = Environment.ComIbmDni.Properties.Common.MessageFlow;
+      SET refEvtReq.ExecutionGroup = Environment.ComIbmDni.Properties.Common.ExecutionGroup;
+      SET refEvtReq.Broker = Environment.ComIbmDni.Properties.Common.Broker;
+      SET refEvtReq.Parameter1 = Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.PreviousId;
+
+      Delete Field Environment.Variables.ComIbmDni.Dnq.ProcessingInformation.DnqInput.PreviousId;
+      
+	  SET OutputLocalEnvironment.Destination.MQ.DestinationData.queueName =
+			chInstance || '.SYSOU.DNI_R_EVENT';
+      
+	  RETURN TRUE;
+	END;
+
+END MODULE;
